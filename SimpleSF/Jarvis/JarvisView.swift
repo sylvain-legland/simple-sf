@@ -291,7 +291,8 @@ struct JarvisView: View {
             ? "No projects exist yet."
             : "Current projects: " + projects.projects.map { "\($0.name) (\($0.status.displayName), tech: \($0.tech))" }.joined(separator: ", ")
 
-        let fullSystem = jarvisSystemPrompt + "\n\nCONTEXT:\n\(projectContext)"
+        let langName = OnboardingView.languages.first(where: { $0.code == AppState.shared.selectedLang })?.name ?? "English"
+        let fullSystem = jarvisSystemPrompt + "\n\nCONTEXT:\n\(projectContext)\n\nIMPORTANT: Always respond in \(langName)."
 
         let history = chatStore.sessions.first(where: { $0.id == sid })?.messages ?? []
         let stream = llm.stream(messages: history, system: fullSystem)

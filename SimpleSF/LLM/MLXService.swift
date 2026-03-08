@@ -53,21 +53,23 @@ final class MLXService: ObservableObject {
         var models: [MLXModel] = []
         let home = FileManager.default.homeDirectoryForCurrentUser
 
-        // HuggingFace hub cache
+        // HuggingFace hub cache — scan ALL model dirs that have snapshots with config.json
         let hubDir = home.appendingPathComponent(".cache/huggingface/hub")
         if let entries = try? FileManager.default.contentsOfDirectory(atPath: hubDir.path) {
-            for entry in entries where entry.hasPrefix("models--mlx-community--") {
-                let name = entry
-                    .replacingOccurrences(of: "models--mlx-community--", with: "")
-                    .replacingOccurrences(of: "--", with: "/")
+            for entry in entries where entry.hasPrefix("models--") {
                 let snapshotsDir = hubDir.appendingPathComponent(entry).appendingPathComponent("snapshots")
-                if let snapshots = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
-                   let latest = snapshots.sorted().last {
-                    let fullPath = snapshotsDir.appendingPathComponent(latest).path
-                    models.append(MLXModel(name: name, path: fullPath))
-                } else {
-                    models.append(MLXModel(name: name, path: "mlx-community/\(name)"))
-                }
+                guard let snapshots = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
+                      let latest = snapshots.filter({ !$0.hasPrefix(".") }).sorted().last else { continue }
+                let fullPath = snapshotsDir.appendingPathComponent(latest).path
+                // Only include if it has a config.json (MLX model marker)
+                let configPath = (fullPath as NSString).appendingPathComponent("config.json")
+                guard FileManager.default.fileExists(atPath: configPath) else { continue }
+                // Extract readable name: "models--mlx-community--Qwen3.5-35B-A3B-4bit" → "Qwen3.5-35B-A3B-4bit"
+                let parts = entry.split(separator: "--", maxSplits: 2)
+                let name = parts.count >= 3 ? String(parts[2]).replacingOccurrences(of: "--", with: "/") :
+                           parts.count >= 2 ? String(parts[1]).replacingOccurrences(of: "--", with: "/") :
+                           entry
+                models.append(MLXModel(name: name, path: fullPath))
             }
         }
 

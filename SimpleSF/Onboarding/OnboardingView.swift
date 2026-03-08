@@ -6,6 +6,7 @@ struct OnboardingView: View {
     @ObservedObject private var llm = LLMService.shared
     @ObservedObject private var mlx = MLXService.shared
     @ObservedObject private var ollama = OllamaService.shared
+    @ObservedObject private var appState = AppState.shared
     @State private var keys: [LLMProvider: String] = [:]
     @State private var testing: LLMProvider? = nil
     @State private var testResults: [LLMProvider: Bool] = [:]
@@ -26,6 +27,9 @@ struct OnboardingView: View {
 
             ScrollView {
                 VStack(spacing: 20) {
+                    // ── Language ──
+                    languageSection
+
                     // ── Local LLM ──
                     localLLMSection
 
@@ -58,6 +62,40 @@ struct OnboardingView: View {
             mlx.scanModels()
             Task { await ollama.refresh() }
         }
+    }
+
+    // MARK: - Language Section
+
+    static let languages: [(code: String, name: String)] = [
+        ("fr", "Francais"), ("en", "English"), ("es", "Espanol"), ("de", "Deutsch"),
+        ("it", "Italiano"), ("pt", "Portugues"), ("ja", "Japanese"), ("ko", "Korean"),
+        ("zh", "Chinese"), ("ar", "Arabic"), ("ru", "Russian"), ("nl", "Dutch")
+    ]
+
+    private var languageSection: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "globe")
+                .foregroundColor(.purple)
+            Text("Language")
+                .font(.headline)
+            Picker("", selection: $appState.selectedLang) {
+                ForEach(Self.languages, id: \.code) { lang in
+                    Text(lang.name).tag(lang.code)
+                }
+            }
+            .labelsHidden()
+            .frame(maxWidth: 200)
+            .onChange(of: appState.selectedLang) { newValue in
+                appState.setLanguage(newValue)
+            }
+            Spacer()
+            Text("Jarvis responds in this language")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(12)
     }
 
     // MARK: - Active provider badge
