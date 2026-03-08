@@ -8,13 +8,11 @@
     <string>com.macaron.simple-sf</string>
     <key>CFBundleName</key>
     <string>SimpleSF</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSSupportsAutomaticTermination</key>
+    <false/>
 </dict>
 </plist>

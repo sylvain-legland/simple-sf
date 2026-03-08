@@ -18,6 +18,8 @@ struct SimpleSFApp: App {
             ContentView()
                 .environmentObject(keychain)
                 .frame(minWidth: 1000, minHeight: 650)
+                .preferredColorScheme(.dark)
+                .background(SF.Colors.bgPrimary)
         }
         .defaultSize(width: 1200, height: 800)
         .windowResizability(.contentMinSize)
