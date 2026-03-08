@@ -3,25 +3,25 @@ import SwiftUI
 // MARK: - SF Design Tokens (matching SF legacy platform theme)
 
 enum SF {
-    // MARK: Colors — Dark purple theme
+    // MARK: Colors — Refined dark mode (GitHub Dark-inspired + purple accents)
     enum Colors {
-        static let bgPrimary    = Color(hex: 0x0f0a1a)
-        static let bgSecondary  = Color(hex: 0x1a1128)
-        static let bgTertiary   = Color(hex: 0x251a35)
-        static let bgCard       = Color(hex: 0x1e1530)
-        static let bgHover      = Color(hex: 0x2d1f42)
+        static let bgPrimary    = Color(hex: 0x0d1117)   // main background
+        static let bgSecondary  = Color(hex: 0x161b22)   // cards, sidebar
+        static let bgTertiary   = Color(hex: 0x21262d)   // inputs, hovers
+        static let bgCard       = Color(hex: 0x1c2128)   // elevated cards
+        static let bgHover      = Color(hex: 0x292e36)   // hover states
 
-        static let purple       = Color(hex: 0xa855f7)
+        static let purple       = Color(hex: 0xa855f7)   // primary accent
         static let purpleLight  = Color(hex: 0xc084fc)
         static let purpleDeep   = Color(hex: 0x7c3aed)
-        static let accent       = Color(hex: 0xf78166)
+        static let accent       = Color(hex: 0xf78166)   // secondary accent
         static let accentHover  = Color(hex: 0xffa28b)
 
-        static let textPrimary  = Color(hex: 0xe2dce8)
-        static let textSecondary = Color(hex: 0x9ca3af)
-        static let textMuted    = Color(hex: 0x6b7280)
-        static let border       = Color(hex: 0x3d2d56)
-        static let borderLight  = Color(hex: 0x4a3666)
+        static let textPrimary  = Color(hex: 0xe6edf3)   // main text — high contrast
+        static let textSecondary = Color(hex: 0x8b949e)  // labels, captions
+        static let textMuted    = Color(hex: 0x6e7681)   // hints, timestamps
+        static let border       = Color(hex: 0x30363d)   // standard border
+        static let borderLight  = Color(hex: 0x3d444d)   // subtle border
 
         // Status
         static let success      = Color(hex: 0x22c55e)

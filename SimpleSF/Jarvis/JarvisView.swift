@@ -272,7 +272,7 @@ struct JarvisView: View {
     // MARK: - Discussion Thread
 
     private var discussionThread: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 20) {
             // ── Phase header ──
             HStack(spacing: 10) {
                 Image(systemName: "bubble.left.and.bubble.right.fill")
@@ -399,21 +399,15 @@ struct JarvisView: View {
                     }
 
                     // ── Content (SF legacy: mu__content — 0.84rem, line-height 1.55) ──
-                    Text(event.data)
-                        .font(.system(size: 14))
-                        .foregroundColor(SF.Colors.textPrimary)
-                        .lineSpacing(5)
+                    MarkdownView(event.data, fontSize: 14)
                         .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .padding(.leading, 14)
         }
-        .padding(.vertical, 10)
-        .padding(.trailing, 16)
+        .padding(.vertical, 14)
+        .padding(.trailing, 20)
     }
-
-    // ── Message type badge (SF legacy: mu__badge) ──
 
     @ViewBuilder
     private func messageTypeBadge(_ type: String) -> some View {
@@ -500,19 +494,11 @@ struct JarvisView: View {
                             .foregroundColor(SF.Colors.textMuted)
                     }
 
-                    Text(event.data)
-                        .font(.system(size: 14))
-                        .foregroundColor(SF.Colors.textPrimary)
-                        .lineSpacing(5)
+                    MarkdownView(event.data, fontSize: 14)
                         .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
                         .background(SF.Colors.po.opacity(0.06))
                         .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(SF.Colors.po.opacity(0.2), lineWidth: 1)
-                        )
                 }
             }
             .padding(.leading, 14)
@@ -729,20 +715,34 @@ struct MessageBubble: View {
                     .clipShape(Circle())
             }
 
-            Text(message.content)
-                .font(.system(size: 14))
-                .foregroundColor(SF.Colors.textPrimary)
-                .lineSpacing(4)
-                .textSelection(.enabled)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(isUser ? SF.Colors.purple.opacity(0.12) : SF.Colors.bgSecondary)
-                .cornerRadius(isUser ? 16 : 12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: isUser ? 16 : 12)
-                        .stroke(isUser ? SF.Colors.purple.opacity(0.2) : SF.Colors.border, lineWidth: 0.5)
-                )
-                .frame(maxWidth: 700, alignment: isUser ? .trailing : .leading)
+            if isUser {
+                Text(message.content)
+                    .font(.system(size: 14))
+                    .foregroundColor(SF.Colors.textPrimary)
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(SF.Colors.purple.opacity(0.12))
+                    .cornerRadius(16)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(SF.Colors.purple.opacity(0.2), lineWidth: 0.5)
+                    )
+                    .frame(maxWidth: 700, alignment: .trailing)
+            } else {
+                MarkdownView(message.content, fontSize: 14)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(SF.Colors.bgSecondary)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(SF.Colors.border, lineWidth: 0.5)
+                    )
+                    .frame(maxWidth: 700, alignment: .leading)
+            }
 
             if isUser {
                 Image(systemName: "person.circle.fill")
