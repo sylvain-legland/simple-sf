@@ -3,11 +3,12 @@ import Foundation
 // MARK: - Provider definitions
 
 enum LLMProvider: String, CaseIterable, Codable {
-    case mlx, openai, anthropic, gemini, minimax, kimi, openrouter, alibaba, glm
+    case ollama, mlx, openai, anthropic, gemini, minimax, kimi, openrouter, alibaba, glm
 
     var displayName: String {
         switch self {
-        case .mlx:        return "MLX (Local)"
+        case .ollama:     return "Ollama"
+        case .mlx:        return "MLX"
         case .openai:     return "OpenAI"
         case .anthropic:  return "Anthropic"
         case .gemini:     return "Google Gemini"
@@ -21,6 +22,7 @@ enum LLMProvider: String, CaseIterable, Codable {
 
     var envVar: String {
         switch self {
+        case .ollama:     return "OLLAMA_LOCAL"
         case .mlx:        return "MLX_LOCAL"
         case .openai:     return "OPENAI_API_KEY"
         case .anthropic:  return "ANTHROPIC_API_KEY"
@@ -35,6 +37,7 @@ enum LLMProvider: String, CaseIterable, Codable {
 
     var baseURL: String {
         switch self {
+        case .ollama:     return "http://127.0.0.1:11434/v1"
         case .mlx:        return "http://127.0.0.1:8800/v1"
         case .openai:     return "https://api.openai.com/v1"
         case .anthropic:  return "https://api.anthropic.com/v1"
@@ -49,6 +52,7 @@ enum LLMProvider: String, CaseIterable, Codable {
 
     var defaultModel: String {
         switch self {
+        case .ollama:     return "qwen3:14b"
         case .mlx:        return "mlx-local"
         case .openai:     return "gpt-4o-mini"
         case .anthropic:  return "claude-3-5-haiku-20241022"
@@ -63,6 +67,7 @@ enum LLMProvider: String, CaseIterable, Codable {
 
     var docURL: String {
         switch self {
+        case .ollama:     return "https://ollama.com/library"
         case .mlx:        return "https://github.com/ml-explore/mlx-lm"
         case .openai:     return "https://platform.openai.com/api-keys"
         case .anthropic:  return "https://console.anthropic.com/settings/keys"
@@ -75,11 +80,16 @@ enum LLMProvider: String, CaseIterable, Codable {
         }
     }
 
-    var isLocal: Bool { self == .mlx }
+    var isLocal: Bool { self == .mlx || self == .ollama }
 
     /// Cloud providers that need API keys
     static var cloudProviders: [LLMProvider] {
         allCases.filter { !$0.isLocal }
+    }
+
+    /// Local providers
+    static var localProviders: [LLMProvider] {
+        allCases.filter { $0.isLocal }
     }
 }
 
@@ -97,8 +107,9 @@ final class LLMService: ObservableObject {
     static let shared = LLMService()
     private init() {}
 
-    // Active provider = MLX if running, else first cloud provider with a key
+    // Active provider: Ollama if running, then MLX if running, then first cloud with key
     var activeProvider: LLMProvider? {
+        if OllamaService.shared.isRunning { return .ollama }
         if MLXService.shared.isRunning { return .mlx }
         return LLMProvider.cloudProviders.first { KeychainService.shared.key(for: $0) != nil }
     }
@@ -121,7 +132,9 @@ final class LLMService: ObservableObject {
         all += messages.map { ["role": $0.role, "content": $0.content] }
 
         let body: [String: Any] = [
-            "model": prov.defaultModel,
+            "model": prov == .ollama ? (OllamaService.shared.activeModel?.name ?? prov.defaultModel) :
+                     prov == .mlx ? (MLXService.shared.activeModel?.name ?? prov.defaultModel) :
+                     prov.defaultModel,
             "messages": all,
             "max_tokens": 1024,
             "temperature": 0.7
@@ -174,7 +187,9 @@ final class LLMService: ObservableObject {
                     all += messages.map { ["role": $0.role, "content": $0.content] }
 
                     let body: [String: Any] = [
-                        "model": prov.defaultModel,
+                        "model": prov == .ollama ? (OllamaService.shared.activeModel?.name ?? prov.defaultModel) :
+                                 prov == .mlx ? (MLXService.shared.activeModel?.name ?? prov.defaultModel) :
+                                 prov.defaultModel,
                         "messages": all,
                         "max_tokens": 1024,
                         "temperature": 0.7,
@@ -223,7 +238,11 @@ final class LLMService: ObservableObject {
     // MARK: - Test connection
 
     func testConnection(provider: LLMProvider, key: String) async -> Bool {
-        if provider.isLocal {
+        if provider == .ollama {
+            await OllamaService.shared.refresh()
+            return OllamaService.shared.isRunning
+        }
+        if provider == .mlx {
             return await MLXService.shared.fetchServerModels().count > 0
         }
         let body: [String: Any] = [

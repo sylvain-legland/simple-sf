@@ -5,15 +5,17 @@ struct OnboardingView: View {
     @ObservedObject private var keychain = KeychainService.shared
     @ObservedObject private var llm = LLMService.shared
     @ObservedObject private var mlx = MLXService.shared
+    @ObservedObject private var ollama = OllamaService.shared
     @State private var keys: [LLMProvider: String] = [:]
     @State private var testing: LLMProvider? = nil
     @State private var testResults: [LLMProvider: Bool] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header
             HStack {
-                Image(systemName: "key.fill").foregroundColor(.yellow)
-                Text("LLM Configuration")
+                Image(systemName: "gearshape.fill").foregroundColor(.purple)
+                Text("Settings")
                     .font(.title2.bold())
                 Spacer()
                 activeBadge
@@ -23,52 +25,29 @@ struct OnboardingView: View {
             Divider()
 
             ScrollView {
-                VStack(spacing: 16) {
-                    // MLX Local section
-                    mlxSection
+                VStack(spacing: 20) {
+                    // ── Local LLM ──
+                    localLLMSection
 
-                    Divider().padding(.horizontal)
-
-                    // Cloud providers
-                    VStack(spacing: 8) {
-                        HStack {
-                            Image(systemName: "cloud.fill")
-                                .foregroundColor(.blue)
-                            Text("Cloud Providers")
-                                .font(.headline)
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-
-                        ForEach(LLMProvider.cloudProviders, id: \.self) { provider in
-                            ProviderRow(
-                                provider: provider,
-                                storedKey: keychain.key(for: provider),
-                                draftKey: Binding(
-                                    get: { keys[provider] ?? "" },
-                                    set: { keys[provider] = $0 }
-                                ),
-                                isTesting: testing == provider,
-                                testResult: testResults[provider],
-                                onSave: { save(provider: provider) },
-                                onTest: { Task { await test(provider: provider) } },
-                                onDelete: { keychain.delete(for: provider) }
-                            )
-                        }
-                    }
+                    // ── Cloud Providers ──
+                    cloudSection
                 }
                 .padding()
             }
 
             Divider()
 
-            VStack(spacing: 4) {
-                Text("Keys stored in macOS Keychain — never sent anywhere except directly to the provider.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text("MLX runs 100% locally on your Mac. No data leaves your machine.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            HStack(spacing: 16) {
+                Image(systemName: "lock.shield.fill")
+                    .foregroundColor(.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Local models run 100% on your Mac. No data leaves your machine.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("Cloud API keys stored in macOS Keychain — sent only to the provider.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .padding()
         }
@@ -77,6 +56,7 @@ struct OnboardingView: View {
                 if let k = keychain.key(for: p) { keys[p] = k }
             }
             mlx.scanModels()
+            Task { await ollama.refresh() }
         }
     }
 
@@ -84,35 +64,157 @@ struct OnboardingView: View {
 
     @ViewBuilder
     private var activeBadge: some View {
-        if mlx.isRunning {
-            Label("MLX Local", systemImage: "cpu")
-                .font(.caption)
-                .foregroundColor(.green)
-        } else if let prov = llm.activeProvider {
-            Label(prov.displayName, systemImage: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundColor(.green)
+        if let prov = llm.activeProvider {
+            HStack(spacing: 6) {
+                Circle().fill(Color.green).frame(width: 8, height: 8)
+                Text(prov.displayName)
+                    .font(.caption.bold())
+                if prov == .ollama, let m = ollama.activeModel {
+                    Text("(\(m.name))")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                } else if prov == .mlx, let m = mlx.activeModel {
+                    Text("(\(m.name))")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .foregroundColor(.green)
         } else {
-            Label("No provider", systemImage: "exclamationmark.circle")
+            Label("No provider", systemImage: "exclamationmark.triangle.fill")
                 .font(.caption)
                 .foregroundColor(.orange)
         }
     }
 
-    // MARK: - MLX Section
+    // MARK: - Local LLM Section
 
-    private var mlxSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var localLLMSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "cpu")
+                Image(systemName: "desktopcomputer")
                     .foregroundColor(.purple)
-                Text("MLX Local")
+                Text("Local LLM")
                     .font(.headline)
                 Spacer()
-                mlxStatusBadge
+                Text("Zero network — runs on Apple Silicon")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
 
-            // Model picker
+            // Ollama card
+            ollamaCard
+
+            // MLX card
+            mlxCard
+        }
+        .padding()
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    (ollama.isRunning || mlx.isRunning) ? Color.green.opacity(0.4) : Color.purple.opacity(0.15),
+                    lineWidth: 1.5
+                )
+        )
+    }
+
+    // MARK: - Ollama Card
+
+    private var ollamaCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Ollama")
+                    .font(.subheadline.bold())
+                if ollama.isRunning {
+                    Label("Running", systemImage: "circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                } else {
+                    Label("Stopped", systemImage: "circle")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                Spacer()
+                Button(action: { Task { await ollama.refresh() } }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.purple)
+            }
+
+            if ollama.isRunning {
+                if !ollama.availableModels.isEmpty {
+                    HStack {
+                        Text("Model:")
+                            .font(.callout)
+                        Picker("", selection: $ollama.activeModel) {
+                            ForEach(ollama.availableModels) { model in
+                                HStack {
+                                    Text(model.name)
+                                    Text("(\(model.size))")
+                                        .foregroundColor(.secondary)
+                                }
+                                .tag(model as OllamaService.OllamaModel?)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 300)
+                    }
+
+                    if llm.activeProvider == .ollama {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Active — Jarvis and agents use this model")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        }
+                    }
+                } else {
+                    Text("No models installed. Run: ollama pull qwen3:14b")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    Button(action: { ollama.start() }) {
+                        Label("Start Ollama", systemImage: "play.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
+                    .controlSize(.small)
+
+                    Text("or run: ollama serve")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(.textBackgroundColor).opacity(0.3))
+        .cornerRadius(8)
+    }
+
+    // MARK: - MLX Card
+
+    private var mlxCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("MLX")
+                    .font(.subheadline.bold())
+                mlxStatusBadge
+                Spacer()
+                Button(action: { mlx.scanModels() }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.purple)
+            }
+
             if !mlx.availableModels.isEmpty {
                 HStack {
                     Text("Model:")
@@ -123,48 +225,50 @@ struct OnboardingView: View {
                         }
                     }
                     .labelsHidden()
+                    .frame(maxWidth: 300)
                 }
             } else {
-                Text("No MLX models found in ~/.cache/huggingface/hub/")
+                Text("No MLX models in ~/.cache/huggingface/hub/ or ~/.cache/mlx-models/")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
 
-            // Start / Stop buttons
             HStack(spacing: 12) {
                 if mlx.isRunning {
-                    Button(action: {
-                        mlx.stop()
-                    }) {
-                        Label("Stop Server", systemImage: "stop.circle.fill")
+                    Button(action: { mlx.stop() }) {
+                        Label("Stop", systemImage: "stop.circle.fill")
                     }
                     .buttonStyle(.bordered)
                     .tint(.red)
+                    .controlSize(.small)
 
                     Text("Port \(mlx.port)")
                         .font(.caption.monospaced())
                         .foregroundColor(.secondary)
+
+                    if llm.activeProvider == .mlx {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Active")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        }
+                    }
                 } else {
                     Button(action: {
                         mlx.start()
-                        // Sync to Rust engine after a delay
                         Task {
                             try? await Task.sleep(nanoseconds: 5_000_000_000)
-                            if mlx.isRunning {
-                                SFBridge.shared.syncLLMConfig()
-                            }
+                            if mlx.isRunning { SFBridge.shared.syncLLMConfig() }
                         }
                     }) {
                         Label("Start Server", systemImage: "play.circle.fill")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.purple)
+                    .controlSize(.small)
                     .disabled(mlx.activeModel == nil)
-
-                    Button(action: { mlx.scanModels() }) {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .buttonStyle(.bordered)
                 }
             }
 
@@ -172,7 +276,7 @@ struct OnboardingView: View {
             if !mlx.logLines.isEmpty {
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(mlx.logLines.suffix(5).enumerated()), id: \.offset) { _, line in
+                        ForEach(Array(mlx.logLines.suffix(3).enumerated()), id: \.offset) { _, line in
                             Text(line)
                                 .font(.caption2.monospaced())
                                 .foregroundColor(.secondary)
@@ -180,16 +284,12 @@ struct OnboardingView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 60)
+                .frame(maxHeight: 40)
             }
         }
-        .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(10)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(mlx.isRunning ? Color.green.opacity(0.4) : Color.purple.opacity(0.2), lineWidth: 1)
-        )
+        .padding(12)
+        .background(Color(.textBackgroundColor).opacity(0.3))
+        .cornerRadius(8)
     }
 
     @ViewBuilder
@@ -197,25 +297,61 @@ struct OnboardingView: View {
         switch mlx.state {
         case .stopped:
             Label("Stopped", systemImage: "circle")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(.gray)
         case .starting:
             HStack(spacing: 4) {
-                ProgressView().scaleEffect(0.6)
+                ProgressView().scaleEffect(0.5)
                 Text("Starting...")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(.orange)
             }
         case .running:
             Label("Running", systemImage: "circle.fill")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(.green)
         case .error(let msg):
             Label(msg, systemImage: "exclamationmark.circle.fill")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(.red)
                 .lineLimit(1)
         }
+    }
+
+    // MARK: - Cloud Section
+
+    private var cloudSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "cloud.fill")
+                    .foregroundColor(.blue)
+                Text("Cloud Providers")
+                    .font(.headline)
+                Spacer()
+                Text("Requires API key")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            ForEach(LLMProvider.cloudProviders, id: \.self) { provider in
+                ProviderRow(
+                    provider: provider,
+                    storedKey: keychain.key(for: provider),
+                    draftKey: Binding(
+                        get: { keys[provider] ?? "" },
+                        set: { keys[provider] = $0 }
+                    ),
+                    isTesting: testing == provider,
+                    testResult: testResults[provider],
+                    onSave: { save(provider: provider) },
+                    onTest: { Task { await test(provider: provider) } },
+                    onDelete: { keychain.delete(for: provider) }
+                )
+            }
+        }
+        .padding()
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(12)
     }
 
     // MARK: - Actions

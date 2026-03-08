@@ -37,7 +37,7 @@ enum SidebarItem: String, Hashable {
         case .ideation:  return "Ideation"
         case .missions:  return "Missions"
         case .agents:    return "Agents"
-        case .settings:  return "API Keys"
+        case .settings:  return "Settings"
         }
     }
 
@@ -48,7 +48,7 @@ enum SidebarItem: String, Hashable {
         case .ideation:  return "lightbulb.fill"
         case .missions:  return "play.circle.fill"
         case .agents:    return "person.3.fill"
-        case .settings:  return "key.fill"
+        case .settings:  return "gearshape.fill"
         }
     }
 }
