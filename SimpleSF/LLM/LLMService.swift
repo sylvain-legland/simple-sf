@@ -115,12 +115,21 @@ final class LLMService: ObservableObject {
     static let shared = LLMService()
     private init() {}
 
-    // Active provider: respects user preference between Ollama/MLX
+    // Active provider: respects explicit user selection, then auto-detect
     var activeProvider: LLMProvider? {
+        // Explicit selection
+        if let sel = AppState.shared.selectedProvider {
+            switch sel {
+            case .mlx where MLXService.shared.isRunning: return .mlx
+            case .ollama where OllamaService.shared.isRunning: return .ollama
+            case let p where !p.isLocal && KeychainService.shared.key(for: p) != nil: return p
+            default: break // selection not available, fall through
+            }
+        }
+        // Auto-detect
         let pref = AppState.shared.preferredLocalProvider
         if pref == "mlx" && MLXService.shared.isRunning { return .mlx }
         if pref == "ollama" && OllamaService.shared.isRunning { return .ollama }
-        // Fallback: try the other local, then cloud
         if MLXService.shared.isRunning { return .mlx }
         if OllamaService.shared.isRunning { return .ollama }
         return LLMProvider.cloudProviders.first { KeychainService.shared.key(for: $0) != nil }
