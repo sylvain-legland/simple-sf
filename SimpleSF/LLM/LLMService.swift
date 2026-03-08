@@ -118,6 +118,23 @@ final class LLMService: ObservableObject {
         return LLMProvider.cloudProviders.first { KeychainService.shared.key(for: $0) != nil }
     }
 
+    /// Human-readable provider + model for UI display
+    var activeDisplayName: String {
+        guard let prov = activeProvider else { return "No LLM" }
+        switch prov {
+        case .mlx:
+            let model = MLXService.shared.activeModel?.name ?? "MLX"
+            // Show short name: "Qwen3.5-35B" instead of full path
+            let short = model.split(separator: "/").last.map(String.init) ?? model
+            return "MLX · \(short)"
+        case .ollama:
+            let model = OllamaService.shared.activeModel?.name ?? "Ollama"
+            return "Ollama · \(model)"
+        default:
+            return prov.displayName
+        }
+    }
+
     // MARK: - One-shot completion
 
     func complete(messages: [LLMMessage], system: String? = nil, provider: LLMProvider? = nil) async throws -> String {
