@@ -27,6 +27,8 @@ final class MLXService: ObservableObject {
         var id: String { path }
         let name: String
         let path: String
+        let sizeGB: Double
+        let modelType: String
     }
 
     @Published var state: ServerState = .stopped
@@ -64,12 +66,20 @@ final class MLXService: ObservableObject {
                 // Only include if it has a config.json (MLX model marker)
                 let configPath = (fullPath as NSString).appendingPathComponent("config.json")
                 guard FileManager.default.fileExists(atPath: configPath) else { continue }
-                // Extract readable name: "models--mlx-community--Qwen3.5-35B-A3B-4bit" → "Qwen3.5-35B-A3B-4bit"
+                // Extract readable name
                 let parts = entry.split(separator: "--", maxSplits: 2)
                 let name = parts.count >= 3 ? String(parts[2]).replacingOccurrences(of: "--", with: "/") :
                            parts.count >= 2 ? String(parts[1]).replacingOccurrences(of: "--", with: "/") :
                            entry
-                models.append(MLXModel(name: name, path: fullPath))
+                // Parse model type from config.json
+                var modelType = ""
+                if let cfgData = FileManager.default.contents(atPath: configPath),
+                   let cfg = try? JSONSerialization.jsonObject(with: cfgData) as? [String: Any] {
+                    modelType = cfg["model_type"] as? String ?? ""
+                }
+                // Compute directory size (sum of .safetensors files)
+                let sizeGB = Self.directorySizeGB(fullPath)
+                models.append(MLXModel(name: name, path: fullPath, sizeGB: sizeGB, modelType: modelType))
             }
         }
 
@@ -80,7 +90,8 @@ final class MLXService: ObservableObject {
                 let fullPath = mlxDir.appendingPathComponent(entry).path
                 var isDir: ObjCBool = false
                 if FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir), isDir.boolValue {
-                    models.append(MLXModel(name: entry, path: fullPath))
+                    let sizeGB = Self.directorySizeGB(fullPath)
+                    models.append(MLXModel(name: entry, path: fullPath, sizeGB: sizeGB, modelType: ""))
                 }
             }
         }
@@ -91,6 +102,22 @@ final class MLXService: ObservableObject {
             activeModel = models.first(where: { $0.name.lowercased().contains("qwen3.5") })
                 ?? models.first
         }
+    }
+
+    // MARK: - Directory size
+
+    private static func directorySizeGB(_ path: String) -> Double {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(atPath: path) else { return 0 }
+        var total: UInt64 = 0
+        while let file = enumerator.nextObject() as? String {
+            let full = (path as NSString).appendingPathComponent(file)
+            if let attrs = try? fm.attributesOfItem(atPath: full),
+               let size = attrs[.size] as? UInt64 {
+                total += size
+            }
+        }
+        return Double(total) / 1_073_741_824.0
     }
 
     // MARK: - Start server

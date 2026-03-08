@@ -136,7 +136,7 @@ final class LLMService: ObservableObject {
                      prov == .mlx ? (MLXService.shared.activeModel?.name ?? prov.defaultModel) :
                      prov.defaultModel,
             "messages": all,
-            "max_tokens": 1024,
+            "max_tokens": 4096,
             "temperature": 0.7
         ]
 
@@ -191,7 +191,7 @@ final class LLMService: ObservableObject {
                                  prov == .mlx ? (MLXService.shared.activeModel?.name ?? prov.defaultModel) :
                                  prov.defaultModel,
                         "messages": all,
-                        "max_tokens": 1024,
+                        "max_tokens": 4096,
                         "temperature": 0.7,
                         "stream": true
                     ]

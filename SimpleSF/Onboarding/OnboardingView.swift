@@ -259,7 +259,16 @@ struct OnboardingView: View {
                         .font(.callout)
                     Picker("", selection: $mlx.activeModel) {
                         ForEach(mlx.availableModels) { model in
-                            Text(model.name).tag(model as MLXService.MLXModel?)
+                            HStack {
+                                Text(model.name)
+                                if !model.modelType.isEmpty {
+                                    Text(model.modelType)
+                                        .foregroundColor(.secondary)
+                                }
+                                Text(String(format: "%.1f GB", model.sizeGB))
+                                    .foregroundColor(.secondary)
+                            }
+                            .tag(model as MLXService.MLXModel?)
                         }
                     }
                     .labelsHidden()
