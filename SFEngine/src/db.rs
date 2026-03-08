@@ -83,6 +83,25 @@ CREATE TABLE IF NOT EXISTS artifacts (
     content TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS ideation_sessions (
+    id TEXT PRIMARY KEY,
+    idea TEXT NOT NULL,
+    status TEXT DEFAULT 'running',
+    created_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ideation_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    agent_name TEXT NOT NULL,
+    round INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES ideation_sessions(id)
+);
 ";
 
 // Seed default agents

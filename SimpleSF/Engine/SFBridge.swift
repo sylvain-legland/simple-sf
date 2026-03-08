@@ -34,6 +34,9 @@ func _sf_mission_status(_ missionId: UnsafePointer<CChar>?) -> UnsafeMutablePoin
 @_silgen_name("sf_list_agents")
 func _sf_list_agents() -> UnsafeMutablePointer<CChar>?
 
+@_silgen_name("sf_start_ideation")
+func _sf_start_ideation(_ idea: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
+
 @_silgen_name("sf_free_string")
 func _sf_free_string(_ s: UnsafeMutablePointer<CChar>?)
 
@@ -47,6 +50,8 @@ final class SFBridge: ObservableObject {
     @Published var isRunning = false
     @Published var currentMissionId: String?
     @Published var engineReady = false
+    @Published var ideationEvents: [AgentEvent] = []
+    @Published var ideationRunning = false
 
     struct AgentEvent: Identifiable {
         let id = UUID()
@@ -232,11 +237,31 @@ final class SFBridge: ObservableObject {
         return (try? JSONDecoder().decode([SFAgent].self, from: data)) ?? []
     }
 
+    func startIdeation(idea: String) -> String? {
+        ideationEvents.removeAll()
+        ideationRunning = true
+        syncLLMConfig()
+        var result: String?
+        idea.withCString { ptr in
+            if let r = _sf_start_ideation(ptr) {
+                result = String(cString: r)
+                _sf_free_string(r)
+            }
+        }
+        return result
+    }
+
     // Called from the global C callback
     nonisolated func handleEvent(agentId: String, eventType: String, data: String) {
         Task { @MainActor in
             let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
-            self.events.append(event)
+            if eventType == "ideation_response" || (eventType == "response" && agentId == "engine" && data.hasPrefix("---")) {
+                self.ideationEvents.append(event)
+            } else if eventType == "ideation_complete" {
+                self.ideationRunning = false
+            } else {
+                self.events.append(event)
+            }
             if eventType == "mission_complete" {
                 self.isRunning = false
             }

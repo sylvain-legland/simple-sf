@@ -1,7 +1,7 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::sync::Mutex;
-use crate::{db, llm, engine, agents};
+use crate::{db, llm, engine, agents, ideation};
 use crate::executor::{AgentEvent, EventCallback};
 
 // Global tokio runtime
@@ -222,6 +222,61 @@ pub extern "C" fn sf_mission_status(mission_id: *const c_char) -> *mut c_char {
         }).to_string()
     });
     c_str(&json).into_raw()
+}
+
+// ──────────────────────────────────────────
+// FFI: Ideation (network discussion pattern)
+// ──────────────────────────────────────────
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sf_start_ideation(idea: *const c_char) -> *mut c_char {
+    let idea_text = from_c(idea);
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let sid = session_id.clone();
+
+    db::with_db(|conn| {
+        conn.execute(
+            "INSERT INTO ideation_sessions (id, idea) VALUES (?1, ?2)",
+            rusqlite::params![&session_id, &idea_text],
+        ).ok();
+    });
+
+    let idea_clone = idea_text.clone();
+    let sid_clone = sid.clone();
+
+    runtime().spawn(async move {
+        let callback: EventCallback = Box::new(|agent_id: &str, event: AgentEvent| {
+            match event {
+                AgentEvent::Thinking => emit(agent_id, "thinking", ""),
+                AgentEvent::Response { content } => emit(agent_id, "ideation_response", &content),
+                AgentEvent::Error { message } => emit(agent_id, "error", &message),
+                _ => {}
+            }
+        });
+
+        match ideation::run_ideation(&sid_clone, &idea_clone, &callback).await {
+            Ok(_) => {
+                db::with_db(|conn| {
+                    conn.execute(
+                        "UPDATE ideation_sessions SET status = 'completed', completed_at = datetime('now') WHERE id = ?1",
+                        rusqlite::params![&sid_clone],
+                    ).ok();
+                });
+                emit("engine", "ideation_complete", &sid_clone);
+            }
+            Err(e) => {
+                db::with_db(|conn| {
+                    conn.execute(
+                        "UPDATE ideation_sessions SET status = 'failed', completed_at = datetime('now') WHERE id = ?1",
+                        rusqlite::params![&sid_clone],
+                    ).ok();
+                });
+                emit("engine", "error", &e);
+            }
+        }
+    });
+
+    c_str(&sid).into_raw()
 }
 
 #[unsafe(no_mangle)]
