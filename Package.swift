@@ -17,6 +17,14 @@ let package = Package(
             ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-LSFEngine/target/release",
+                    "-lsf_engine",
+                    "-framework", "Security",
+                    "-framework", "SystemConfiguration",
+                ]),
             ]
         )
     ]

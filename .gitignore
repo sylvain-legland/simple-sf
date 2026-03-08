@@ -15,5 +15,6 @@ data/
 *.key
 .env
 SimpleSFServer/target/
+SFEngine/target/
 dist/
 SimpleSFServer/
