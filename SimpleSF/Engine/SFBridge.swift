@@ -68,6 +68,38 @@ final class SFBridge: ObservableObject {
         let eventType: String
         let data: String
         let timestamp = Date()
+
+        // Rich metadata (parsed from JSON for discuss_response events)
+        var agentName: String = ""
+        var role: String = ""
+        var messageType: String = "response"
+        var toAgents: [String] = []
+        var round: Int = 0
+
+        /// Parse JSON data from Rust engine's rich discussion events
+        static func fromDiscussJSON(agentId: String, eventType: String, json: String) -> AgentEvent {
+            var event = AgentEvent(agentId: agentId, eventType: eventType, data: "")
+            guard let jsonData = json.data(using: .utf8),
+                  let dict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+                // Not JSON — use raw string as content
+                event = AgentEvent(agentId: agentId, eventType: eventType, data: json)
+                return event
+            }
+            let content = dict["content"] as? String ?? json
+            let name = dict["agent_name"] as? String ?? agentId
+            let role = dict["role"] as? String ?? ""
+            let msgType = dict["message_type"] as? String ?? "response"
+            let to = dict["to_agents"] as? [String] ?? []
+            let round = dict["round"] as? Int ?? 0
+
+            var e = AgentEvent(agentId: agentId, eventType: eventType, data: content)
+            e.agentName = name
+            e.role = role
+            e.messageType = msgType
+            e.toAgents = to
+            e.round = round
+            return e
+        }
     }
 
     private init() {}
@@ -343,13 +375,13 @@ final class SFBridge: ObservableObject {
     // Called from the global C callback
     nonisolated func handleEvent(agentId: String, eventType: String, data: String) {
         Task { @MainActor in
-            let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
-
             switch eventType {
-            // Discussion events (Jarvis intake)
+            // Discussion events (Jarvis intake) — data is JSON for discuss_response
             case "discuss_thinking":
+                let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.discussionEvents.append(event)
             case "discuss_response":
+                let event = AgentEvent.fromDiscussJSON(agentId: agentId, eventType: eventType, json: data)
                 self.discussionEvents.append(event)
             case "discuss_complete":
                 self.discussionSynthesis = data
@@ -357,19 +389,22 @@ final class SFBridge: ObservableObject {
 
             // Ideation events
             case "ideation_response":
+                let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.ideationEvents.append(event)
             case "ideation_complete":
                 self.ideationRunning = false
 
             // Mission events
             case "mission_complete":
+                let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.events.append(event)
                 self.isRunning = false
             case "error":
+                let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.events.append(event)
                 if self.discussionRunning { self.discussionRunning = false }
             default:
-                // Mission phase events (thinking, tool_call, tool_result, response)
+                let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 if agentId == "engine" && data.hasPrefix("---") {
                     self.ideationEvents.append(event)
                 } else {

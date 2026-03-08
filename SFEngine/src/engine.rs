@@ -88,6 +88,21 @@ pub async fn run_intake(
 
     let mut all_outputs: Vec<(String, String, String, String)> = Vec::new(); // (id, name, role, content)
 
+    // Helper: emit a rich discussion event as JSON so Swift can display full metadata
+    let emit_discuss = |agent: &Agent, content: &str, msg_type: &str, to_agents: &[&str], round: usize| {
+        let to_json: Vec<String> = to_agents.iter().map(|s| format!("\"{}\"", s)).collect();
+        let json = format!(
+            r#"{{"content":{},"agent_name":"{}","role":"{}","message_type":"{}","to_agents":[{}],"round":{}}}"#,
+            serde_json::to_string(content).unwrap_or_else(|_| format!("\"{}\"", content.replace('"', "\\\""))),
+            agent.name.replace('"', "\\\""),
+            agent.role.replace('"', "\\\""),
+            msg_type,
+            to_json.join(","),
+            round,
+        );
+        on_event(&agent.id, AgentEvent::Response { content: json });
+    };
+
     // ── Phase 1: RTE cadre la discussion ──
     on_event("engine", AgentEvent::Response {
         content: "── Réunion de cadrage ──".into(),
@@ -124,7 +139,9 @@ pub async fn run_intake(
     ).await?;
     let rte_content = strip_emoji(&rte_result.content.unwrap_or_default());
 
-    on_event(&rte.id, AgentEvent::Response { content: rte_content.clone() });
+    // RTE addresses all other agents
+    let rte_recipients: Vec<&str> = agents_data[1..].iter().map(|a| a.id.as_str()).collect();
+    emit_discuss(rte, &rte_content, "instruction", &rte_recipients, 0);
     store_discussion_msg(&session_id, &rte.id, &rte.name, &rte.role, 0, &rte_content);
     all_outputs.push((rte.id.clone(), rte.name.clone(), rte.role.clone(), rte_content.clone()));
 
@@ -187,7 +204,13 @@ pub async fn run_intake(
                 Err(e) => return Err(format!("LLM error for {}: {}", agent.name, e)),
             };
 
-            on_event(&agent.id, AgentEvent::Response { content: content.clone() });
+            // Determine recipients — each expert addresses the whole team
+            let recipients: Vec<&str> = agents_data.iter()
+                .filter(|a| a.id != agent.id)
+                .map(|a| a.id.as_str())
+                .collect();
+            let msg_type = if round == 0 { "response" } else { "response" };
+            emit_discuss(agent, &content, msg_type, &recipients, round + 1);
             store_discussion_msg(&session_id, &agent.id, &agent.name, &agent.role, (round + 1) as i32, &content);
             all_outputs.push((agent.id.clone(), agent.name.clone(), agent.role.clone(), content.clone()));
         }
@@ -242,7 +265,7 @@ pub async fn run_intake(
     ).await?;
 
     let po_content = strip_emoji(&synthesis.content.unwrap_or_default());
-    on_event(&po.id, AgentEvent::Response { content: po_content.clone() });
+    emit_discuss(po, &po_content, "synthesis", &["all"], 99);
     store_discussion_msg(&session_id, &po.id, &po.name, &po.role, 99, &po_content);
 
     db::with_db(|conn| {
