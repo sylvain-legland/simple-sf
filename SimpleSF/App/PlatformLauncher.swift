@@ -23,10 +23,10 @@ final class PlatformLauncher: ObservableObject {
         guard case .idle = state else { return }
         state = .starting
 
-        guard let pythonPath = Bundle.main.path(forResource: "Python.framework/Versions/3.12/bin/python3", ofType: nil),
-              let platformDir = Bundle.main.path(forResource: "platform", ofType: nil),
-              let sitePackages = Bundle.main.path(forResource: "site-packages", ofType: nil) else {
-            state = .failed("Python runtime not found. Run Scripts/embed_python.sh first.")
+        // Locate the embedded Rust server binary
+        guard let serverPath = Bundle.main.path(forResource: "simple-sf-server", ofType: nil) ??
+              findServerBinary() else {
+            state = .failed("simple-sf-server binary not found in app bundle.")
             return
         }
 
@@ -34,20 +34,13 @@ final class PlatformLauncher: ObservableObject {
         port = freePort
 
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: pythonPath)
-        proc.arguments = [
-            "-m", "uvicorn",
-            "platform.server:app",
-            "--host", "127.0.0.1",
-            "--port", String(freePort),
-            "--ws", "none",
-            "--log-level", "warning"
-        ]
+        proc.executableURL = URL(fileURLWithPath: serverPath)
+        proc.arguments = []
 
         var env = ProcessInfo.processInfo.environment
-        env["PYTHONPATH"] = sitePackages
+        env["PORT"] = String(freePort)
         env["SF_DATA_DIR"] = dataDirectory()
-        env["SF_DEMO_PASSWORD"] = "demo2026"
+        env["JWT_SECRET"] = "simple-sf-\(ProcessInfo.processInfo.hostName)-2026"
         // Inject LLM keys from Keychain
         for provider in LLMProvider.allCases {
             if let key = KeychainStore.shared.getKey(for: provider) {
@@ -55,7 +48,6 @@ final class PlatformLauncher: ObservableObject {
             }
         }
         proc.environment = env
-        proc.currentDirectoryURL = URL(fileURLWithPath: platformDir).deletingLastPathComponent()
 
         let pipe = Pipe()
         proc.standardOutput = pipe
@@ -73,20 +65,20 @@ final class PlatformLauncher: ObservableObject {
             try proc.run()
             self.process = proc
         } catch {
-            state = .failed("Failed to launch Python: \(error)")
+            state = .failed("Failed to launch server: \(error.localizedDescription)")
             return
         }
 
-        // Poll until server is up (max 30s)
-        for _ in 0..<60 {
+        // Poll until server is up (max 10s — Rust starts instantly)
+        for _ in 0..<20 {
             try? await Task.sleep(nanoseconds: 500_000_000)
             if await isServerUp(port: freePort) {
                 state = .ready
-                log.info("SF server ready on port \(freePort)")
+                log.info("SF Rust server ready on port \(freePort)")
                 return
             }
         }
-        state = .failed("Server did not start within 30 seconds")
+        state = .failed("Server did not respond within 10 seconds")
     }
 
     func stop() {
@@ -95,16 +87,35 @@ final class PlatformLauncher: ObservableObject {
         state = .stopped
     }
 
+    func setLLMKey(_ key: String, for provider: LLMProvider) {
+        KeychainStore.shared.setKey(key, for: provider)
+        // If server already running, restart to pick up new key
+        if case .ready = state {
+            stop()
+            Task { @MainActor in
+                self.state = .idle
+                await self.start()
+            }
+        }
+    }
+
     private func isServerUp(port: Int) async -> Bool {
-        guard let url = URL(string: "http://127.0.0.1:\(port)/api/health") else { return false }
+        guard let url = URL(string: "http://127.0.0.1:\(port)/health") else { return false }
         do {
             let (_, response) = try await URLSession.shared.data(from: url)
             return (response as? HTTPURLResponse)?.statusCode == 200
         } catch { return false }
     }
 
+    /// Fallback: look next to the Swift binary (dev mode)
+    private func findServerBinary() -> String? {
+        let exe = Bundle.main.executableURL?.deletingLastPathComponent()
+        let candidate = exe?.appendingPathComponent("simple-sf-server").path
+        if let c = candidate, FileManager.default.fileExists(atPath: c) { return c }
+        return nil
+    }
+
     private func findFreePort() -> Int {
-        // Bind to port 0 and let OS assign a free port
         let sock = socket(AF_INET, SOCK_STREAM, 0)
         defer { close(sock) }
         var addr = sockaddr_in()
@@ -113,8 +124,12 @@ final class PlatformLauncher: ObservableObject {
         addr.sin_port = 0
         var len = socklen_t(MemoryLayout<sockaddr_in>.size)
         withUnsafeMutablePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(sock, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(sock, $0, &len) }
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(sock, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(sock, $0, &len)
+            }
         }
         return Int(addr.sin_port.bigEndian)
     }
