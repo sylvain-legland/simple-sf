@@ -99,27 +99,33 @@ enum JarvisAction {
 
 // MARK: - Agent info for display
 private let agentInfo: [String: (name: String, role: String, icon: String, color: Color)] = [
-    "rte-marie":      ("Marie Lefevre",    "RTE",           "person.badge.clock",        .blue),
-    "po-lucas":       ("Lucas Martin",     "Product Owner", "list.clipboard",            .green),
-    "scrum-ines":     ("Inès Rousseau",    "Scrum Master",  "calendar.badge.clock",      .teal),
-    "archi-pierre":   ("Pierre Garnier",   "Architecte",    "building.2",                .indigo),
-    "lead-thomas":    ("Thomas Dubois",    "Lead Dev",      "wrench.and.screwdriver",    .orange),
-    "lead-frontend":  ("Emma Laurent",     "Lead Frontend", "paintbrush",                .pink),
-    "lead-backend":   ("Julien Moreau",    "Lead Backend",  "server.rack",               .mint),
-    "dev-emma":       ("Clara Nguyen",     "Dev Frontend",  "laptopcomputer",            .pink),
-    "dev-karim":      ("Karim Benali",     "Dev Backend",   "externaldrive.connected.to.line.below", .cyan),
-    "dev-fullstack":  ("Alex Petit",       "Dev Fullstack", "macbook.and.iphone",        .purple),
-    "dev-mobile":     ("Romain Faure",     "Dev Mobile",    "iphone",                    .orange),
-    "qa-sophie":      ("Sophie Martin",    "QA Lead",       "checkmark.shield",          .yellow),
-    "qa-claire":      ("Claire Dupont",    "QA",            "checklist",                 .yellow),
-    "devops-karim":   ("Karim Bouzid",     "DevOps",        "cloud",                     .blue),
-    "secu-marc":      ("Marc Lefranc",     "Sécurité",      "lock.shield",               .red),
-    "ux-chloe":       ("Chloé Bernard",    "UX Designer",   "paintpalette",              .pink),
-    "data-antoine":   ("Antoine Roux",     "Data Engineer", "chart.bar",                 .green),
-    "tw-valerie":     ("Valérie Morin",    "Tech Writer",   "doc.text",                  .gray),
-    "cloud-romain":   ("Romain Duval",     "Cloud Archi",   "cloud.bolt",                .blue),
-    "jarvis":         ("Jarvis",           "Chef de projet","sparkles",                  .purple),
-    "engine":         ("Système",          "",              "gearshape",                 .gray),
+    // Intake team (matching SF platform DB IDs)
+    "rte":            ("Marc Delacroix",    "RTE",           "person.badge.clock",        .blue),
+    "product":        ("Laura Vidal",       "Product Owner", "list.clipboard",            .green),
+    "architecte":     ("Pierre Duval",      "Architecte",    "building.2",                .indigo),
+    "lead_dev":       ("Thomas Dubois",     "Lead Dev",      "wrench.and.screwdriver",    .orange),
+    // Dev team
+    "dev":            ("Maxime Bernard",    "Developer",     "laptopcomputer",            .cyan),
+    "dev_frontend":   ("Emma Laurent",      "Dev Frontend",  "paintbrush",                .pink),
+    "dev_backend":    ("Julien Moreau",     "Dev Backend",   "server.rack",               .mint),
+    "dev_fullstack":  ("Alex Petit",        "Dev Fullstack", "macbook.and.iphone",        .purple),
+    "dev_mobile":     ("Romain Faure",      "Dev Mobile",    "iphone",                    .orange),
+    // QA & Ops
+    "qa_lead":        ("Claire Rousseau",   "QA Lead",       "checkmark.shield",          .yellow),
+    "tester":         ("Éric Fontaine",     "QA",            "checklist",                 .yellow),
+    "devops":         ("Karim Diallo",      "DevOps",        "cloud",                     .blue),
+    "securite":       ("Marc Lefranc",      "Sécurité",      "lock.shield",               .red),
+    "ux_designer":    ("Chloé Bernard",     "UX Designer",   "paintpalette",              .pink),
+    "data_engineer":  ("Antoine Roux",      "Data Engineer", "chart.bar",                 .green),
+    "tech_writer":    ("Valérie Morin",     "Tech Writer",   "doc.text",                  .gray),
+    "cloud_architect":("Romain Vasseur",    "Cloud Archi",   "cloud.bolt",                .blue),
+    // Strategic
+    "strat-cto":      ("Karim Benali",      "CTO",           "gear.badge.checkmark",      .purple),
+    "strat-cpo":      ("Julie Marchand",    "CPO",           "star.circle",               .orange),
+    "brain":          ("Gabriel Mercier",   "Orchestrateur", "brain.head.profile",        .purple),
+    // System
+    "jarvis":         ("Jarvis",            "Chef de projet","sparkles",                  .purple),
+    "engine":         ("Système",           "",              "gearshape",                 .gray),
 ]
 
 // MARK: - JarvisView
@@ -472,7 +478,7 @@ struct JarvisView: View {
         // Show PO's final synthesis (cleaned of action tags)
         let displayText = JarvisAction.cleanDisplay(synthesis)
         if !displayText.isEmpty {
-            let poInfo = agentInfo["po-lucas"]!
+            let poInfo = agentInfo["product"]!
             chatStore.appendMessage(
                 LLMMessage(role: "assistant", content: "📋 **\(poInfo.name) (\(poInfo.role))**: \(displayText)"),
                 to: sid
