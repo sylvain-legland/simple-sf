@@ -179,23 +179,35 @@ struct JarvisView: View {
                 // ── Chat area ──
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 24) {
                             if messages.isEmpty && !isProcessing && bridge.discussionEvents.isEmpty {
                                 emptyState
                             }
 
-                            ForEach(Array(messages.enumerated()), id: \.offset) { _, msg in
-                                MessageBubble(message: msg)
+                            // Unified message rendering — agent cards or user bubbles
+                            ForEach(Array(messages.enumerated()), id: \.offset) { idx, msg in
+                                if msg.isAgentMessage {
+                                    // ── Phase header (shown before first agent message in a group) ──
+                                    if idx == 0 || !messages[idx - 1].isAgentMessage {
+                                        phaseHeader
+                                    }
+                                    agentMessageCardFromStored(msg)
+                                } else {
+                                    MessageBubble(message: msg)
+                                }
                             }
 
-                            if !bridge.discussionEvents.isEmpty {
-                                discussionThread
+                            // Live thinking indicators only
+                            if bridge.discussionRunning {
+                                ForEach(bridge.discussionEvents.filter { $0.eventType == "discuss_thinking" }) { event in
+                                    thinkingIndicator(event: event)
+                                }
                             }
 
-                            if isProcessing && bridge.discussionEvents.isEmpty {
+                            if isProcessing && messages.last?.role == "user" && bridge.discussionEvents.isEmpty {
                                 HStack(spacing: 12) {
                                     ProgressView().controlSize(.small)
-                                    Text("L'équipe se réunit…")
+                                    Text("L'equipe se reunit...")
                                         .font(.system(size: 14))
                                         .foregroundColor(SF.Colors.textMuted)
                                 }
@@ -213,15 +225,30 @@ struct JarvisView: View {
                                 .padding(.horizontal, 24)
                             }
                         }
-                        .padding(.horizontal, 48)
+                        .padding(.horizontal, 32)
                         .padding(.vertical, 24)
                         Color.clear.frame(height: 1).id("bottom")
                     }
                     .background(SF.Colors.bgPrimary)
-                    .onChange(of: bridge.discussionEvents.count) { _ in
+                    .onChange(of: messages.count) { _ in
                         withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
-                    .onChange(of: messages.count) { _ in
+                    .onChange(of: bridge.discussionEvents.count) { _ in
+                        // Save new agent events to chat session
+                        if let last = bridge.discussionEvents.last, let sid = session?.id {
+                            if last.eventType == "discuss_response" {
+                                let msg = LLMMessage(
+                                    role: "assistant",
+                                    content: last.data,
+                                    agentId: last.agentId,
+                                    agentName: last.agentName.isEmpty ? nil : last.agentName,
+                                    agentRole: last.role.isEmpty ? nil : last.role,
+                                    messageType: last.messageType,
+                                    toAgents: last.toAgents.isEmpty ? nil : last.toAgents
+                                )
+                                chatStore.appendMessage(msg, to: sid)
+                            }
+                        }
                         withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                 }
@@ -269,173 +296,138 @@ struct JarvisView: View {
         }
     }
 
-    // MARK: - Discussion Thread
+    // MARK: - Phase header (shown before first agent message group)
 
-    private var discussionThread: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // ── Phase header ──
-            HStack(spacing: 10) {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(SF.Colors.purple)
-                Text("Reunion de cadrage")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(SF.Colors.textPrimary)
-                PatternBadge(pattern: "network")
-                Spacer()
-                if bridge.discussionRunning {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text("En cours")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(SF.Colors.textMuted)
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(SF.Colors.bgTertiary)
-            .cornerRadius(12)
-
-            // ── Participants bar ──
-            HStack(spacing: 10) {
-                HStack(spacing: -8) {
-                    ForEach(["rte", "architecte", "lead_dev", "product"], id: \.self) { id in
-                        AgentAvatarView(agentId: id, size: 32)
-                    }
-                }
-                .padding(.trailing, 4)
-                ForEach(["rte", "architecte", "lead_dev", "product"], id: \.self) { id in
-                    if let info = agentInfo[id] {
-                        Text(String(info.name.split(separator: " ").first ?? ""))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(SF.Colors.textSecondary)
-                    }
-                }
-            }
-            .padding(.bottom, 4)
-
-            // ── Agent messages ──
-            ForEach(bridge.discussionEvents) { event in
-                if event.eventType == "discuss_response" {
-                    agentMessageCard(event: event)
-
-                } else if event.eventType == "discuss_thinking" {
-                    thinkingIndicator(event: event)
-
-                } else if event.eventType == "discuss_synthesis" {
-                    synthesisCard(event: event)
+    private var phaseHeader: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bubble.left.and.bubble.right.fill")
+                .font(.system(size: 18))
+                .foregroundColor(SF.Colors.purple)
+            Text("Reunion de cadrage")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(SF.Colors.textPrimary)
+            PatternBadge(pattern: "network")
+            Spacer()
+            if bridge.discussionRunning {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("En cours")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(SF.Colors.textMuted)
                 }
             }
         }
-        .padding(24)
-        .background(SF.Colors.bgSecondary)
-        .cornerRadius(16)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(SF.Colors.bgTertiary)
+        .cornerRadius(12)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(SF.Colors.border, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(SF.Colors.border, lineWidth: 0.5)
         )
     }
 
-    // ── Agent message card (SF legacy mu--thread layout) ──
-    // Structure: 3px left border (by msg type) | avatar 40px | body (meta line + content)
+    // ── Agent message card from stored LLMMessage ──
 
     @ViewBuilder
-    private func agentMessageCard(event: SFBridge.AgentEvent) -> some View {
-        // Use rich metadata from JSON, fallback to agentInfo dict
-        let name = event.agentName.isEmpty
-            ? (agentInfo[event.agentId]?.name ?? event.agentId)
-            : event.agentName
-        let role = event.role.isEmpty
-            ? (agentInfo[event.agentId]?.role ?? "")
-            : event.role
-        let roleColor = roleColorFor(event.agentId)
-        let borderColor = borderColorFor(event.messageType)
+    private func agentMessageCardFromStored(_ msg: LLMMessage) -> some View {
+        let aid = msg.agentId ?? "engine"
+        let name = msg.agentName ?? agentInfo[aid]?.name ?? aid
+        let role = msg.agentRole ?? agentInfo[aid]?.role ?? ""
+        let mtype = msg.messageType ?? "response"
+        let recipients = msg.toAgents ?? []
+        let roleColor = roleColorFor(aid)
+        let borderColor = borderColorFor(mtype)
 
         HStack(alignment: .top, spacing: 0) {
-            // 3px left border — colored by message type (SF legacy: border-left: 3px solid)
+            // Left accent border
             RoundedRectangle(cornerRadius: 2)
                 .fill(borderColor)
-                .frame(width: 3)
-                .padding(.vertical, 4)
+                .frame(width: 4)
 
-            HStack(alignment: .top, spacing: 14) {
-                // Avatar — 40px with colored ring
-                AgentAvatarView(agentId: event.agentId, size: 40)
-                    .overlay(Circle().stroke(roleColor.opacity(0.5), lineWidth: 2))
+            VStack(alignment: .leading, spacing: 12) {
+                // ── Metadata header ──
+                HStack(spacing: 10) {
+                    AgentAvatarView(agentId: aid, size: 44)
+                        .overlay(Circle().stroke(roleColor.opacity(0.6), lineWidth: 2.5))
 
-                // Body column
-                VStack(alignment: .leading, spacing: 8) {
-                    // ── Metadata row (SF legacy: mu__meta) ──
-                    HStack(spacing: 6) {
-                        // Agent name (SF legacy: mu__name — 0.8rem, bold, colored)
-                        Text(name)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(roleColor)
-
-                        // Role (SF legacy: mu__role — 0.65rem, italic)
-                        if !role.isEmpty {
-                            Text(role)
-                                .font(.system(size: 11, weight: .regular).italic())
-                                .foregroundColor(SF.Colors.textMuted)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Text(name)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(roleColor)
+                            if mtype != "response" {
+                                messageTypeBadge(mtype)
+                            }
                         }
-
-                        // Message type badge (SF legacy: mu__badge — only if not "response")
-                        if event.messageType != "response" && !event.messageType.isEmpty {
-                            messageTypeBadge(event.messageType)
+                        HStack(spacing: 6) {
+                            if !role.isEmpty {
+                                Text(role)
+                                    .font(.system(size: 12).italic())
+                                    .foregroundColor(SF.Colors.textSecondary)
+                            }
+                            PatternBadge(pattern: "network")
                         }
-
-                        Spacer()
-
-                        // Recipients (SF legacy: mu__arrow → mu__target)
-                        if !event.toAgents.isEmpty {
-                            recipientsView(event.toAgents)
-                        }
-
-                        // Timestamp (SF legacy: mu__time — HH:MM right-aligned)
-                        Text(formatTime(event.timestamp))
-                            .font(.system(size: 11))
-                            .foregroundColor(SF.Colors.textMuted)
                     }
 
-                    // ── Content (SF legacy: mu__content — 0.84rem, line-height 1.55) ──
-                    MarkdownView(event.data, fontSize: 14)
-                        .textSelection(.enabled)
+                    Spacer()
+
+                    if !recipients.isEmpty {
+                        recipientsView(recipients)
+                    }
                 }
+
+                Divider().background(SF.Colors.border.opacity(0.5))
+
+                // ── Content ──
+                MarkdownView(msg.content, fontSize: 14)
+                    .textSelection(.enabled)
             }
-            .padding(.leading, 14)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
         }
-        .padding(.vertical, 14)
-        .padding(.trailing, 20)
+        .background(SF.Colors.bgCard)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(SF.Colors.border.opacity(0.5), lineWidth: 0.5)
+        )
     }
 
     @ViewBuilder
     private func messageTypeBadge(_ type: String) -> some View {
         let (bg, fg) = badgeColors(type)
         Text(type.uppercased())
-            .font(.system(size: 10, weight: .bold))
+            .font(.system(size: 11, weight: .bold))
             .foregroundColor(fg)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
             .background(bg)
-            .cornerRadius(4)
+            .cornerRadius(6)
     }
 
     // ── Recipients view (SF legacy: mu__arrow → mu__target) ──
 
     @ViewBuilder
     private func recipientsView(_ toAgents: [String]) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             Image(systemName: "arrow.right")
-                .font(.system(size: 9))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundColor(SF.Colors.textMuted)
             ForEach(toAgents, id: \.self) { agentId in
-                let name = agentInfo[agentId]?.name.split(separator: " ").first.map(String.init)
-                    ?? (agentId == "all" ? "All" : agentId)
+                let info = agentInfo[agentId]
+                let displayName = info?.name ?? (agentId == "all" ? "Tous" : agentId)
                 let color = roleColorFor(agentId)
-                Text("@\(name)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(color.opacity(0.8))
+                HStack(spacing: 4) {
+                    AgentAvatarView(agentId: agentId, size: 20)
+                    Text(displayName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(color)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(color.opacity(0.1))
+                .cornerRadius(6)
             }
         }
     }
@@ -456,55 +448,6 @@ struct JarvisView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
-    }
-
-    // ── PO synthesis card ──
-
-    @ViewBuilder
-    private func synthesisCard(event: SFBridge.AgentEvent) -> some View {
-        let name = event.agentName.isEmpty
-            ? (agentInfo["product"]?.name ?? "PO")
-            : event.agentName
-
-        HStack(alignment: .top, spacing: 0) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(SF.Colors.success)
-                .frame(width: 3)
-                .padding(.vertical, 4)
-
-            HStack(alignment: .top, spacing: 14) {
-                AgentAvatarView(agentId: "product", size: 40)
-                    .overlay(Circle().stroke(SF.Colors.po.opacity(0.5), lineWidth: 2))
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Text(name)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(SF.Colors.po)
-                        Text("Product Owner")
-                            .font(.system(size: 11, weight: .regular).italic())
-                            .foregroundColor(SF.Colors.textMuted)
-                        messageTypeBadge("synthesis")
-                        Spacer()
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(SF.Colors.success)
-                        Text(formatTime(event.timestamp))
-                            .font(.system(size: 11))
-                            .foregroundColor(SF.Colors.textMuted)
-                    }
-
-                    MarkdownView(event.data, fontSize: 14)
-                        .textSelection(.enabled)
-                        .padding(16)
-                        .background(SF.Colors.po.opacity(0.06))
-                        .cornerRadius(12)
-                }
-            }
-            .padding(.leading, 14)
-        }
-        .padding(.vertical, 10)
-        .padding(.trailing, 16)
     }
 
     // ── Helper: border color by message type (SF legacy) ──
@@ -680,18 +623,23 @@ struct JarvisView: View {
 
     /// Called when the Rust discussion completes — process synthesis and execute actions.
     private func processDiscussionResult(_ synthesis: String) {
-        // Execute any actions from the synthesis (CREATE_PROJECT, START_MISSION, etc.)
         let actions = JarvisAction.parse(synthesis)
         for action in actions { action.execute() }
 
-        // Show PO's final synthesis (cleaned of action tags) as a special event
         let displayText = JarvisAction.cleanDisplay(synthesis)
-        if !displayText.isEmpty {
-            let event = SFBridge.AgentEvent(agentId: "product", eventType: "discuss_synthesis", data: displayText)
-            bridge.discussionEvents.append(event)
+        if !displayText.isEmpty, let sid = session?.id {
+            let msg = LLMMessage(
+                role: "assistant",
+                content: displayText,
+                agentId: "product",
+                agentName: agentInfo["product"]?.name,
+                agentRole: "Product Owner",
+                messageType: "synthesis",
+                toAgents: ["all"]
+            )
+            chatStore.appendMessage(msg, to: sid)
         }
 
-        // Keep discussionEvents visible — do NOT clear them
         isProcessing = false
     }
 }
