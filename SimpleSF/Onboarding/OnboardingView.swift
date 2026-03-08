@@ -1,144 +1,160 @@
 import SwiftUI
 
+@MainActor
 struct OnboardingView: View {
-    @EnvironmentObject var appState: AppState
+    @ObservedObject private var keychain = KeychainService.shared
+    @ObservedObject private var llm = LLMService.shared
     @State private var keys: [LLMProvider: String] = [:]
-    @State private var testResults: [LLMProvider: TestResult] = [:]
-    @State private var step: Int = 0
-
-    enum TestResult { case none, testing, ok, fail(String) }
+    @State private var testing: LLMProvider? = nil
+    @State private var testResults: [LLMProvider: Bool] = [:]
+    @State private var selectedProvider: LLMProvider = .minimax
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            VStack(spacing: 8) {
-                Image(systemName: "key.fill")
-                    .resizable().scaledToFit().frame(width: 40)
-                    .foregroundStyle(.purple)
-                Text("Configure your LLM providers")
+            HStack {
+                Image(systemName: "key.fill").foregroundColor(.yellow)
+                Text("API Keys")
                     .font(.title2.bold())
-                Text("Add at least one API key to get started. Keys are stored securely in your macOS Keychain.")
-                    .font(.callout).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).frame(maxWidth: 480)
+                Spacer()
+                if let prov = llm.activeProvider {
+                    Label("Active: \(prov.displayName)", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
             }
-            .padding(.vertical, 32)
+            .padding()
 
             Divider()
 
-            // Provider list
             ScrollView {
-                VStack(spacing: 12) {
-                    ForEach(LLMProvider.allCases) { provider in
+                VStack(spacing: 8) {
+                    ForEach(LLMProvider.allCases, id: \.self) { provider in
                         ProviderRow(
                             provider: provider,
-                            key: Binding(
-                                get: { keys[provider] ?? KeychainStore.shared.getKey(for: provider) ?? "" },
+                            storedKey: keychain.key(for: provider),
+                            draftKey: Binding(
+                                get: { keys[provider] ?? "" },
                                 set: { keys[provider] = $0 }
                             ),
-                            testResult: testResults[provider] ?? .none,
-                            onSave: { saveKey(provider) },
-                            onTest: { await testKey(provider) }
+                            isTesting: testing == provider,
+                            testResult: testResults[provider],
+                            onSave: { save(provider: provider) },
+                            onTest: { Task { await test(provider: provider) } },
+                            onDelete: { keychain.delete(for: provider) }
                         )
                     }
                 }
-                .padding(.horizontal, 40)
-                .padding(.vertical, 20)
+                .padding()
             }
 
             Divider()
 
-            // Footer
-            HStack {
-                Spacer()
-                Button("Skip for now") { appState.completeOnboarding() }
-                    .buttonStyle(.plain).foregroundStyle(.secondary)
-                Button("Continue →") { appState.completeOnboarding() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!KeychainStore.shared.hasAnyKey())
+            // Footer info
+            VStack(spacing: 4) {
+                Text("Keys stored in macOS Keychain — never sent anywhere except directly to the provider.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("All LLM calls go directly from this app to the provider. No relay server.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 40)
-            .padding(.vertical, 20)
+            .padding()
         }
-        .frame(width: 680, height: 640)
+        .onAppear {
+            // Pre-fill text fields with existing keys
+            for p in LLMProvider.allCases {
+                if let k = keychain.key(for: p) { keys[p] = k }
+            }
+        }
     }
 
-    private func saveKey(_ provider: LLMProvider) {
-        guard let key = keys[provider], !key.isEmpty else {
-            KeychainStore.shared.deleteKey(for: provider)
-            return
-        }
-        KeychainStore.shared.setKey(key, for: provider)
+    private func save(provider: LLMProvider) {
+        let key = (keys[provider] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        keychain.save(key: key, for: provider)
     }
 
-    private func testKey(_ provider: LLMProvider) async {
-        guard let key = keys[provider], !key.isEmpty else { return }
-        testResults[provider] = .testing
-        do {
-            try await LLMConnectionTest.test(provider: provider, key: key)
-            testResults[provider] = .ok
-        } catch {
-            testResults[provider] = .fail(error.localizedDescription)
-        }
+    private func test(provider: LLMProvider) async {
+        let key = (keys[provider] ?? keychain.key(for: provider) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        testing = provider
+        let result = await llm.testConnection(provider: provider, key: key)
+        testResults[provider] = result
+        testing = nil
     }
 }
 
 struct ProviderRow: View {
     let provider: LLMProvider
-    @Binding var key: String
-    let testResult: OnboardingView.TestResult
+    let storedKey: String?
+    @Binding var draftKey: String
+    let isTesting: Bool
+    let testResult: Bool?
     let onSave: () -> Void
-    let onTest: () async -> Void
+    let onTest: () -> Void
+    let onDelete: () -> Void
 
-    @State private var isEditing = false
-    @State private var isTesting = false
+    @State private var expanded = false
+
+    private var hasKey: Bool { storedKey != nil && !storedKey!.isEmpty }
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Icon + name
-            VStack(alignment: .leading, spacing: 2) {
-                Text(provider.displayName).font(.headline)
-                if let url = provider.docURL {
-                    Link("Get API key", destination: url)
-                        .font(.caption).foregroundStyle(.purple)
+        VStack(alignment: .leading, spacing: 0) {
+            // Row header
+            Button(action: { withAnimation(.spring(response: 0.3)) { expanded.toggle() } }) {
+                HStack {
+                    Circle()
+                        .fill(hasKey ? Color.green : Color.gray.opacity(0.3))
+                        .frame(width: 8, height: 8)
+                    Text(provider.displayName)
+                        .font(.headline)
+                    Text("· \(provider.defaultModel)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if hasKey {
+                        if isTesting {
+                            ProgressView().scaleEffect(0.7)
+                        } else if let ok = testResult {
+                            Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(ok ? .green : .red)
+                        }
+                    }
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
+                .padding(12)
             }
-            .frame(width: 160, alignment: .leading)
+            .buttonStyle(.plain)
 
-            // Key input
-            SecureField("API key", text: $key)
-                .textFieldStyle(.roundedBorder)
-                .onChange(of: key) { _, _ in onSave() }
-
-            // Status indicator
-            statusView
-
-            // Test button
-            Button {
-                isTesting = true
-                Task { await onTest(); isTesting = false }
-            } label: {
-                Label("Test", systemImage: "bolt.fill")
+            if expanded {
+                Divider()
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        SecureField("API Key", text: $draftKey)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Save") { onSave() }
+                            .buttonStyle(.bordered)
+                        if hasKey {
+                            Button("Test") { onTest() }
+                                .buttonStyle(.bordered)
+                                .tint(.green)
+                            Button("Delete", role: .destructive) { onDelete(); draftKey = "" }
+                                .buttonStyle(.plain)
+                                .foregroundColor(.red)
+                        }
+                    }
+                    Button("Get API key →") {
+                        NSWorkspace.shared.open(URL(string: provider.docURL)!)
+                    }
                     .font(.caption)
+                    .buttonStyle(.plain)
+                    .foregroundColor(.purple)
+                }
+                .padding(12)
             }
-            .disabled(key.isEmpty || isTesting)
-            .buttonStyle(.bordered)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.secondary.opacity(0.08)))
-    }
-
-    @ViewBuilder
-    private var statusView: some View {
-        switch testResult {
-        case .none:
-            Circle().fill(.clear).frame(width: 10)
-        case .testing:
-            ProgressView().scaleEffect(0.6).frame(width: 20)
-        case .ok:
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-        case .fail(let msg):
-            Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
-                .help(msg)
-        }
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(10)
     }
 }

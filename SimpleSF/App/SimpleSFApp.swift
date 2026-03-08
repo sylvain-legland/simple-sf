@@ -1,28 +1,24 @@
 import SwiftUI
-import SwiftData
 
 @main
 struct SimpleSFApp: App {
-    @StateObject private var launcher = PlatformLauncher.shared
-    @StateObject private var appState = AppState.shared
+    @StateObject private var keychain = KeychainService.shared
+
+    init() {
+        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(launcher)
-                .environmentObject(appState)
-                .task { await launcher.start() }
+                .environmentObject(keychain)
+                .frame(minWidth: 900, minHeight: 600)
         }
-        .windowStyle(.automatic)
+        .defaultSize(width: 1100, height: 720)
+        .windowResizability(.contentMinSize)
         .commands {
-            CommandGroup(replacing: .appInfo) {
-                Button("About Simple SF") { appState.showAbout = true }
-            }
-        }
-
-        Settings {
-            SettingsRootView()
-                .environmentObject(appState)
+            CommandGroup(replacing: .newItem) {}
         }
     }
 }
