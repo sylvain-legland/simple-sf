@@ -58,7 +58,7 @@ Swift handles UI, persistence, and provider management.
 ### Quick Start
 
 ```bash
-git clone https://github.com/sylvain-legland/simple-sf.git
+git clone https://github.com/macaron-software/simple-sf.git
 cd simple-sf
 
 # Build the Rust engine
@@ -134,7 +134,7 @@ Les agents collaborent en discussions temps réel (pattern network) avec des rô
 ### Démarrage Rapide
 
 ```bash
-git clone https://github.com/sylvain-legland/simple-sf.git
+git clone https://github.com/macaron-software/simple-sf.git
 cd simple-sf
 cd SFEngine && cargo build --release && cd ..
 xcrun swift build
@@ -172,7 +172,7 @@ open dist/SimpleSF.app
 ### Inicio Rápido
 
 ```bash
-git clone https://github.com/sylvain-legland/simple-sf.git
+git clone https://github.com/macaron-software/simple-sf.git
 cd simple-sf && cd SFEngine && cargo build --release && cd ..
 xcrun swift build && open dist/SimpleSF.app
 ```
