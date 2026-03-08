@@ -337,63 +337,130 @@ struct JarvisView: View {
         )
     }
 
-    // ── Agent message card ──
+    // ── Agent message card (SF legacy mu--thread layout) ──
+    // Structure: 3px left border (by msg type) | avatar 40px | body (meta line + content)
 
     @ViewBuilder
     private func agentMessageCard(event: SFBridge.AgentEvent) -> some View {
-        let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
+        // Use rich metadata from JSON, fallback to agentInfo dict
+        let name = event.agentName.isEmpty
+            ? (agentInfo[event.agentId]?.name ?? event.agentId)
+            : event.agentName
+        let role = event.role.isEmpty
+            ? (agentInfo[event.agentId]?.role ?? "")
+            : event.role
         let roleColor = roleColorFor(event.agentId)
+        let borderColor = borderColorFor(event.messageType)
 
-        HStack(alignment: .top, spacing: 16) {
-            AgentAvatarView(agentId: event.agentId, size: 40)
-                .overlay(Circle().stroke(roleColor.opacity(0.5), lineWidth: 2))
+        HStack(alignment: .top, spacing: 0) {
+            // 3px left border — colored by message type (SF legacy: border-left: 3px solid)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(borderColor)
+                .frame(width: 3)
+                .padding(.vertical, 4)
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text(info.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(roleColor)
-                    RoleBadge(role: info.role, color: roleColor)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrowshape.turn.up.right")
-                            .font(.system(size: 10))
-                            .foregroundColor(SF.Colors.textMuted)
-                        Text(recipientsFor(event.agentId))
-                            .font(.system(size: 10, weight: .medium))
+            HStack(alignment: .top, spacing: 14) {
+                // Avatar — 40px with colored ring
+                AgentAvatarView(agentId: event.agentId, size: 40)
+                    .overlay(Circle().stroke(roleColor.opacity(0.5), lineWidth: 2))
+
+                // Body column
+                VStack(alignment: .leading, spacing: 8) {
+                    // ── Metadata row (SF legacy: mu__meta) ──
+                    HStack(spacing: 6) {
+                        // Agent name (SF legacy: mu__name — 0.8rem, bold, colored)
+                        Text(name)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(roleColor)
+
+                        // Role (SF legacy: mu__role — 0.65rem, italic)
+                        if !role.isEmpty {
+                            Text(role)
+                                .font(.system(size: 11, weight: .regular).italic())
+                                .foregroundColor(SF.Colors.textMuted)
+                        }
+
+                        // Message type badge (SF legacy: mu__badge — only if not "response")
+                        if event.messageType != "response" && !event.messageType.isEmpty {
+                            messageTypeBadge(event.messageType)
+                        }
+
+                        Spacer()
+
+                        // Recipients (SF legacy: mu__arrow → mu__target)
+                        if !event.toAgents.isEmpty {
+                            recipientsView(event.toAgents)
+                        }
+
+                        // Timestamp (SF legacy: mu__time — HH:MM right-aligned)
+                        Text(formatTime(event.timestamp))
+                            .font(.system(size: 11))
                             .foregroundColor(SF.Colors.textMuted)
                     }
-                }
 
-                Text(event.data)
-                    .font(.system(size: 14))
-                    .foregroundColor(SF.Colors.textPrimary)
-                    .lineSpacing(5)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .background(SF.Colors.bgTertiary)
-                    .cornerRadius(12)
+                    // ── Content (SF legacy: mu__content — 0.84rem, line-height 1.55) ──
+                    Text(event.data)
+                        .font(.system(size: 14))
+                        .foregroundColor(SF.Colors.textPrimary)
+                        .lineSpacing(5)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.leading, 14)
+        }
+        .padding(.vertical, 10)
+        .padding(.trailing, 16)
+    }
+
+    // ── Message type badge (SF legacy: mu__badge) ──
+
+    @ViewBuilder
+    private func messageTypeBadge(_ type: String) -> some View {
+        let (bg, fg) = badgeColors(type)
+        Text(type.uppercased())
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(fg)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(bg)
+            .cornerRadius(4)
+    }
+
+    // ── Recipients view (SF legacy: mu__arrow → mu__target) ──
+
+    @ViewBuilder
+    private func recipientsView(_ toAgents: [String]) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "arrow.right")
+                .font(.system(size: 9))
+                .foregroundColor(SF.Colors.textMuted)
+            ForEach(toAgents, id: \.self) { agentId in
+                let name = agentInfo[agentId]?.name.split(separator: " ").first.map(String.init)
+                    ?? (agentId == "all" ? "All" : agentId)
+                let color = roleColorFor(agentId)
+                Text("@\(name)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(color.opacity(0.8))
             }
         }
-        .padding(16)
-        .background(roleColor.opacity(0.03))
-        .cornerRadius(12)
     }
 
     // ── Thinking indicator ──
 
     @ViewBuilder
     private func thinkingIndicator(event: SFBridge.AgentEvent) -> some View {
-        let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
+        let name = event.agentName.isEmpty
+            ? (agentInfo[event.agentId]?.name ?? event.agentId)
+            : event.agentName
         HStack(spacing: 12) {
             AgentAvatarView(agentId: event.agentId, size: 32)
             ProgressView().controlSize(.small)
-            Text("\(info.name) redige…")
+            Text("\(name) redige…")
                 .font(.system(size: 13))
                 .foregroundColor(SF.Colors.textMuted)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 20)
         .padding(.vertical, 8)
     }
 
@@ -401,42 +468,101 @@ struct JarvisView: View {
 
     @ViewBuilder
     private func synthesisCard(event: SFBridge.AgentEvent) -> some View {
-        let info = agentInfo["product"] ?? ("PO", "Product Owner", "list.clipboard", .green)
+        let name = event.agentName.isEmpty
+            ? (agentInfo["product"]?.name ?? "PO")
+            : event.agentName
 
-        HStack(alignment: .top, spacing: 16) {
-            AgentAvatarView(agentId: "product", size: 40)
-                .overlay(Circle().stroke(SF.Colors.po.opacity(0.5), lineWidth: 2))
+        HStack(alignment: .top, spacing: 0) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(SF.Colors.success)
+                .frame(width: 3)
+                .padding(.vertical, 4)
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text(info.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(SF.Colors.po)
-                    RoleBadge(role: "Synthese", color: SF.Colors.po)
-                    Spacer()
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(SF.Colors.success)
+            HStack(alignment: .top, spacing: 14) {
+                AgentAvatarView(agentId: "product", size: 40)
+                    .overlay(Circle().stroke(SF.Colors.po.opacity(0.5), lineWidth: 2))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text(name)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(SF.Colors.po)
+                        Text("Product Owner")
+                            .font(.system(size: 11, weight: .regular).italic())
+                            .foregroundColor(SF.Colors.textMuted)
+                        messageTypeBadge("synthesis")
+                        Spacer()
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(SF.Colors.success)
+                        Text(formatTime(event.timestamp))
+                            .font(.system(size: 11))
+                            .foregroundColor(SF.Colors.textMuted)
+                    }
+
+                    Text(event.data)
+                        .font(.system(size: 14))
+                        .foregroundColor(SF.Colors.textPrimary)
+                        .lineSpacing(5)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(SF.Colors.po.opacity(0.06))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(SF.Colors.po.opacity(0.2), lineWidth: 1)
+                        )
                 }
-
-                Text(event.data)
-                    .font(.system(size: 14))
-                    .foregroundColor(SF.Colors.textPrimary)
-                    .lineSpacing(5)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .background(SF.Colors.po.opacity(0.06))
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(SF.Colors.po.opacity(0.2), lineWidth: 1)
-                    )
             }
+            .padding(.leading, 14)
         }
-        .padding(16)
-        .background(SF.Colors.po.opacity(0.03))
-        .cornerRadius(12)
+        .padding(.vertical, 10)
+        .padding(.trailing, 16)
+    }
+
+    // ── Helper: border color by message type (SF legacy) ──
+
+    private func borderColorFor(_ messageType: String) -> Color {
+        switch messageType {
+        case "instruction", "request", "delegation":
+            return Color(red: 0.92, green: 0.70, blue: 0.03) // yellow #EAB308
+        case "response", "approval":
+            return Color(red: 0.13, green: 0.77, blue: 0.37) // green #22C55E
+        case "veto":
+            return Color(red: 0.94, green: 0.27, blue: 0.27) // red #EF4444
+        case "synthesis":
+            return SF.Colors.po
+        default:
+            return SF.Colors.textMuted.opacity(0.5) // gray
+        }
+    }
+
+    // ── Helper: badge colors by message type (SF legacy) ──
+
+    private func badgeColors(_ type: String) -> (Color, Color) {
+        switch type {
+        case "instruction":
+            return (Color(red: 0.92, green: 0.70, blue: 0.03).opacity(0.2), Color(red: 0.92, green: 0.70, blue: 0.03))
+        case "delegation":
+            return (SF.Colors.purple.opacity(0.2), SF.Colors.purple)
+        case "approval":
+            return (Color(red: 0.13, green: 0.77, blue: 0.37).opacity(0.2), Color(red: 0.13, green: 0.77, blue: 0.37))
+        case "veto":
+            return (Color(red: 0.94, green: 0.27, blue: 0.27).opacity(0.2), Color(red: 0.94, green: 0.27, blue: 0.27))
+        case "synthesis":
+            return (SF.Colors.po.opacity(0.2), SF.Colors.po)
+        default:
+            return (SF.Colors.textMuted.opacity(0.15), SF.Colors.textMuted)
+        }
+    }
+
+    // ── Helper: format timestamp as HH:MM ──
+
+    private func formatTime(_ date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "HH:mm"
+        return fmt.string(from: date)
     }
 
     /// Role-based color for agent
@@ -450,13 +576,6 @@ struct JarvisView: View {
             let info = agentInfo[agentId]
             return info?.color ?? SF.Colors.textMuted
         }
-    }
-
-    /// Recipients display: "@Pierre @Thomas @Laura"
-    private func recipientsFor(_ senderId: String) -> String {
-        let all = ["rte", "architecte", "lead_dev", "product"]
-        let others = all.filter { $0 != senderId }
-        return others.compactMap { agentInfo[$0]?.name.split(separator: " ").first.map { "@\($0)" } }.joined(separator: " ")
     }
 
     // MARK: - Session Sidebar
