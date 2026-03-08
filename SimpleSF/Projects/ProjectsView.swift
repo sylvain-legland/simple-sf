@@ -3,8 +3,6 @@ import SwiftUI
 @MainActor
 struct ProjectsView: View {
     @ObservedObject private var store = ProjectStore.shared
-    @State private var showCreate = false
-    @State private var selectedProject: Project?
     @State private var searchText = ""
 
     private var filtered: [Project] {
@@ -27,26 +25,22 @@ struct ProjectsView: View {
                 Text("\(store.projects.count) projects")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Button(action: { showCreate = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.purple)
-                }
-                .buttonStyle(.plain)
             }
             .padding()
 
-            // Search
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Search projects…", text: $searchText)
-                    .textFieldStyle(.plain)
+            if !store.projects.isEmpty {
+                // Search
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("Search projects…", text: $searchText)
+                        .textFieldStyle(.plain)
+                }
+                .padding(8)
+                .background(Color(.controlBackgroundColor))
+                .cornerRadius(8)
+                .padding(.horizontal)
             }
-            .padding(8)
-            .background(Color(.controlBackgroundColor))
-            .cornerRadius(8)
-            .padding(.horizontal)
 
             Divider().padding(.top, 8)
 
@@ -56,12 +50,6 @@ struct ProjectsView: View {
                 projectList
             }
         }
-        .sheet(isPresented: $showCreate) {
-            CreateProjectView()
-        }
-        .sheet(item: $selectedProject) { proj in
-            ProjectDetailView(project: proj)
-        }
     }
 
     private var projectList: some View {
@@ -69,7 +57,6 @@ struct ProjectsView: View {
             LazyVStack(spacing: 8) {
                 ForEach(filtered) { project in
                     ProjectCard(project: project)
-                        .onTapGesture { selectedProject = project }
                 }
             }
             .padding()
@@ -78,14 +65,16 @@ struct ProjectsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "folder.badge.plus")
+            Image(systemName: "sparkles")
                 .font(.system(size: 48))
                 .foregroundColor(.purple.opacity(0.4))
             Text("No projects yet")
                 .font(.title3)
                 .foregroundColor(.secondary)
-            Button("Create your first project") { showCreate = true }
-                .buttonStyle(.bordered)
+            Text("Ask Jarvis to create a project for you.\n\"Create a project called MyApp using Swift\"")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -127,89 +116,11 @@ struct ProjectCard: View {
                         .foregroundColor(.secondary)
                 }
                 Spacer()
-                Text(project.updatedAt, style: .relative)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
             }
         }
         .padding(12)
         .background(Color(.controlBackgroundColor))
         .cornerRadius(10)
-    }
-}
-
-struct CreateProjectView: View {
-    @Environment(\.dismiss) var dismiss
-    @State private var name = ""
-    @State private var description = ""
-    @State private var tech = ""
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("New Project")
-                .font(.title2.bold())
-            Form {
-                TextField("Name", text: $name)
-                TextField("Description", text: $description)
-                TextField("Tech stack (e.g. Swift, Python)", text: $tech)
-            }
-            .formStyle(.grouped)
-            HStack {
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Create") {
-                    ProjectStore.shared.add(Project(name: name, description: description, tech: tech))
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(name.isEmpty)
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding()
-        .frame(width: 440)
-    }
-}
-
-struct ProjectDetailView: View {
-    @Environment(\.dismiss) var dismiss
-    @State var project: Project
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text(project.name)
-                .font(.title2.bold())
-            Form {
-                TextField("Name", text: $project.name)
-                TextField("Description", text: $project.description)
-                TextField("Tech stack", text: $project.tech)
-                Picker("Status", selection: $project.status) {
-                    ForEach(ProjectStatus.allCases, id: \.self) {
-                        Text($0.displayName).tag($0)
-                    }
-                }
-                Slider(value: $project.progress, in: 0...1) {
-                    Text("Progress \(Int(project.progress * 100))%")
-                }
-            }
-            .formStyle(.grouped)
-            HStack {
-                Button("Delete", role: .destructive) {
-                    ProjectStore.shared.delete(project.id)
-                    dismiss()
-                }
-                Spacer()
-                Button("Done") {
-                    ProjectStore.shared.update(project)
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding()
-        .frame(width: 480)
     }
 }
 

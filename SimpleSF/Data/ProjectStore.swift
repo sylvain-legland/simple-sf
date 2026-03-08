@@ -1,17 +1,19 @@
 import Foundation
 
-struct Project: Codable, Identifiable {
+struct Project: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
     var name: String
     var description: String = ""
     var tech: String = ""
     var status: ProjectStatus = .idea
     var progress: Double = 0.0
-    var createdAt: Date = Date()
-    var updatedAt: Date = Date()
-    var path: String?          // local workspace path
-    var gitURL: String?        // remote git URL
-    var chatHistory: [LLMMessage] = []
+    var createdAt: String = ISO8601DateFormatter().string(from: Date())
+    var updatedAt: String = ISO8601DateFormatter().string(from: Date())
+    var path: String?
+    var gitURL: String?
+
+    static func == (lhs: Project, rhs: Project) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 enum ProjectStatus: String, Codable, CaseIterable {
@@ -54,14 +56,20 @@ final class ProjectStore: ObservableObject {
     private init() { load() }
 
     func load() {
-        guard let data = try? Data(contentsOf: storeURL),
-              let list = try? JSONDecoder().decode([Project].self, from: data)
-        else { return }
-        projects = list
+        guard FileManager.default.fileExists(atPath: storeURL.path) else { return }
+        do {
+            let data = try Data(contentsOf: storeURL)
+            projects = try JSONDecoder().decode([Project].self, from: data)
+        } catch {
+            print("[ProjectStore] decode error: \(error) — starting fresh")
+            projects = []
+        }
     }
 
     func save() {
-        guard let data = try? JSONEncoder().encode(projects) else { return }
+        let enc = JSONEncoder()
+        enc.outputFormatting = .prettyPrinted
+        guard let data = try? enc.encode(projects) else { return }
         try? data.write(to: storeURL, options: .atomic)
     }
 
@@ -72,8 +80,9 @@ final class ProjectStore: ObservableObject {
 
     func update(_ project: Project) {
         if let idx = projects.firstIndex(where: { $0.id == project.id }) {
-            projects[idx] = project
-            projects[idx].updatedAt = Date()
+            var p = project
+            p.updatedAt = ISO8601DateFormatter().string(from: Date())
+            projects[idx] = p
             save()
         }
     }
@@ -86,7 +95,7 @@ final class ProjectStore: ObservableObject {
     func setStatus(_ id: String, status: ProjectStatus) {
         if let idx = projects.firstIndex(where: { $0.id == id }) {
             projects[idx].status = status
-            projects[idx].updatedAt = Date()
+            projects[idx].updatedAt = ISO8601DateFormatter().string(from: Date())
             save()
         }
     }

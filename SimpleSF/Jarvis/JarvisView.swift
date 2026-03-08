@@ -1,10 +1,111 @@
 import SwiftUI
 
+// MARK: - Action parsing (Jarvis manages projects)
+
+enum JarvisAction {
+    case createProject(name: String, description: String, tech: String)
+    case deleteProject(name: String)
+    case updateProject(name: String, status: ProjectStatus?)
+
+    static func parse(_ text: String) -> [JarvisAction] {
+        var actions: [JarvisAction] = []
+
+        // Extract name/description/tech from tag content
+        func attr(_ key: String, in block: String) -> String? {
+            guard let range = block.range(of: "\(key)=\"") else { return nil }
+            let start = range.upperBound
+            guard let end = block[start...].firstIndex(of: "\"") else { return nil }
+            return String(block[start..<end])
+        }
+
+        // Find all [TAG ...] blocks
+        var i = text.startIndex
+        while i < text.endIndex {
+            guard let open = text[i...].firstIndex(of: "[") else { break }
+            guard let close = text[open...].firstIndex(of: "]") else { break }
+            let block = String(text[text.index(after: open)..<close])
+
+            if block.hasPrefix("CREATE_PROJECT"), let name = attr("name", in: block) {
+                actions.append(.createProject(
+                    name: name,
+                    description: attr("description", in: block) ?? "",
+                    tech: attr("tech", in: block) ?? ""
+                ))
+            } else if block.hasPrefix("DELETE_PROJECT"), let name = attr("name", in: block) {
+                actions.append(.deleteProject(name: name))
+            } else if block.hasPrefix("UPDATE_PROJECT"), let name = attr("name", in: block) {
+                let status = attr("status", in: block).flatMap { ProjectStatus(rawValue: $0) }
+                actions.append(.updateProject(name: name, status: status))
+            }
+
+            i = text.index(after: close)
+        }
+        return actions
+    }
+
+    @MainActor func execute() {
+        let store = ProjectStore.shared
+        switch self {
+        case .createProject(let name, let desc, let tech):
+            if !store.projects.contains(where: { $0.name.lowercased() == name.lowercased() }) {
+                store.add(Project(name: name, description: desc, tech: tech))
+            }
+        case .deleteProject(let name):
+            if let p = store.projects.first(where: { $0.name.lowercased() == name.lowercased() }) {
+                store.delete(p.id)
+            }
+        case .updateProject(let name, let status):
+            if let p = store.projects.first(where: { $0.name.lowercased() == name.lowercased() }),
+               let s = status {
+                store.setStatus(p.id, status: s)
+            }
+        }
+    }
+
+    // Strip action tags from displayed text
+    static func cleanDisplay(_ text: String) -> String {
+        var out = text
+        // Remove all [XXX_PROJECT ...] tags
+        while let open = out.range(of: "[CREATE_PROJECT ") ?? out.range(of: "[DELETE_PROJECT ") ?? out.range(of: "[UPDATE_PROJECT ") {
+            if let close = out[open.lowerBound...].firstIndex(of: "]") {
+                out.removeSubrange(open.lowerBound...close)
+            } else { break }
+        }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+// MARK: - System prompt with project tools
+
+private let jarvisSystemPrompt = """
+You are Jarvis, a helpful software engineering AI assistant embedded in a native macOS app.
+Be concise and precise. You manage the user's projects.
+
+AVAILABLE ACTIONS (include these tags in your response when the user asks):
+
+To create a project:
+[CREATE_PROJECT name="Project Name" description="Short description" tech="Swift, Python, etc."]
+
+To delete a project:
+[DELETE_PROJECT name="Project Name"]
+
+To update a project status (idea, planning, active, paused, done):
+[UPDATE_PROJECT name="Project Name" status="active"]
+
+RULES:
+- When the user says "create a project", ALWAYS include a [CREATE_PROJECT ...] tag
+- When the user says "delete/remove a project", ALWAYS include a [DELETE_PROJECT ...] tag
+- You can include actions AND explanatory text in the same response
+- The action tags will be hidden from the user, they only see your text
+"""
+
+// MARK: - JarvisView
+
 @MainActor
 struct JarvisView: View {
     @ObservedObject private var llm = LLMService.shared
     @ObservedObject private var chatStore = ChatStore.shared
-    @ObservedObject private var keychain = KeychainService.shared
+    @ObservedObject private var projects = ProjectStore.shared
 
     @State private var inputText = ""
     @State private var isStreaming = false
@@ -45,14 +146,17 @@ struct JarvisView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
-                        if messages.isEmpty {
+                        if messages.isEmpty && !isStreaming {
                             emptyState
                         }
                         ForEach(Array(messages.enumerated()), id: \.offset) { _, msg in
                             MessageRow(message: msg)
                         }
                         if isStreaming {
-                            MessageRow(message: LLMMessage(role: "assistant", content: streamingContent + "▊"))
+                            MessageRow(message: LLMMessage(
+                                role: "assistant",
+                                content: JarvisAction.cleanDisplay(streamingContent) + "▊"
+                            ))
                         }
                         if let err = errorMessage {
                             Text(err)
@@ -62,7 +166,7 @@ struct JarvisView: View {
                         }
                     }
                     .padding()
-                    .id("bottom")
+                    Color.clear.frame(height: 1).id("bottom")
                 }
                 .onChange(of: streamingContent) { _ in
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
@@ -82,7 +186,7 @@ struct JarvisView: View {
                     .padding(10)
                     .background(Color(.controlBackgroundColor))
                     .cornerRadius(8)
-                    .onSubmit { if !inputText.isEmpty { Task { await sendMessage() } } }
+                    .onSubmit { if !inputText.isEmpty && !isStreaming { Task { await sendMessage() } } }
 
                 Button(action: { Task { await sendMessage() } }) {
                     Image(systemName: isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill")
@@ -107,7 +211,7 @@ struct JarvisView: View {
             Text("Ask Jarvis anything")
                 .font(.title3)
                 .foregroundColor(.secondary)
-            Text("Your local AI assistant. All API calls go directly\nto the provider you configured in Settings.")
+            Text("Your local AI assistant. Manages your projects too.\nTry: \"Create a project called MyApp using SwiftUI\"")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -124,7 +228,7 @@ struct JarvisView: View {
     private func sendMessage() async {
         guard !inputText.isEmpty, !isStreaming else { return }
         guard llm.activeProvider != nil else {
-            errorMessage = "Configure an API key in Settings first."
+            errorMessage = "Configure an API key in API Keys first."
             return
         }
 
@@ -132,27 +236,34 @@ struct JarvisView: View {
         inputText = ""
         errorMessage = nil
 
-        // Persist user msg
         let sid = session?.id ?? chatStore.newSession().id
         chatStore.appendMessage(LLMMessage(role: "user", content: userText), to: sid)
 
-        // Stream assistant reply
         isStreaming = true
         streamingContent = ""
 
+        // Build context with current projects
+        let projectContext = projects.projects.isEmpty
+            ? "No projects exist yet."
+            : "Current projects: " + projects.projects.map { "\($0.name) (\($0.status.displayName), tech: \($0.tech))" }.joined(separator: ", ")
+
+        let fullSystem = jarvisSystemPrompt + "\n\nCONTEXT:\n\(projectContext)"
+
         let history = chatStore.sessions.first(where: { $0.id == sid })?.messages ?? []
-        let stream = llm.stream(
-            messages: history,
-            system: "You are Jarvis, a helpful software engineering AI assistant. Be concise and precise."
-        )
+        let stream = llm.stream(messages: history, system: fullSystem)
 
         for await chunk in stream {
             streamingContent += chunk
         }
 
-        // Persist full reply
-        if !streamingContent.isEmpty {
-            chatStore.appendMessage(LLMMessage(role: "assistant", content: streamingContent), to: sid)
+        // Execute any actions in the response
+        let actions = JarvisAction.parse(streamingContent)
+        for action in actions { action.execute() }
+
+        // Store cleaned message (without action tags)
+        let displayText = JarvisAction.cleanDisplay(streamingContent)
+        if !displayText.isEmpty {
+            chatStore.appendMessage(LLMMessage(role: "assistant", content: displayText), to: sid)
         }
         streamingContent = ""
         isStreaming = false
