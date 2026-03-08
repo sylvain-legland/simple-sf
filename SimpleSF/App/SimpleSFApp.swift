@@ -9,6 +9,8 @@ struct SimpleSFApp: App {
         NSApplication.shared.activate(ignoringOtherApps: true)
         // Initialize the Rust SF engine
         SFBridge.shared.initialize()
+        // Pass LLM config from Keychain to Rust engine
+        SFBridge.shared.syncLLMConfig()
     }
 
     var body: some Scene {

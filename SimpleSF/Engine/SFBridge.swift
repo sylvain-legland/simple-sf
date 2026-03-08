@@ -74,6 +74,20 @@ final class SFBridge: ObservableObject {
         engineReady = true
     }
 
+    /// Pass LLM config from macOS Keychain to the Rust engine
+    func syncLLMConfig() {
+        let keychain = KeychainService.shared
+        // Find first provider with a key (same logic as LLMService.activeProvider)
+        guard let provider = LLMProvider.allCases.first(where: { keychain.key(for: $0) != nil }),
+              let apiKey = keychain.key(for: provider) else { return }
+        configureLLM(
+            provider: provider.rawValue,
+            apiKey: apiKey,
+            baseUrl: provider.baseURL,
+            model: provider.defaultModel
+        )
+    }
+
     func configureLLM(provider: String, apiKey: String, baseUrl: String, model: String) {
         provider.withCString { p in
             apiKey.withCString { k in

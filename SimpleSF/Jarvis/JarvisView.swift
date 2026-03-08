@@ -6,6 +6,7 @@ enum JarvisAction {
     case createProject(name: String, description: String, tech: String)
     case deleteProject(name: String)
     case updateProject(name: String, status: ProjectStatus?)
+    case startMission(projectName: String, brief: String)
 
     static func parse(_ text: String) -> [JarvisAction] {
         var actions: [JarvisAction] = []
@@ -36,6 +37,11 @@ enum JarvisAction {
             } else if block.hasPrefix("UPDATE_PROJECT"), let name = attr("name", in: block) {
                 let status = attr("status", in: block).flatMap { ProjectStatus(rawValue: $0) }
                 actions.append(.updateProject(name: name, status: status))
+            } else if block.hasPrefix("START_MISSION"), let project = attr("project", in: block) {
+                actions.append(.startMission(
+                    projectName: project,
+                    brief: attr("brief", in: block) ?? ""
+                ))
             }
 
             i = text.index(after: close)
@@ -45,19 +51,43 @@ enum JarvisAction {
 
     @MainActor func execute() {
         let store = ProjectStore.shared
+        let bridge = SFBridge.shared
         switch self {
         case .createProject(let name, let desc, let tech):
             if !store.projects.contains(where: { $0.name.lowercased() == name.lowercased() }) {
                 store.add(Project(name: name, description: desc, tech: tech))
             }
+            // Also create in Rust engine
+            let _ = bridge.createProject(name: name, description: desc, tech: tech)
         case .deleteProject(let name):
             if let p = store.projects.first(where: { $0.name.lowercased() == name.lowercased() }) {
                 store.delete(p.id)
+            }
+            // Also delete from Rust engine
+            let rustProjects = bridge.listProjects()
+            if let rp = rustProjects.first(where: { $0.name.lowercased() == name.lowercased() }) {
+                bridge.deleteProject(id: rp.id)
             }
         case .updateProject(let name, let status):
             if let p = store.projects.first(where: { $0.name.lowercased() == name.lowercased() }),
                let s = status {
                 store.setStatus(p.id, status: s)
+            }
+        case .startMission(let projectName, let brief):
+            // Find project in Rust engine, or create one
+            var rustProjects = bridge.listProjects()
+            var projectId = rustProjects.first(where: { $0.name.lowercased() == projectName.lowercased() })?.id
+            if projectId == nil {
+                // Auto-create from Swift store if it exists there
+                if let swiftProj = store.projects.first(where: { $0.name.lowercased() == projectName.lowercased() }) {
+                    projectId = bridge.createProject(name: swiftProj.name, description: swiftProj.description, tech: swiftProj.tech)
+                } else {
+                    projectId = bridge.createProject(name: projectName, description: brief, tech: "")
+                }
+            }
+            if let pid = projectId {
+                bridge.syncLLMConfig()
+                let _ = bridge.startMission(projectId: pid, brief: brief)
             }
         }
     }
@@ -65,8 +95,7 @@ enum JarvisAction {
     // Strip action tags from displayed text
     static func cleanDisplay(_ text: String) -> String {
         var out = text
-        // Remove all [XXX_PROJECT ...] tags
-        while let open = out.range(of: "[CREATE_PROJECT ") ?? out.range(of: "[DELETE_PROJECT ") ?? out.range(of: "[UPDATE_PROJECT ") {
+        while let open = out.range(of: "[CREATE_PROJECT ") ?? out.range(of: "[DELETE_PROJECT ") ?? out.range(of: "[UPDATE_PROJECT ") ?? out.range(of: "[START_MISSION ") {
             if let close = out[open.lowerBound...].firstIndex(of: "]") {
                 out.removeSubrange(open.lowerBound...close)
             } else { break }
@@ -79,9 +108,17 @@ enum JarvisAction {
 
 private let jarvisSystemPrompt = """
 You are Jarvis, a helpful software engineering AI assistant embedded in a native macOS app.
-Be concise and precise. You manage the user's projects.
+Be concise and precise. You manage the user's projects and can launch SAFe missions.
 
-AVAILABLE ACTIONS (include these tags in your response when the user asks):
+You have a full Software Factory engine embedded locally with a team of 6 agents:
+- Marie Lefevre (RTE) — coordinates the team
+- Lucas Martin (PO) — defines user stories and acceptance criteria
+- Thomas Dubois (Lead Dev) — architecture and code review
+- Emma Laurent (Frontend Dev) — UI implementation
+- Karim Benali (Backend Dev) — backend implementation
+- Sophie Durand (QA) — testing and quality
+
+AVAILABLE ACTIONS (include these tags in your response when needed):
 
 To create a project:
 [CREATE_PROJECT name="Project Name" description="Short description" tech="Swift, Python, etc."]
@@ -92,11 +129,18 @@ To delete a project:
 To update a project status (idea, planning, active, paused, done):
 [UPDATE_PROJECT name="Project Name" status="active"]
 
+To start a SAFe mission (triggers the full agent team workflow):
+[START_MISSION project="Project Name" brief="Detailed description of what to build"]
+
 RULES:
 - When the user says "create a project", ALWAYS include a [CREATE_PROJECT ...] tag
 - When the user says "delete/remove a project", ALWAYS include a [DELETE_PROJECT ...] tag
-- You can include actions AND explanatory text in the same response
+- When the user asks to BUILD, CODE, or DEVELOP something, ALWAYS:
+  1. Create the project first with [CREATE_PROJECT ...] if it doesn't exist
+  2. Then start a mission with [START_MISSION ...] with a detailed brief
+- The mission will trigger the SAFe workflow: Vision → Design → Development → QA → Review
 - The action tags will be hidden from the user, they only see your text
+- After starting a mission, tell the user to check the Missions tab to see progress
 """
 
 // MARK: - JarvisView
