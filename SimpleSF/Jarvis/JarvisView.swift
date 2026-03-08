@@ -269,11 +269,11 @@ struct JarvisView: View {
     // MARK: - Discussion Thread
 
     private var discussionThread: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: SF.Spacing.sm) {
             // Phase/pattern header
-            HStack(spacing: 6) {
+            HStack(spacing: SF.Spacing.sm) {
                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.caption)
+                    .font(.system(size: 14))
                     .foregroundColor(SF.Colors.purple)
                 Text("Réunion de cadrage")
                     .font(SF.Font.headline)
@@ -284,55 +284,29 @@ struct JarvisView: View {
                     ProgressView().controlSize(.mini)
                 }
             }
-            .padding(.bottom, SF.Spacing.sm)
+            .padding(.bottom, SF.Spacing.xs)
 
             // Participant pills
             HStack(spacing: -6) {
                 ForEach(["rte", "architecte", "lead_dev", "product"], id: \.self) { id in
-                    AgentAvatarView(agentId: id, size: 24)
+                    AgentAvatarView(agentId: id, size: 26)
                 }
+                let names = ["rte", "architecte", "lead_dev", "product"]
+                    .compactMap { agentInfo[$0]?.name.split(separator: " ").first.map(String.init) }
+                Text(names.joined(separator: ", "))
+                    .font(SF.Font.caption)
+                    .foregroundColor(SF.Colors.textMuted)
+                    .padding(.leading, SF.Spacing.sm)
             }
             .padding(.bottom, SF.Spacing.md)
+
+            Divider().background(SF.Colors.border)
 
             // Agent messages
             ForEach(bridge.discussionEvents) { event in
                 if event.eventType == "discuss_response" {
-                    let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
-                    let roleColor = roleColorFor(event.agentId)
-
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Agent header
-                        HStack(spacing: SF.Spacing.sm) {
-                            AgentAvatarView(agentId: event.agentId, size: 32)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(info.name)
-                                    .font(SF.Font.headline)
-                                    .foregroundColor(SF.Colors.textPrimary)
-                                RoleBadge(role: info.role, color: roleColor)
-                            }
-                            Spacer()
-                            // Recipients
-                            Text(recipientsFor(event.agentId))
-                                .font(SF.Font.badge)
-                                .foregroundColor(SF.Colors.textMuted)
-                        }
-                        .padding(.bottom, SF.Spacing.xs)
-
-                        // Message content
-                        Text(event.data)
-                            .font(SF.Font.body)
-                            .foregroundColor(SF.Colors.textPrimary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(SF.Spacing.md)
-                            .background(SF.Colors.bgSecondary)
-                            .cornerRadius(SF.Radius.md)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: SF.Radius.md)
-                                    .stroke(roleColor.opacity(0.15), lineWidth: 1)
-                            )
-                    }
-                    .padding(.vertical, SF.Spacing.xs)
+                    agentMessageCard(event: event)
+                        .padding(.vertical, SF.Spacing.sm)
 
                 } else if event.eventType == "discuss_thinking" {
                     let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
@@ -346,45 +320,103 @@ struct JarvisView: View {
                     .padding(.vertical, SF.Spacing.xs)
 
                 } else if event.eventType == "discuss_synthesis" {
-                    // PO synthesis card — highlighted
-                    let info = agentInfo["product"] ?? ("PO", "Product Owner", "list.clipboard", .green)
-                    VStack(alignment: .leading, spacing: SF.Spacing.xs) {
-                        HStack(spacing: SF.Spacing.sm) {
-                            AgentAvatarView(agentId: "product", size: 32)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(info.name)
-                                    .font(SF.Font.headline)
-                                    .foregroundColor(SF.Colors.textPrimary)
-                                RoleBadge(role: "Synthèse", color: SF.Colors.po)
-                            }
-                            Spacer()
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(SF.Colors.success)
-                        }
-                        Text(event.data)
-                            .font(SF.Font.body)
-                            .foregroundColor(SF.Colors.textPrimary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(SF.Spacing.md)
-                            .background(SF.Colors.po.opacity(0.06))
-                            .cornerRadius(SF.Radius.md)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: SF.Radius.md)
-                                    .stroke(SF.Colors.po.opacity(0.2), lineWidth: 1)
-                            )
-                    }
-                    .padding(.vertical, SF.Spacing.xs)
+                    synthesisCard(event: event)
+                        .padding(.vertical, SF.Spacing.sm)
                 }
             }
         }
-        .padding(SF.Spacing.md)
+        .padding(SF.Spacing.lg)
         .background(SF.Colors.bgCard.opacity(0.5))
         .cornerRadius(SF.Radius.lg)
         .overlay(
             RoundedRectangle(cornerRadius: SF.Radius.lg)
                 .stroke(SF.Colors.border, lineWidth: 1)
         )
+    }
+
+    /// Individual agent message card with avatar, name, role badge, recipients
+    @ViewBuilder
+    private func agentMessageCard(event: SFBridge.AgentEvent) -> some View {
+        let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
+        let roleColor = roleColorFor(event.agentId)
+
+        VStack(alignment: .leading, spacing: SF.Spacing.sm) {
+            // Agent header
+            HStack(spacing: SF.Spacing.md) {
+                AgentAvatarView(agentId: event.agentId, size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(info.name)
+                        .font(SF.Font.headline)
+                        .foregroundColor(SF.Colors.textPrimary)
+                    RoleBadge(role: info.role, color: roleColor)
+                }
+                Spacer()
+                // Recipients
+                HStack(spacing: 3) {
+                    Image(systemName: "arrowshape.turn.up.right")
+                        .font(.system(size: 9))
+                        .foregroundColor(SF.Colors.textMuted)
+                    Text(recipientsFor(event.agentId))
+                        .font(SF.Font.badge)
+                        .foregroundColor(SF.Colors.textMuted)
+                }
+            }
+
+            // Message content
+            Text(event.data)
+                .font(SF.Font.body)
+                .foregroundColor(SF.Colors.textPrimary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(SF.Spacing.lg)
+                .background(SF.Colors.bgSecondary)
+                .cornerRadius(SF.Radius.md)
+                .overlay(
+                    RoundedRectangle(cornerRadius: SF.Radius.md)
+                        .stroke(roleColor.opacity(0.15), lineWidth: 1)
+                )
+        }
+        .padding(SF.Spacing.md)
+        .background(roleColor.opacity(0.03))
+        .cornerRadius(SF.Radius.lg)
+    }
+
+    /// PO synthesis card — highlighted with success color
+    @ViewBuilder
+    private func synthesisCard(event: SFBridge.AgentEvent) -> some View {
+        let info = agentInfo["product"] ?? ("PO", "Product Owner", "list.clipboard", .green)
+
+        VStack(alignment: .leading, spacing: SF.Spacing.sm) {
+            HStack(spacing: SF.Spacing.md) {
+                AgentAvatarView(agentId: "product", size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(info.name)
+                        .font(SF.Font.headline)
+                        .foregroundColor(SF.Colors.textPrimary)
+                    RoleBadge(role: "Synthèse", color: SF.Colors.po)
+                }
+                Spacer()
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundColor(SF.Colors.success)
+                    .font(.system(size: 16))
+            }
+
+            Text(event.data)
+                .font(SF.Font.body)
+                .foregroundColor(SF.Colors.textPrimary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(SF.Spacing.lg)
+                .background(SF.Colors.po.opacity(0.05))
+                .cornerRadius(SF.Radius.md)
+                .overlay(
+                    RoundedRectangle(cornerRadius: SF.Radius.md)
+                        .stroke(SF.Colors.po.opacity(0.2), lineWidth: 1)
+                )
+        }
+        .padding(SF.Spacing.md)
+        .background(SF.Colors.po.opacity(0.03))
+        .cornerRadius(SF.Radius.lg)
     }
 
     /// Role-based color for agent
