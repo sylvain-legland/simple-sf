@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class SFClient {
     static let shared = SFClient()
     private var session: URLSession = .shared
@@ -54,10 +55,15 @@ final class SFClient {
 
     // MARK: - SSE Streaming
 
-    func stream(_ path: String, body: [String: Any]? = nil) -> AsyncThrowingStream<String, Error> {
-        AsyncThrowingStream { continuation in
+    nonisolated func stream(_ path: String, body: [String: Any]? = nil) -> AsyncThrowingStream<String, Error> {
+        let port = Task { @MainActor in PlatformLauncher.shared.port }
+        return AsyncThrowingStream { continuation in
             Task {
-                var req = request(path: path, method: body != nil ? "POST" : "GET")
+                let p = await port.value
+                let baseURL = "http://127.0.0.1:\(p)"
+                var req = URLRequest(url: URL(string: "\(baseURL)\(path)")!)
+                req.httpMethod = body != nil ? "POST" : "GET"
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 req.timeoutInterval = 300
                 if let body {
                     req.httpBody = try? JSONSerialization.data(withJSONObject: body)

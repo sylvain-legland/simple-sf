@@ -62,6 +62,7 @@ enum LLMProvider: String, CaseIterable, Identifiable {
     }
 }
 
+@MainActor
 final class KeychainStore {
     static let shared = KeychainStore()
     private let service = "com.macaron.simple-sf"

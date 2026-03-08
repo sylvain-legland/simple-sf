@@ -3,6 +3,7 @@ import Combine
 
 enum SFMode: String { case simple, advanced }
 
+@MainActor
 final class AppState: ObservableObject {
     static let shared = AppState()
 

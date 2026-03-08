@@ -11,8 +11,9 @@ let package = Package(
         .executableTarget(
             name: "SimpleSF",
             path: "SimpleSF",
+            exclude: ["Resources"],
             resources: [
-                .process("Resources")
+                .process("i18n/Localizable.xcstrings")
             ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
