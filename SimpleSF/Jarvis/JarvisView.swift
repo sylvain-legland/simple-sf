@@ -344,6 +344,37 @@ struct JarvisView: View {
                             .foregroundColor(SF.Colors.textMuted)
                     }
                     .padding(.vertical, SF.Spacing.xs)
+
+                } else if event.eventType == "discuss_synthesis" {
+                    // PO synthesis card — highlighted
+                    let info = agentInfo["product"] ?? ("PO", "Product Owner", "list.clipboard", .green)
+                    VStack(alignment: .leading, spacing: SF.Spacing.xs) {
+                        HStack(spacing: SF.Spacing.sm) {
+                            AgentAvatarView(agentId: "product", size: 32)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(info.name)
+                                    .font(SF.Font.headline)
+                                    .foregroundColor(SF.Colors.textPrimary)
+                                RoleBadge(role: "Synthèse", color: SF.Colors.po)
+                            }
+                            Spacer()
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(SF.Colors.success)
+                        }
+                        Text(event.data)
+                            .font(SF.Font.body)
+                            .foregroundColor(SF.Colors.textPrimary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(SF.Spacing.md)
+                            .background(SF.Colors.po.opacity(0.06))
+                            .cornerRadius(SF.Radius.md)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: SF.Radius.md)
+                                    .stroke(SF.Colors.po.opacity(0.2), lineWidth: 1)
+                            )
+                    }
+                    .padding(.vertical, SF.Spacing.xs)
                 }
             }
         }
@@ -491,40 +522,18 @@ struct JarvisView: View {
 
     /// Called when the Rust discussion completes — process synthesis and execute actions.
     private func processDiscussionResult(_ synthesis: String) {
-        let sid = session?.id ?? chatStore.newSession().id
-
-        // Build a summary of the discussion for the chat history
-        let discussionSummary = bridge.discussionEvents
-            .filter { $0.eventType == "discuss_response" }
-            .map { event -> String in
-                let info = agentInfo[event.agentId] ?? (event.agentId, "", "", .gray)
-                let roleTag = info.role.isEmpty ? "" : " (\(info.role))"
-                return "**\(info.name)\(roleTag)**: \(event.data)"
-            }
-            .joined(separator: "\n\n---\n\n")
-
-        if !discussionSummary.isEmpty {
-            chatStore.appendMessage(
-                LLMMessage(role: "assistant", content: discussionSummary),
-                to: sid
-            )
-        }
-
         // Execute any actions from the synthesis (CREATE_PROJECT, START_MISSION, etc.)
         let actions = JarvisAction.parse(synthesis)
         for action in actions { action.execute() }
 
-        // Show PO's final synthesis (cleaned of action tags)
+        // Show PO's final synthesis (cleaned of action tags) as a special event
         let displayText = JarvisAction.cleanDisplay(synthesis)
         if !displayText.isEmpty {
-            let poInfo = agentInfo["product"]!
-            chatStore.appendMessage(
-                LLMMessage(role: "assistant", content: "📋 **\(poInfo.name) (\(poInfo.role))**: \(displayText)"),
-                to: sid
-            )
+            let event = SFBridge.AgentEvent(agentId: "product", eventType: "discuss_synthesis", data: displayText)
+            bridge.discussionEvents.append(event)
         }
 
-        bridge.discussionEvents.removeAll()
+        // Keep discussionEvents visible — do NOT clear them
         isProcessing = false
     }
 }

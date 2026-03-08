@@ -118,42 +118,47 @@ struct AgentAvatarView: View {
     }
 
     private static var cache: [String: NSImage] = [:]
+    private static var spmBundle: Bundle? = {
+        let bundleName = "SimpleSF_SimpleSF"
+        let candidates: [URL?] = [
+            Bundle.main.resourceURL,
+            Bundle.main.bundleURL,
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Resources"),
+            // SPM debug: binary sits next to .bundle
+            Bundle.main.executableURL?.deletingLastPathComponent(),
+        ]
+        for candidate in candidates {
+            if let path = candidate?.appendingPathComponent(bundleName + ".bundle"),
+               let bundle = Bundle(url: path) {
+                return bundle
+            }
+        }
+        return nil
+    }()
 
     static func loadAvatar(_ agentId: String) -> NSImage? {
         if let cached = cache[agentId] { return cached }
-        let paths: [URL?] = [
-            Bundle.main.url(forResource: agentId, withExtension: "jpg", subdirectory: "Resources/Avatars"),
-            Bundle.main.url(forResource: agentId, withExtension: "jpg", subdirectory: "Avatars"),
-            Bundle.main.url(forResource: agentId, withExtension: "jpg"),
-            // SPM module bundle
-            Bundle.module_safe?.url(forResource: agentId, withExtension: "jpg", subdirectory: "Avatars"),
-            Bundle.module_safe?.url(forResource: agentId, withExtension: "jpg"),
-        ]
-        for case let path? in paths {
-            if let img = NSImage(contentsOf: path) {
+
+        // Try SPM module bundle first (most reliable for packaged resources)
+        if let bundle = spmBundle {
+            for subdir in ["Avatars", "Resources/Avatars", nil] as [String?] {
+                if let url = bundle.url(forResource: agentId, withExtension: "jpg", subdirectory: subdir),
+                   let img = NSImage(contentsOf: url) {
+                    cache[agentId] = img
+                    return img
+                }
+            }
+        }
+
+        // Try main bundle
+        for subdir in ["Resources/Avatars", "Avatars", nil] as [String?] {
+            if let url = Bundle.main.url(forResource: agentId, withExtension: "jpg", subdirectory: subdir),
+               let img = NSImage(contentsOf: url) {
                 cache[agentId] = img
                 return img
             }
         }
-        return nil
-    }
-}
 
-extension Bundle {
-    /// Safe module bundle that doesn't crash if not in SPM context
-    static var module_safe: Bundle? {
-        let bundleName = "SimpleSF_SimpleSF"
-        let candidates = [
-            Bundle.main.resourceURL,
-            Bundle.main.bundleURL,
-            Bundle.main.bundleURL.appendingPathComponent("Contents/Resources"),
-        ]
-        for candidate in candidates {
-            let bundlePath = candidate?.appendingPathComponent(bundleName + ".bundle")
-            if let bundlePath, let bundle = Bundle(url: bundlePath) {
-                return bundle
-            }
-        }
         return nil
     }
 }
