@@ -20,6 +20,26 @@ const SAFE_PHASES: &[(&str, &str, &[&str])] = &[
 const MAX_NETWORK_ROUNDS: usize = 3;
 const CONTEXT_BUDGET: usize = 6000;
 
+/// Instruction appended to every system prompt — enforce no emoji
+const STYLE_RULES: &str = "RÈGLES DE FORMAT : ZÉRO emoji, ZÉRO émoticône, ZÉRO caractère Unicode décoratif. \
+Utilise uniquement du texte, des tirets (-), des pipes (|), des étoiles (*) pour la mise en forme. \
+Sois structuré avec des titres en **gras** et des listes à tirets.";
+
+/// Strip emoji and decorative Unicode from LLM output
+fn strip_emoji(text: &str) -> String {
+    text.chars().filter(|c| {
+        let cp = *c as u32;
+        // Keep ASCII + Latin Extended + common punctuation + CJK
+        cp < 0x2600 || // Basic Multilingual Plane below symbols
+        (cp >= 0x3000 && cp < 0xFE00) || // CJK
+        (cp >= 0xFF00 && cp < 0xFFF0)    // Fullwidth forms
+    }).collect::<String>()
+    .lines()
+    .map(|l| l.trim_end())
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
 // ──────────────────────────────────────────
 // Jarvis Intake Discussion (SAFe network pattern)
 // ──────────────────────────────────────────
@@ -93,8 +113,8 @@ pub async fn run_intake(
 
     let rte_system = format!(
         "{}\n\n{}\n\nTu t'adresses à tes collègues par leur prénom avec @. \
-         Réponds dans la même langue que la demande client.",
-        rte.persona, protocols::RESEARCH_PROTOCOL
+         Réponds dans la même langue que la demande client.\n\n{}",
+        rte.persona, protocols::RESEARCH_PROTOCOL, STYLE_RULES
     );
 
     let rte_result = llm::chat_completion(
@@ -102,7 +122,7 @@ pub async fn run_intake(
         Some(&rte_system),
         None,
     ).await?;
-    let rte_content = rte_result.content.unwrap_or_else(|| "(pas de réponse)".into());
+    let rte_content = strip_emoji(&rte_result.content.unwrap_or_default());
 
     on_event(&rte.id, AgentEvent::Response { content: rte_content.clone() });
     store_discussion_msg(&session_id, &rte.id, &rte.name, &rte.role, 0, &rte_content);
@@ -152,8 +172,8 @@ pub async fn run_intake(
 
             let system = format!(
                 "{}\n\nTu t'adresses à tes collègues par @prénom. \
-                 Réponds dans la même langue que la demande client.",
-                agent.persona
+                 Réponds dans la même langue que la demande client.\n\n{}",
+                agent.persona, STYLE_RULES
             );
 
             let result = llm::chat_completion(
@@ -163,8 +183,8 @@ pub async fn run_intake(
             ).await;
 
             let content = match result {
-                Ok(r) => r.content.unwrap_or_else(|| "(pas de réponse)".into()),
-                Err(e) => format!("(erreur: {})", e),
+                Ok(r) => strip_emoji(&r.content.unwrap_or_default()),
+                Err(e) => return Err(format!("LLM error for {}: {}", agent.name, e)),
             };
 
             on_event(&agent.id, AgentEvent::Response { content: content.clone() });
@@ -211,8 +231,8 @@ pub async fn run_intake(
         "{}\n\nTu es le décideur produit. Tu synthétises la discussion et tu décides.\n\
          Les tags [CREATE_PROJECT ...] et [START_MISSION ...] sont invisibles pour le client \
          — ils déclenchent des actions automatiques.\n\
-         Réponds dans la même langue que la demande client.",
-        po.persona
+         Réponds dans la même langue que la demande client.\n\n{}",
+        po.persona, STYLE_RULES
     );
 
     let synthesis = llm::chat_completion(
@@ -221,7 +241,7 @@ pub async fn run_intake(
         None,
     ).await?;
 
-    let po_content = synthesis.content.unwrap_or_else(|| "(pas de synthèse)".into());
+    let po_content = strip_emoji(&synthesis.content.unwrap_or_default());
     on_event(&po.id, AgentEvent::Response { content: po_content.clone() });
     store_discussion_msg(&session_id, &po.id, &po.name, &po.role, 99, &po_content);
 
@@ -391,8 +411,8 @@ async fn run_network(
     );
 
     let leader_system = format!(
-        "{}\n\n{}",
-        leader.persona, protocols::protocol_for_role(&leader.role, phase)
+        "{}\n\n{}\n\n{}",
+        leader.persona, protocols::protocol_for_role(&leader.role, phase), STYLE_RULES
     );
 
     let leader_result = llm::chat_completion(
@@ -400,7 +420,7 @@ async fn run_network(
         Some(&leader_system),
         None,
     ).await?;
-    let leader_content = leader_result.content.unwrap_or_default();
+    let leader_content = strip_emoji(&leader_result.content.unwrap_or_default());
     on_event(&leader.id, AgentEvent::Response { content: leader_content.clone() });
     store_agent_msg(mission_id, phase_id, &leader.id, &leader.name, "assistant", &leader_content, None);
     all_outputs.push(format!("**{} ({})**: {}", leader.name, leader.role, leader_content));
@@ -430,8 +450,8 @@ async fn run_network(
             };
 
             let system = format!(
-                "{}\n\n{}",
-                agent.persona, protocols::protocol_for_role(&agent.role, phase)
+                "{}\n\n{}\n\n{}",
+                agent.persona, protocols::protocol_for_role(&agent.role, phase), STYLE_RULES
             );
 
             let result = llm::chat_completion(
@@ -441,8 +461,8 @@ async fn run_network(
             ).await;
 
             let content = match result {
-                Ok(r) => r.content.unwrap_or_default(),
-                Err(e) => format!("(error: {})", e),
+                Ok(r) => strip_emoji(&r.content.unwrap_or_default()),
+                Err(e) => return Err(format!("LLM error for {}: {}", agent.name, e)),
             };
 
             on_event(&agent.id, AgentEvent::Response { content: content.clone() });
@@ -476,10 +496,10 @@ async fn run_network(
 
     let synthesis = llm::chat_completion(
         &[LLMMessage { role: "user".into(), content: synthesis_prompt }],
-        Some(&format!("{}\n\n{}", leader.persona, protocols::protocol_for_role(&leader.role, phase))),
+        Some(&format!("{}\n\n{}\n\n{}", leader.persona, protocols::protocol_for_role(&leader.role, phase), STYLE_RULES)),
         None,
     ).await?;
-    let synthesis_content = synthesis.content.unwrap_or_default();
+    let synthesis_content = strip_emoji(&synthesis.content.unwrap_or_default());
     on_event(&leader.id, AgentEvent::Response { content: synthesis_content.clone() });
     store_agent_msg(mission_id, phase_id, &leader.id, &leader.name, "assistant", &synthesis_content, None);
     all_outputs.push(synthesis_content.clone());
