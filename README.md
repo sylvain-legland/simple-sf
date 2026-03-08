@@ -292,4 +292,4 @@ xcrun swift build && open dist/SimpleSF.app
 
 ## License
 
-MIT © [Sylvain Legland](https://github.com/sylvain-legland)
+This project is licensed under the AGPL v3 License - see the [LICENSE](LICENSE) file for details.
