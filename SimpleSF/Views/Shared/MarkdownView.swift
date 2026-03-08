@@ -30,6 +30,7 @@ struct MarkdownView: View {
         case numbered(number: String, text: String)
         case blockquote(text: String)
         case codeBlock(code: String, lang: String)
+        case table(headers: [String], rows: [[String]])
         case divider
     }
 
@@ -50,10 +51,40 @@ struct MarkdownView: View {
                 continue
             }
 
-            // Divider
-            if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+            // Divider (but not table separator like |---|---|)
+            if (trimmed == "---" || trimmed == "***" || trimmed == "___") && !trimmed.contains("|") {
                 blocks.append(.divider)
                 i += 1
+                continue
+            }
+
+            // Table — lines starting with |
+            if trimmed.hasPrefix("|") && trimmed.hasSuffix("|") {
+                var tableLines: [String] = []
+                while i < lines.count {
+                    let tl = lines[i].trimmingCharacters(in: .whitespaces)
+                    if tl.hasPrefix("|") {
+                        tableLines.append(tl)
+                        i += 1
+                    } else {
+                        break
+                    }
+                }
+                if tableLines.count >= 2 {
+                    let parseCells: (String) -> [String] = { line in
+                        line.split(separator: "|", omittingEmptySubsequences: false)
+                            .map { $0.trimmingCharacters(in: .whitespaces) }
+                            .filter { !$0.isEmpty }
+                    }
+                    let headers = parseCells(tableLines[0])
+                    // Skip separator row (|---|---|)
+                    let startRow = tableLines.count > 1 && tableLines[1].contains("-") ? 2 : 1
+                    var rows: [[String]] = []
+                    for ri in startRow..<tableLines.count {
+                        rows.append(parseCells(tableLines[ri]))
+                    }
+                    blocks.append(.table(headers: headers, rows: rows))
+                }
                 continue
             }
 
@@ -130,6 +161,7 @@ struct MarkdownView: View {
                 let nextTrimmed = lines[i].trimmingCharacters(in: .whitespaces)
                 if nextTrimmed.isEmpty || nextTrimmed.hasPrefix("#") || nextTrimmed.hasPrefix("```")
                     || nextTrimmed.hasPrefix(">") || nextTrimmed.hasPrefix("- ") || nextTrimmed.hasPrefix("* ")
+                    || nextTrimmed.hasPrefix("|")
                     || nextTrimmed == "---" || nextTrimmed == "***" {
                     break
                 }
@@ -209,6 +241,48 @@ struct MarkdownView: View {
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(SF.Colors.bgPrimary.opacity(0.7))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(SF.Colors.border, lineWidth: 0.5)
+            )
+
+        case .table(let headers, let rows):
+            VStack(spacing: 0) {
+                // Header row
+                HStack(spacing: 0) {
+                    ForEach(Array(headers.enumerated()), id: \.offset) { ci, header in
+                        renderInline(header)
+                            .font(.system(size: fontSize - 1, weight: .semibold))
+                            .foregroundColor(SF.Colors.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                        if ci < headers.count - 1 {
+                            Divider().frame(height: 32).background(SF.Colors.border.opacity(0.3))
+                        }
+                    }
+                }
+                .background(SF.Colors.bgTertiary)
+
+                // Data rows
+                ForEach(Array(rows.enumerated()), id: \.offset) { ri, row in
+                    HStack(spacing: 0) {
+                        ForEach(Array(row.enumerated()), id: \.offset) { ci, cell in
+                            renderInline(cell)
+                                .font(.system(size: fontSize - 1))
+                                .foregroundColor(SF.Colors.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                            if ci < row.count - 1 {
+                                Divider().frame(height: 28).background(SF.Colors.border.opacity(0.2))
+                            }
+                        }
+                    }
+                    .background(ri % 2 == 0 ? Color.clear : SF.Colors.bgTertiary.opacity(0.4))
+                }
+            }
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
