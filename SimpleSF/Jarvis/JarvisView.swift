@@ -98,15 +98,28 @@ enum JarvisAction {
 }
 
 // MARK: - Agent info for display
-private let agentInfo: [String: (name: String, icon: String, color: Color)] = [
-    "rte-marie":   ("Marie (RTE)", "person.badge.clock", .blue),
-    "po-lucas":    ("Lucas (PO)", "list.clipboard", .green),
-    "lead-thomas": ("Thomas (Lead)", "wrench.and.screwdriver", .orange),
-    "dev-emma":    ("Emma (Dev)", "laptopcomputer", .pink),
-    "dev-karim":   ("Karim (Dev)", "server.rack", .cyan),
-    "qa-sophie":   ("Sophie (QA)", "checkmark.shield", .yellow),
-    "jarvis":      ("Jarvis", "sparkles", .purple),
-    "engine":      ("Système", "gearshape", .gray),
+private let agentInfo: [String: (name: String, role: String, icon: String, color: Color)] = [
+    "rte-marie":      ("Marie Lefevre",    "RTE",           "person.badge.clock",        .blue),
+    "po-lucas":       ("Lucas Martin",     "Product Owner", "list.clipboard",            .green),
+    "scrum-ines":     ("Inès Rousseau",    "Scrum Master",  "calendar.badge.clock",      .teal),
+    "archi-pierre":   ("Pierre Garnier",   "Architecte",    "building.2",                .indigo),
+    "lead-thomas":    ("Thomas Dubois",    "Lead Dev",      "wrench.and.screwdriver",    .orange),
+    "lead-frontend":  ("Emma Laurent",     "Lead Frontend", "paintbrush",                .pink),
+    "lead-backend":   ("Julien Moreau",    "Lead Backend",  "server.rack",               .mint),
+    "dev-emma":       ("Clara Nguyen",     "Dev Frontend",  "laptopcomputer",            .pink),
+    "dev-karim":      ("Karim Benali",     "Dev Backend",   "externaldrive.connected.to.line.below", .cyan),
+    "dev-fullstack":  ("Alex Petit",       "Dev Fullstack", "macbook.and.iphone",        .purple),
+    "dev-mobile":     ("Romain Faure",     "Dev Mobile",    "iphone",                    .orange),
+    "qa-sophie":      ("Sophie Martin",    "QA Lead",       "checkmark.shield",          .yellow),
+    "qa-claire":      ("Claire Dupont",    "QA",            "checklist",                 .yellow),
+    "devops-karim":   ("Karim Bouzid",     "DevOps",        "cloud",                     .blue),
+    "secu-marc":      ("Marc Lefranc",     "Sécurité",      "lock.shield",               .red),
+    "ux-chloe":       ("Chloé Bernard",    "UX Designer",   "paintpalette",              .pink),
+    "data-antoine":   ("Antoine Roux",     "Data Engineer", "chart.bar",                 .green),
+    "tw-valerie":     ("Valérie Morin",    "Tech Writer",   "doc.text",                  .gray),
+    "cloud-romain":   ("Romain Duval",     "Cloud Archi",   "cloud.bolt",                .blue),
+    "jarvis":         ("Jarvis",           "Chef de projet","sparkles",                  .purple),
+    "engine":         ("Système",          "",              "gearshape",                 .gray),
 ]
 
 // MARK: - JarvisView
@@ -236,30 +249,42 @@ struct JarvisView: View {
     // MARK: - Discussion Thread (shows each agent's contribution)
 
     private var discussionThread: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(bridge.discussionEvents) { event in
                 if event.eventType == "discuss_response" {
-                    let info = agentInfo[event.agentId] ?? (event.agentId, "person.circle", .gray)
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: info.icon)
-                            .foregroundColor(info.color)
-                            .frame(width: 20)
+                    let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
+                    HStack(alignment: .top, spacing: 12) {
+                        // Avatar: photo if available, else icon
+                        agentAvatar(id: event.agentId, color: info.color, icon: info.icon)
+
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(info.name)
-                                .font(.caption.bold())
-                                .foregroundColor(info.color)
+                            HStack(spacing: 6) {
+                                Text(info.name)
+                                    .font(.callout.bold())
+                                    .foregroundColor(info.color)
+                                if !info.role.isEmpty {
+                                    Text(info.role)
+                                        .font(.caption2)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(info.color.opacity(0.15))
+                                        .foregroundColor(info.color)
+                                        .cornerRadius(4)
+                                }
+                            }
                             Text(event.data)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 8)
-                    .background(info.color.opacity(0.05))
-                    .cornerRadius(8)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(info.color.opacity(0.04))
+                    .cornerRadius(10)
                 } else if event.eventType == "discuss_thinking" {
-                    let info = agentInfo[event.agentId] ?? (event.agentId, "person.circle", .gray)
+                    let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
                     HStack(spacing: 8) {
+                        agentAvatar(id: event.agentId, color: info.color, icon: info.icon, size: 24)
                         ProgressView().controlSize(.mini)
                         Text("\(info.name) réfléchit…")
                             .font(.caption)
@@ -277,6 +302,37 @@ struct JarvisView: View {
                 }
             }
         }
+    }
+
+    /// Agent avatar — shows JPG photo from bundle if available, fallback to SF icon
+    @ViewBuilder
+    private func agentAvatar(id: String, color: Color, icon: String, size: CGFloat = 36) -> some View {
+        if let img = NSImage(named: id) ?? loadBundleAvatar(id) {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(color.opacity(0.4), lineWidth: 1.5))
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: size * 0.45))
+                .foregroundColor(color)
+                .frame(width: size, height: size)
+                .background(color.opacity(0.12))
+                .clipShape(Circle())
+        }
+    }
+
+    /// Load avatar from app bundle Resources/Avatars/
+    private func loadBundleAvatar(_ agentId: String) -> NSImage? {
+        if let url = Bundle.main.url(forResource: agentId, withExtension: "jpg", subdirectory: "Resources/Avatars") {
+            return NSImage(contentsOf: url)
+        }
+        if let url = Bundle.main.url(forResource: agentId, withExtension: "jpg") {
+            return NSImage(contentsOf: url)
+        }
+        return nil
     }
 
     // MARK: - Session Sidebar
@@ -396,8 +452,9 @@ struct JarvisView: View {
         let discussionSummary = bridge.discussionEvents
             .filter { $0.eventType == "discuss_response" }
             .map { event -> String in
-                let info = agentInfo[event.agentId] ?? (event.agentId, "", .gray)
-                return "**\(info.name)**: \(event.data)"
+                let info = agentInfo[event.agentId] ?? (event.agentId, "", "", .gray)
+                let roleTag = info.role.isEmpty ? "" : " (\(info.role))"
+                return "**\(info.name)\(roleTag)**: \(event.data)"
             }
             .joined(separator: "\n\n---\n\n")
 
@@ -412,11 +469,12 @@ struct JarvisView: View {
         let actions = JarvisAction.parse(synthesis)
         for action in actions { action.execute() }
 
-        // Show Jarvis's final synthesis (cleaned of action tags)
+        // Show PO's final synthesis (cleaned of action tags)
         let displayText = JarvisAction.cleanDisplay(synthesis)
         if !displayText.isEmpty {
+            let poInfo = agentInfo["po-lucas"]!
             chatStore.appendMessage(
-                LLMMessage(role: "assistant", content: "🎯 **Jarvis**: \(displayText)"),
+                LLMMessage(role: "assistant", content: "📋 **\(poInfo.name) (\(poInfo.role))**: \(displayText)"),
                 to: sid
             )
         }

@@ -33,10 +33,11 @@ pub async fn run_agent(
     on_event: &EventCallback,
 ) -> Result<String, String> {
     // Get tool schemas: role-based + any extras from agent catalog
-    let extra: Vec<&str> = crate::catalog::get_agent_def(agent_id)
-        .map(|a| a.tools.to_vec())
+    let extra: Vec<String> = crate::catalog::get_agent_info(agent_id)
+        .map(|a| a.tools)
         .unwrap_or_default();
-    let tool_schemas = tools::tool_schemas_for_role_with_extras(agent_role, &extra);
+    let extra_refs: Vec<&str> = extra.iter().map(|s| s.as_str()).collect();
+    let tool_schemas = tools::tool_schemas_for_role_with_extras(agent_role, &extra_refs);
 
     // Build system prompt: persona + protocol + task context
     let protocol_section = protocol.map(|p| format!("\n\n{}", p)).unwrap_or_default();

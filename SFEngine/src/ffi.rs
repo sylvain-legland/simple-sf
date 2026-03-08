@@ -29,11 +29,15 @@ fn from_c(p: *const c_char) -> String {
 // ──────────────────────────────────────────
 
 #[unsafe(no_mangle)]
-pub extern "C" fn sf_init(db_path: *const c_char) {
+pub extern "C" fn sf_init(db_path: *const c_char, data_dir: *const c_char) {
     let path = from_c(db_path);
     let p = if path.is_empty() { "sf_engine.db".to_string() } else { path };
     db::init_db(&p);
-    db::seed_agents();
+
+    let dir = from_c(data_dir);
+    if !dir.is_empty() {
+        db::seed_from_json(&dir);
+    }
 }
 
 /// Register a callback: (agent_id, event_type, data)
@@ -333,15 +337,15 @@ pub extern "C" fn sf_list_agents() -> *mut c_char {
 /// List available workflow templates (returns JSON array)
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_list_workflows() -> *mut c_char {
-    let wfs: Vec<serde_json::Value> = crate::catalog::WORKFLOWS.iter().map(|w| {
+    let wfs = crate::catalog::list_workflows();
+    let json_arr: Vec<serde_json::Value> = wfs.iter().map(|(id, name, desc)| {
         serde_json::json!({
-            "id": w.id,
-            "name": w.name,
-            "description": w.description,
-            "phases": w.phases.len(),
+            "id": id,
+            "name": name,
+            "description": desc,
         })
     }).collect();
-    let json = serde_json::to_string(&wfs).unwrap_or_else(|_| "[]".into());
+    let json = serde_json::to_string(&json_arr).unwrap_or_else(|_| "[]".into());
     c_str(&json).into_raw()
 }
 

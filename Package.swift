@@ -11,9 +11,10 @@ let package = Package(
         .executableTarget(
             name: "SimpleSF",
             path: "SimpleSF",
-            exclude: ["Resources"],
             resources: [
-                .process("i18n/Localizable.xcstrings")
+                .process("i18n/Localizable.xcstrings"),
+                .copy("Resources/Avatars"),
+                .copy("Resources/SFData")
             ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")

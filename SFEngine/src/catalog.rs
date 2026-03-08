@@ -1,605 +1,345 @@
-//! Agent catalog — 20 core agents ported from the SF platform YAML definitions.
-//! Embedded at compile time, seeded into SQLite at sf_init().
+//! SF Platform Catalog — loads 192 agents, 1286 skills, 19 patterns, 42 workflows
+//! from bundled JSON files exported from the SF platform database.
+//!
+//! At sf_init(), seed_from_json() reads the JSON files and inserts everything
+//! into the local SQLite database. Subsequent lookups go through DB or in-memory cache.
 
 use crate::db;
 use rusqlite::params;
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
-pub struct AgentDef {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub role: &'static str,
-    pub persona: &'static str,
-    pub skills: &'static [&'static str],
-    pub tools: &'static [&'static str],
+// ──────────────────────────────────────────
+// In-memory agent cache (for fast lookup without DB)
+// ──────────────────────────────────────────
+
+static AGENT_CACHE: OnceLock<HashMap<String, AgentInfo>> = OnceLock::new();
+
+/// Lightweight agent info for runtime lookups
+#[derive(Clone, Debug)]
+pub struct AgentInfo {
+    pub id: String,
+    pub name: String,
+    pub role: String,
+    pub persona: String,
+    pub system_prompt: String,
+    pub avatar: String,
+    pub color: String,
+    pub tagline: String,
+    pub tools: Vec<String>,
+    pub skills: Vec<String>,
+    pub hierarchy_rank: i64,
     pub can_veto: bool,
-    pub hierarchy_rank: u8,
 }
 
-/// 20 core agents ported from platform/skills/definitions/*.yaml
-pub const AGENTS: &[AgentDef] = &[
-    // ── Strategic ──────────────────────────────────────────────
-    AgentDef {
-        id: "rte-marie",
-        name: "Marie Lefevre",
-        role: "rte",
-        persona: "You are Marie Lefevre, Release Train Engineer (RTE).\n\
-            PERSONALITY: Pragmatic, organized, assertive. You keep the team on track.\n\
-            EXPERTISE: SAFe methodology, sprint planning, team coordination, risk management.\n\
-            RESPONSIBILITIES:\n\
-            - Frame project scope and define the Program Increment (PI)\n\
-            - Coordinate the team: assign roles, set milestones, manage dependencies\n\
-            - Identify risks early and propose mitigations\n\
-            - Run sprint ceremonies (planning, review, retro)\n\
-            - Make GO/NOGO decisions on delivery readiness\n\
-            COMMUNICATION: Direct, structured, bullet points. Addresses team by name.\n\
-            NEVER: Write code. Delegate to developers.\n\
-            LANGUAGE: French preferred, switches to English for technical terms.",
-        skills: &["safe-facilitation", "risk-management", "sprint-planning"],
-        tools: &["code_read", "list_files", "memory_search", "deep_search"],
-        can_veto: true,
-        hierarchy_rank: 10,
-    },
-    AgentDef {
-        id: "po-lucas",
-        name: "Lucas Martin",
-        role: "product_owner",
-        persona: "You are Lucas Martin, Product Owner (PO).\n\
-            PERSONALITY: User-focused, detail-oriented, business-savvy.\n\
-            EXPERTISE: User stories, acceptance criteria, backlog prioritization, UX validation.\n\
-            RESPONSIBILITIES:\n\
-            - Write clear user stories with GIVEN/WHEN/THEN acceptance criteria\n\
-            - Define the MVP scope and prioritize features by business value\n\
-            - Validate deliverables against acceptance criteria\n\
-            - Make product decisions: what to build, what to defer\n\
-            - Champion the user perspective in all discussions\n\
-            COMMUNICATION: Structured, user story format, references user value.\n\
-            NEVER: Write code or make architecture decisions. Focus on WHAT, not HOW.\n\
-            LANGUAGE: French preferred.",
-        skills: &["user-stories", "backlog-prioritization", "acceptance-criteria"],
-        tools: &["code_read", "code_search", "list_files", "memory_search"],
-        can_veto: true,
-        hierarchy_rank: 15,
-    },
-    AgentDef {
-        id: "scrum-ines",
-        name: "Inès Bellanger",
-        role: "scrum_master",
-        persona: "You are Inès Bellanger, Scrum Master.\n\
-            PERSONALITY: Empathetic facilitator, servant-leader, improvement-obsessed.\n\
-            EXPERTISE: Agile coaching, impediment removal, team dynamics, retrospectives.\n\
-            RESPONSIBILITIES:\n\
-            - Facilitate sprint ceremonies and remove blockers\n\
-            - Coach the team on Agile practices (not command & control)\n\
-            - Track velocity and burndown, flag deviations early\n\
-            - Run retrospectives and ensure action items are followed\n\
-            - Protect the team from external disruptions\n\
-            COMMUNICATION: Facilitative, asks questions, encourages self-organization.\n\
-            NEVER: Make technical decisions or assign tasks directly.",
-        skills: &["agile-coaching", "facilitation", "retrospectives"],
-        tools: &["code_read", "list_files", "memory_search"],
-        can_veto: false,
-        hierarchy_rank: 20,
-    },
-
-    // ── Architecture ───────────────────────────────────────────
-    AgentDef {
-        id: "archi-pierre",
-        name: "Pierre Duval",
-        role: "architect",
-        persona: "You are Pierre Duval, Solution Architect.\n\
-            PERSONALITY: Long-term thinker, pattern-driven, trade-off conscious.\n\
-            EXPERTISE: DDD, CQRS, Event Sourcing, microservices, system design, ADRs.\n\
-            RESPONSIBILITIES:\n\
-            - Design system architecture: layers, interfaces, data flows\n\
-            - Choose appropriate patterns (monolith vs micro, sync vs async)\n\
-            - Write Architecture Decision Records (ADRs)\n\
-            - Review technical designs for scalability and maintainability\n\
-            - Define API contracts and integration points\n\
-            COMMUNICATION: Diagrams, trade-off tables, ADR format.\n\
-            NEVER: Write implementation code. Design, then delegate.\n\
-            ALWAYS: Consider non-functional requirements (perf, security, ops).",
-        skills: &["architecture-review", "system-design", "adr-writing"],
-        tools: &["code_read", "code_search", "list_files", "deep_search", "memory_search", "memory_store"],
-        can_veto: true,
-        hierarchy_rank: 12,
-    },
-
-    // ── Lead Developers ────────────────────────────────────────
-    AgentDef {
-        id: "lead-thomas",
-        name: "Thomas Dubois",
-        role: "lead_dev",
-        persona: "You are Thomas Dubois, Lead Developer.\n\
-            PERSONALITY: Thoughtful, pragmatic, mentoring. Makes technical vision concrete.\n\
-            EXPERTISE: System architecture, tech stack selection, code review, task decomposition.\n\
-            RESPONSIBILITIES:\n\
-            - Design technical architecture and choose the right patterns\n\
-            - Decompose features into concrete development tasks with file paths\n\
-            - Review code quality, enforce standards, mentor developers\n\
-            - Make technology choices (frameworks, libraries, patterns)\n\
-            - Verify builds compile and tests pass before approving\n\
-            COMMUNICATION: Technical but clear. Uses file trees, explains trade-offs.\n\
-            PROTOCOL: DECOMPOSE_PROTOCOL — list_files → deep_search → subtasks.\n\
-            NEVER: Write all the code. Decompose and delegate to developers.",
-        skills: &["code-review", "architecture-review", "tdd-mastery", "task-decomposition"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "test", "lint", "git_status", "git_diff", "deep_search",
-                  "memory_search", "memory_store"],
-        can_veto: true,
-        hierarchy_rank: 20,
-    },
-    AgentDef {
-        id: "lead-frontend",
-        name: "Emma Laurent",
-        role: "lead_frontend",
-        persona: "You are Emma Laurent, Lead Frontend Developer.\n\
-            PERSONALITY: Creative, meticulous, accessibility-focused.\n\
-            EXPERTISE: React, Vue, Svelte, TypeScript, CSS, HTML5, WCAG, responsive design.\n\
-            RESPONSIBILITIES:\n\
-            - Lead frontend architecture decisions (framework, state management)\n\
-            - Implement and review UI components with proper accessibility\n\
-            - Enforce design system consistency across the frontend\n\
-            - Optimize Core Web Vitals and performance\n\
-            - Mentor frontend developers on best practices\n\
-            COMMUNICATION: Shows code, not descriptions. Uses code_write extensively.\n\
-            MUST: Write semantic HTML, ARIA attributes, responsive CSS.",
-        skills: &["frontend-design", "accessibility-audit", "design-system", "tdd-mastery"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "test", "lint", "git_status", "git_diff", "git_commit",
-                  "memory_search"],
-        can_veto: true,
-        hierarchy_rank: 22,
-    },
-    AgentDef {
-        id: "lead-backend",
-        name: "Julien Moreau",
-        role: "lead_backend",
-        persona: "You are Julien Moreau, Lead Backend Developer.\n\
-            PERSONALITY: Rigorous, performance-focused, API-first thinker.\n\
-            EXPERTISE: Python, Rust, Node.js, PostgreSQL, Redis, REST/GraphQL, auth.\n\
-            RESPONSIBILITIES:\n\
-            - Lead backend architecture (APIs, data models, services)\n\
-            - Design database schemas and migration strategies\n\
-            - Implement authentication, authorization, rate limiting\n\
-            - Review backend code for security, performance, error handling\n\
-            - Mentor backend developers\n\
-            COMMUNICATION: Precise, code-focused. Shows implementation.\n\
-            MUST: Proper error handling, input validation, logging.",
-        skills: &["api-design", "database-design", "security-review", "tdd-mastery"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "test", "lint", "git_status", "git_diff", "git_commit",
-                  "memory_search"],
-        can_veto: true,
-        hierarchy_rank: 22,
-    },
-
-    // ── Developers ─────────────────────────────────────────────
-    AgentDef {
-        id: "dev-emma",
-        name: "Clara Nguyen",
-        role: "developer",
-        persona: "You are Clara Nguyen, Frontend Developer.\n\
-            PERSONALITY: Creative, detail-oriented, pixel-perfect.\n\
-            EXPERTISE: React, Vue, TypeScript, CSS, HTML5, responsive design, WCAG.\n\
-            RESPONSIBILITIES:\n\
-            - Implement UI components and pages using code_write\n\
-            - Write clean, semantic HTML with proper ARIA attributes\n\
-            - Use CSS custom properties, responsive layouts\n\
-            - Handle loading/error/empty states for every component\n\
-            - Write unit tests for components\n\
-            PROTOCOL: EXEC_PROTOCOL — list_files → deep_search → code_write → build.\n\
-            MUST: Call code_write for every file. Use build to verify. git_commit when done.",
-        skills: &["frontend-design", "accessibility-audit", "component-testing"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "test", "lint", "git_init", "git_commit", "git_status"],
-        can_veto: false,
-        hierarchy_rank: 40,
-    },
-    AgentDef {
-        id: "dev-karim",
-        name: "Karim Benali",
-        role: "developer",
-        persona: "You are Karim Benali, Backend Developer.\n\
-            PERSONALITY: Rigorous, security-minded, performance-focused.\n\
-            EXPERTISE: Python, Node.js, Rust, APIs, databases, authentication, error handling.\n\
-            RESPONSIBILITIES:\n\
-            - Implement APIs, data models, and business logic using code_write\n\
-            - Write robust code with proper error handling and input validation\n\
-            - Create dependency manifests (requirements.txt, package.json)\n\
-            - Set up database schemas and migrations\n\
-            - Write integration tests\n\
-            PROTOCOL: EXEC_PROTOCOL — list_files → deep_search → code_write → build.\n\
-            MUST: Call code_write for every file. Use build to verify. git_commit when done.",
-        skills: &["api-development", "database-design", "integration-testing"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "test", "lint", "git_init", "git_commit", "git_status"],
-        can_veto: false,
-        hierarchy_rank: 40,
-    },
-    AgentDef {
-        id: "dev-fullstack",
-        name: "Maxime Girard",
-        role: "developer",
-        persona: "You are Maxime Girard, Fullstack Developer.\n\
-            PERSONALITY: Versatile, pragmatic, fast learner.\n\
-            EXPERTISE: React+Node, Python+FastAPI, TypeScript, PostgreSQL, REST.\n\
-            RESPONSIBILITIES:\n\
-            - Implement features end-to-end (frontend + backend + data)\n\
-            - Set up project scaffolding (package.json, vite.config, etc.)\n\
-            - Write both UI components and API endpoints\n\
-            - Handle deployment configs (Dockerfile, nginx)\n\
-            PROTOCOL: EXEC_PROTOCOL.\n\
-            MUST: Call code_write for every file. Use build to verify.",
-        skills: &["fullstack-development", "project-scaffolding"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "test", "lint", "git_init", "git_commit", "git_status"],
-        can_veto: false,
-        hierarchy_rank: 40,
-    },
-    AgentDef {
-        id: "dev-mobile",
-        name: "Amira Khelil",
-        role: "developer",
-        persona: "You are Amira Khelil, Mobile Developer.\n\
-            PERSONALITY: User-experience driven, platform-native advocate.\n\
-            EXPERTISE: Swift/SwiftUI (iOS), Kotlin/Compose (Android), React Native, Flutter.\n\
-            RESPONSIBILITIES:\n\
-            - Implement mobile UI and business logic\n\
-            - Handle platform-specific APIs (camera, location, push)\n\
-            - Optimize for battery, memory, network\n\
-            - Write UI tests and snapshot tests\n\
-            PROTOCOL: EXEC_PROTOCOL.\n\
-            MUST: Use platform-native patterns. No web-view hacks.",
-        skills: &["mobile-development", "platform-apis", "ui-testing"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "test", "git_init", "git_commit", "git_status"],
-        can_veto: false,
-        hierarchy_rank: 40,
-    },
-
-    // ── QA ──────────────────────────────────────────────────────
-    AgentDef {
-        id: "qa-sophie",
-        name: "Sophie Durand",
-        role: "qa",
-        persona: "You are Sophie Durand, QA Engineer.\n\
-            PERSONALITY: Thorough, skeptical, detail-obsessed. Finds bugs others miss.\n\
-            EXPERTISE: Test strategies, edge cases, regression testing, acceptance validation.\n\
-            RESPONSIBILITIES:\n\
-            - Run REAL tests using build/test tools (not just read code)\n\
-            - Verify code compiles and runs without errors\n\
-            - Check edge cases: empty inputs, large data, error conditions\n\
-            - Validate against acceptance criteria from the PO\n\
-            - Issue [APPROVE] or [VETO] with evidence (actual test output)\n\
-            PROTOCOL: QA_PROTOCOL — build → test → lint → report.\n\
-            MUST: Call build/test at least once. [VETO] if build fails. Include actual output.",
-        skills: &["test-strategy", "acceptance-validation", "regression-testing"],
-        tools: &["code_read", "code_search", "list_files", "build", "test", "lint",
-                  "git_status", "git_log", "git_diff"],
-        can_veto: true,
-        hierarchy_rank: 30,
-    },
-    AgentDef {
-        id: "qa-claire",
-        name: "Claire Rousseau",
-        role: "qa_lead",
-        persona: "You are Claire Rousseau, QA Lead.\n\
-            PERSONALITY: Strategic quality thinker, shift-left advocate.\n\
-            EXPERTISE: Test strategy, quality gates, automation frameworks, E2E testing.\n\
-            RESPONSIBILITIES:\n\
-            - Define the overall test strategy and quality gates\n\
-            - Review test coverage and identify gaps\n\
-            - Set up test automation pipelines\n\
-            - Make GO/NOGO quality decisions\n\
-            - Coach team on shift-left testing practices\n\
-            MUST: Evidence-based decisions. Quote actual test output. Zero tolerance for untested code.",
-        skills: &["test-strategy", "quality-gates", "e2e-testing"],
-        tools: &["code_read", "code_search", "list_files", "build", "test", "lint",
-                  "git_status", "git_log", "git_diff", "deep_search"],
-        can_veto: true,
-        hierarchy_rank: 25,
-    },
-
-    // ── DevOps ──────────────────────────────────────────────────
-    AgentDef {
-        id: "devops-karim",
-        name: "Karim Diallo",
-        role: "devops",
-        persona: "You are Karim Diallo, DevOps / SRE.\n\
-            PERSONALITY: Automation-obsessed, reliability-focused, incident-ready.\n\
-            EXPERTISE: CI/CD, Docker, Kubernetes, Terraform, monitoring, observability.\n\
-            RESPONSIBILITIES:\n\
-            - Write Dockerfiles, docker-compose, CI/CD pipelines\n\
-            - Set up monitoring, alerting, logging infrastructure\n\
-            - Implement Infrastructure as Code (Terraform, Ansible)\n\
-            - Handle incident response and postmortems\n\
-            - Optimize deployment strategies (canary, blue-green)\n\
-            MUST: Every deploy reproducible. Every service monitored. Zero manual steps.",
-        skills: &["ci-cd", "docker", "infrastructure-as-code", "monitoring"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "test", "git_status", "git_log", "git_diff", "git_commit",
-                  "git_push", "git_create_branch"],
-        can_veto: false,
-        hierarchy_rank: 30,
-    },
-
-    // ── Security ────────────────────────────────────────────────
-    AgentDef {
-        id: "secu-marc",
-        name: "Marc Lefebvre",
-        role: "security",
-        persona: "You are Marc Lefebvre, Security Engineer.\n\
-            PERSONALITY: Paranoid (in a good way), methodical, defense-in-depth.\n\
-            EXPERTISE: OWASP Top 10, SAST/DAST, penetration testing, secure coding, threat modeling.\n\
-            RESPONSIBILITIES:\n\
-            - Review code for security vulnerabilities (injection, XSS, CSRF, auth bypass)\n\
-            - Run static analysis and dependency audit\n\
-            - Write security requirements and threat models\n\
-            - Validate secrets management (no hardcoded credentials)\n\
-            - Issue [VETO] on critical security findings\n\
-            MUST: Check for hardcoded secrets, SQL injection, XSS, insecure deserialization.",
-        skills: &["security-review", "threat-modeling", "owasp-top10"],
-        tools: &["code_read", "code_search", "list_files", "deep_search",
-                  "git_status", "git_log", "git_diff"],
-        can_veto: true,
-        hierarchy_rank: 25,
-    },
-
-    // ── UX ──────────────────────────────────────────────────────
-    AgentDef {
-        id: "ux-chloe",
-        name: "Chloé Bertrand",
-        role: "ux_designer",
-        persona: "You are Chloé Bertrand, UX Designer.\n\
-            PERSONALITY: Empathetic, user-advocate, data-driven.\n\
-            EXPERTISE: UX/UI design, WCAG accessibility, user research, design systems, Figma.\n\
-            RESPONSIBILITIES:\n\
-            - Define user flows and wireframes\n\
-            - Write UX specifications (spacing, typography, color, interaction)\n\
-            - Ensure WCAG 2.1 AA compliance\n\
-            - Validate UI implementations against design specs\n\
-            - Conduct heuristic evaluations\n\
-            NEVER: Write production code. Specify, review, validate.\n\
-            MUST: Every design decision justified by user need or data.",
-        skills: &["ux-design", "accessibility-audit", "design-system"],
-        tools: &["code_read", "code_search", "list_files", "memory_search"],
-        can_veto: false,
-        hierarchy_rank: 30,
-    },
-
-    // ── Data ────────────────────────────────────────────────────
-    AgentDef {
-        id: "data-antoine",
-        name: "Antoine Mercier",
-        role: "data_engineer",
-        persona: "You are Antoine Mercier, Data Engineer.\n\
-            PERSONALITY: Pipeline-obsessed, quality-focused, schema-rigorous.\n\
-            EXPERTISE: ETL/ELT, SQL, Python, data modeling, data quality, Spark, dbt.\n\
-            RESPONSIBILITIES:\n\
-            - Design data models and schemas\n\
-            - Build reliable data pipelines (extract, transform, load)\n\
-            - Implement data quality checks and monitoring\n\
-            - Optimize query performance\n\
-            MUST: Every pipeline idempotent. Every schema versioned. Data quality gates.",
-        skills: &["data-pipelines", "data-modeling", "sql-optimization"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "test", "git_commit", "git_status"],
-        can_veto: false,
-        hierarchy_rank: 35,
-    },
-
-    // ── Tech Writer ─────────────────────────────────────────────
-    AgentDef {
-        id: "tw-valerie",
-        name: "Valérie Caron",
-        role: "tech_writer",
-        persona: "You are Valérie Caron, Technical Writer.\n\
-            PERSONALITY: Clarity-obsessed, reader-empathetic, structured.\n\
-            EXPERTISE: API documentation, user guides, architecture docs, README, ADRs.\n\
-            RESPONSIBILITIES:\n\
-            - Write clear README.md, API docs, user guides\n\
-            - Document architecture decisions (ADRs)\n\
-            - Create onboarding guides for new developers\n\
-            - Review code comments and inline documentation\n\
-            MUST: If it's not documented, it doesn't exist. Examples in every doc.",
-        skills: &["technical-writing", "api-documentation", "adr-writing"],
-        tools: &["code_read", "code_write", "code_search", "list_files",
-                  "git_status", "git_diff"],
-        can_veto: false,
-        hierarchy_rank: 35,
-    },
-
-    // ── Cloud ───────────────────────────────────────────────────
-    AgentDef {
-        id: "cloud-romain",
-        name: "Romain Vasseur",
-        role: "cloud_architect",
-        persona: "You are Romain Vasseur, Cloud Architect.\n\
-            PERSONALITY: Cost-conscious, multi-cloud savvy, FinOps-driven.\n\
-            EXPERTISE: AWS, Azure, GCP, Terraform, Kubernetes, FinOps, multi-region.\n\
-            RESPONSIBILITIES:\n\
-            - Design cloud infrastructure (compute, storage, networking)\n\
-            - Write Infrastructure as Code (Terraform, CloudFormation)\n\
-            - Optimize cloud costs (FinOps)\n\
-            - Plan disaster recovery and multi-region strategies\n\
-            MUST: Every resource tagged. Every cost justified. Auto-scaling by default.",
-        skills: &["cloud-architecture", "infrastructure-as-code", "finops"],
-        tools: &["code_read", "code_write", "code_edit", "code_search", "list_files",
-                  "build", "git_commit", "git_status"],
-        can_veto: false,
-        hierarchy_rank: 15,
-    },
-];
-
-// ── Workflow Templates ─────────────────────────────────────────
-
-pub struct WorkflowPhase {
-    pub name: &'static str,
-    pub pattern: &'static str,
-    pub agent_ids: &'static [&'static str],
-    pub gate: &'static str, // "all_approved" | "no_veto" | "always"
+/// Get agent info from cache (fast, no DB)
+pub fn get_agent_info(id: &str) -> Option<AgentInfo> {
+    AGENT_CACHE.get().and_then(|c| c.get(id).cloned())
 }
 
-pub struct WorkflowDef {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub description: &'static str,
-    pub phases: &'static [WorkflowPhase],
+/// Get all agent infos
+pub fn all_agents() -> Vec<AgentInfo> {
+    AGENT_CACHE.get()
+        .map(|c| c.values().cloned().collect())
+        .unwrap_or_default()
 }
 
-pub const WORKFLOWS: &[WorkflowDef] = &[
-    WorkflowDef {
-        id: "safe-standard",
-        name: "SAFe Standard",
-        description: "Standard SAFe pipeline: Vision → Design → Dev → QA → Review",
-        phases: &[
-            WorkflowPhase { name: "vision",  pattern: "network",    agent_ids: &["rte-marie", "po-lucas"],       gate: "no_veto" },
-            WorkflowPhase { name: "design",  pattern: "sequential", agent_ids: &["lead-thomas"],                 gate: "always" },
-            WorkflowPhase { name: "dev",     pattern: "parallel",   agent_ids: &["dev-emma", "dev-karim"],       gate: "always" },
-            WorkflowPhase { name: "qa",      pattern: "sequential", agent_ids: &["qa-sophie"],                   gate: "no_veto" },
-            WorkflowPhase { name: "review",  pattern: "network",    agent_ids: &["lead-thomas", "po-lucas"],     gate: "all_approved" },
-        ],
-    },
-    WorkflowDef {
-        id: "safe-fullteam",
-        name: "SAFe Full Team",
-        description: "Full team pipeline with architect, security, UX review",
-        phases: &[
-            WorkflowPhase { name: "vision",    pattern: "network",    agent_ids: &["rte-marie", "po-lucas", "archi-pierre"], gate: "no_veto" },
-            WorkflowPhase { name: "design",    pattern: "sequential", agent_ids: &["archi-pierre", "lead-thomas"],           gate: "always" },
-            WorkflowPhase { name: "dev",       pattern: "parallel",   agent_ids: &["dev-emma", "dev-karim", "dev-fullstack"], gate: "always" },
-            WorkflowPhase { name: "security",  pattern: "sequential", agent_ids: &["secu-marc"],                              gate: "no_veto" },
-            WorkflowPhase { name: "qa",        pattern: "sequential", agent_ids: &["qa-sophie", "qa-claire"],                 gate: "no_veto" },
-            WorkflowPhase { name: "review",    pattern: "network",    agent_ids: &["lead-thomas", "po-lucas", "rte-marie"],   gate: "all_approved" },
-        ],
-    },
-    WorkflowDef {
-        id: "quick-fix",
-        name: "Quick Fix",
-        description: "Fast bug fix: diagnose → fix → test → ship",
-        phases: &[
-            WorkflowPhase { name: "diagnose", pattern: "sequential", agent_ids: &["lead-thomas"], gate: "always" },
-            WorkflowPhase { name: "fix",      pattern: "sequential", agent_ids: &["dev-karim"],   gate: "always" },
-            WorkflowPhase { name: "test",     pattern: "sequential", agent_ids: &["qa-sophie"],   gate: "no_veto" },
-        ],
-    },
-    WorkflowDef {
-        id: "frontend-feature",
-        name: "Frontend Feature",
-        description: "Frontend-focused: UX spec → design → implement → test",
-        phases: &[
-            WorkflowPhase { name: "ux-spec",    pattern: "network",    agent_ids: &["ux-chloe", "po-lucas"],        gate: "no_veto" },
-            WorkflowPhase { name: "design",     pattern: "sequential", agent_ids: &["lead-frontend"],                gate: "always" },
-            WorkflowPhase { name: "implement",  pattern: "parallel",   agent_ids: &["dev-emma", "dev-fullstack"],    gate: "always" },
-            WorkflowPhase { name: "qa",         pattern: "sequential", agent_ids: &["qa-sophie"],                    gate: "no_veto" },
-            WorkflowPhase { name: "review",     pattern: "network",    agent_ids: &["lead-frontend", "ux-chloe"],    gate: "all_approved" },
-        ],
-    },
-    WorkflowDef {
-        id: "backend-api",
-        name: "Backend API",
-        description: "API development: design → implement → security → test",
-        phases: &[
-            WorkflowPhase { name: "api-design",  pattern: "network",    agent_ids: &["archi-pierre", "lead-backend"],  gate: "no_veto" },
-            WorkflowPhase { name: "implement",   pattern: "parallel",   agent_ids: &["dev-karim", "dev-fullstack"],    gate: "always" },
-            WorkflowPhase { name: "security",    pattern: "sequential", agent_ids: &["secu-marc"],                     gate: "no_veto" },
-            WorkflowPhase { name: "test",        pattern: "sequential", agent_ids: &["qa-sophie"],                     gate: "no_veto" },
-            WorkflowPhase { name: "review",      pattern: "network",    agent_ids: &["lead-backend", "archi-pierre"],  gate: "all_approved" },
-        ],
-    },
-    WorkflowDef {
-        id: "refactor",
-        name: "Refactor Cycle",
-        description: "Tech debt: analyze → plan → refactor → test → review",
-        phases: &[
-            WorkflowPhase { name: "analyze",   pattern: "sequential", agent_ids: &["lead-thomas"],              gate: "always" },
-            WorkflowPhase { name: "plan",      pattern: "network",    agent_ids: &["archi-pierre", "lead-thomas"], gate: "no_veto" },
-            WorkflowPhase { name: "refactor",  pattern: "parallel",   agent_ids: &["dev-karim", "dev-emma"],    gate: "always" },
-            WorkflowPhase { name: "test",      pattern: "sequential", agent_ids: &["qa-sophie"],                gate: "no_veto" },
-            WorkflowPhase { name: "review",    pattern: "sequential", agent_ids: &["lead-thomas"],              gate: "all_approved" },
-        ],
-    },
-    WorkflowDef {
-        id: "data-pipeline",
-        name: "Data Pipeline",
-        description: "Data project: model → implement → validate → deploy",
-        phases: &[
-            WorkflowPhase { name: "model",     pattern: "network",    agent_ids: &["data-antoine", "archi-pierre"], gate: "no_veto" },
-            WorkflowPhase { name: "implement", pattern: "sequential", agent_ids: &["data-antoine"],                 gate: "always" },
-            WorkflowPhase { name: "validate",  pattern: "sequential", agent_ids: &["qa-sophie"],                    gate: "no_veto" },
-            WorkflowPhase { name: "deploy",    pattern: "sequential", agent_ids: &["devops-karim"],                 gate: "always" },
-        ],
-    },
-    WorkflowDef {
-        id: "documentation",
-        name: "Documentation",
-        description: "Docs: audit → write → review",
-        phases: &[
-            WorkflowPhase { name: "audit",  pattern: "sequential", agent_ids: &["tw-valerie"],              gate: "always" },
-            WorkflowPhase { name: "write",  pattern: "sequential", agent_ids: &["tw-valerie"],              gate: "always" },
-            WorkflowPhase { name: "review", pattern: "network",    agent_ids: &["lead-thomas", "po-lucas"], gate: "no_veto" },
-        ],
-    },
-];
+/// Count of loaded agents
+pub fn agent_count() -> usize {
+    AGENT_CACHE.get().map(|c| c.len()).unwrap_or(0)
+}
 
-/// Seed all agents from the catalog into SQLite.
-pub fn seed_all_agents() {
+// ──────────────────────────────────────────
+// JSON Loading — reads from bundled SFData/
+// ──────────────────────────────────────────
+
+/// Seed all SF platform data from JSON files.
+pub fn seed_from_json(data_dir: &str) {
+    let mut cache = HashMap::new();
+
+    seed_agents_json(data_dir, &mut cache);
+    seed_skills_json(data_dir);
+    seed_patterns_json(data_dir);
+    seed_workflows_json(data_dir);
+
+    AGENT_CACHE.set(cache).ok();
+}
+
+fn seed_agents_json(data_dir: &str, cache: &mut HashMap<String, AgentInfo>) {
+    let path = format!("{}/agents.json", data_dir);
+    let data = match std::fs::read_to_string(&path) {
+        Ok(d) => d,
+        Err(_) => {
+            eprintln!("[catalog] No agents.json at {}, using fallback", path);
+            seed_fallback_agents(cache);
+            return;
+        }
+    };
+    let agents: Vec<Value> = match serde_json::from_str(&data) {
+        Ok(a) => a,
+        Err(e) => { eprintln!("[catalog] Failed to parse agents.json: {}", e); return; }
+    };
+    let count = agents.len();
+
     db::with_db(|conn| {
-        for a in AGENTS {
-            let tools_json = serde_json::to_string(&a.tools).unwrap_or_else(|_| "[]".into());
-            let skills_json = serde_json::to_string(&a.skills).unwrap_or_else(|_| "[]".into());
-            conn.execute(
-                "INSERT INTO agents (id, name, role, persona, model, tools, skills, can_veto, hierarchy_rank)
-                 VALUES (?1, ?2, ?3, ?4, 'default', ?5, ?6, ?7, ?8)
-                 ON CONFLICT(id) DO UPDATE SET
-                   persona = excluded.persona,
-                   tools = excluded.tools,
-                   skills = excluded.skills,
-                   can_veto = excluded.can_veto,
-                   hierarchy_rank = excluded.hierarchy_rank",
-                params![a.id, a.name, a.role, a.persona, &tools_json, &skills_json,
-                        a.can_veto, a.hierarchy_rank],
-            ).unwrap();
+        let mut stmt = conn.prepare_cached(
+            "INSERT OR REPLACE INTO agents (id, name, role, description, system_prompt, \
+             provider, model, temperature, max_tokens, skills_json, tools_json, \
+             mcps_json, permissions_json, tags_json, icon, color, is_builtin, \
+             avatar, tagline, persona, motivation, hierarchy_rank, project_id) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)"
+        ).unwrap();
+
+        for a in &agents {
+            let id = a["id"].as_str().unwrap_or("");
+            let name = a["name"].as_str().unwrap_or("");
+            let role = a["role"].as_str().unwrap_or("worker");
+            let persona = a["persona"].as_str().unwrap_or("");
+            let system_prompt = a["system_prompt"].as_str().unwrap_or("");
+            let avatar = a["avatar"].as_str().unwrap_or("");
+            let color = a["color"].as_str().unwrap_or("#f78166");
+            let tagline = a["tagline"].as_str().unwrap_or("");
+            let tools_json = a["tools_json"].as_str().unwrap_or("[]");
+            let skills_json = a["skills_json"].as_str().unwrap_or("[]");
+            let hierarchy_rank = a["hierarchy_rank"].as_i64().unwrap_or(50);
+            let permissions = a["permissions_json"].as_str().unwrap_or("{}");
+            let can_veto = serde_json::from_str::<Value>(permissions)
+                .ok()
+                .and_then(|p| p.get("can_veto")?.as_bool())
+                .unwrap_or(false);
+
+            stmt.execute(params![
+                id, name, role,
+                a["description"].as_str().unwrap_or(""),
+                system_prompt,
+                a["provider"].as_str().unwrap_or("local"),
+                a["model"].as_str().unwrap_or("default"),
+                a["temperature"].as_f64().unwrap_or(0.7),
+                a["max_tokens"].as_i64().unwrap_or(4096),
+                skills_json, tools_json,
+                a["mcps_json"].as_str().unwrap_or("[]"),
+                permissions,
+                a["tags_json"].as_str().unwrap_or("[]"),
+                a["icon"].as_str().unwrap_or("bot"),
+                color,
+                a["is_builtin"].as_i64().unwrap_or(0),
+                avatar, tagline, persona,
+                a["motivation"].as_str().unwrap_or(""),
+                hierarchy_rank,
+                a["project_id"].as_str().unwrap_or(""),
+            ]).ok();
+
+            let tools: Vec<String> = serde_json::from_str(tools_json).unwrap_or_default();
+            let skills: Vec<String> = serde_json::from_str(skills_json).unwrap_or_default();
+            cache.insert(id.to_string(), AgentInfo {
+                id: id.to_string(),
+                name: name.to_string(),
+                role: role.to_string(),
+                persona: persona.to_string(),
+                system_prompt: system_prompt.to_string(),
+                avatar: avatar.to_string(),
+                color: color.to_string(),
+                tagline: tagline.to_string(),
+                tools, skills, hierarchy_rank, can_veto,
+            });
         }
     });
+    eprintln!("[catalog] Loaded {} agents", count);
 }
 
-/// Seed all workflows from the catalog into SQLite.
-pub fn seed_all_workflows() {
+fn seed_skills_json(data_dir: &str) {
+    let path = format!("{}/skills.json", data_dir);
+    let data = match std::fs::read_to_string(&path) {
+        Ok(d) => d,
+        Err(_) => { eprintln!("[catalog] No skills.json found"); return; }
+    };
+    let skills: Vec<Value> = match serde_json::from_str(&data) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("[catalog] Failed to parse skills.json: {}", e); return; }
+    };
+    let count = skills.len();
     db::with_db(|conn| {
-        for wf in WORKFLOWS {
-            let phases_json: Vec<serde_json::Value> = wf.phases.iter().map(|p| {
-                serde_json::json!({
-                    "name": p.name,
-                    "pattern": p.pattern,
-                    "agent_ids": p.agent_ids,
-                    "gate": p.gate,
-                })
+        let mut stmt = conn.prepare_cached(
+            "INSERT OR REPLACE INTO skills (id, name, description, content, source, source_url, tags_json) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7)"
+        ).unwrap();
+        for s in &skills {
+            stmt.execute(params![
+                s["id"].as_str().unwrap_or(""),
+                s["name"].as_str().unwrap_or(""),
+                s["description"].as_str().unwrap_or(""),
+                s["content"].as_str().unwrap_or(""),
+                s["source"].as_str().unwrap_or(""),
+                s["source_url"].as_str().unwrap_or(""),
+                s["tags_json"].as_str().unwrap_or("[]"),
+            ]).ok();
+        }
+    });
+    eprintln!("[catalog] Loaded {} skills", count);
+}
+
+fn seed_patterns_json(data_dir: &str) {
+    let path = format!("{}/patterns.json", data_dir);
+    let data = match std::fs::read_to_string(&path) {
+        Ok(d) => d,
+        Err(_) => { eprintln!("[catalog] No patterns.json found"); return; }
+    };
+    let patterns: Vec<Value> = match serde_json::from_str(&data) {
+        Ok(p) => p,
+        Err(e) => { eprintln!("[catalog] Failed to parse patterns.json: {}", e); return; }
+    };
+    let count = patterns.len();
+    db::with_db(|conn| {
+        let mut stmt = conn.prepare_cached(
+            "INSERT OR REPLACE INTO patterns (id, name, description, type, agents_json, \
+             edges_json, config_json, memory_config_json, icon, is_builtin) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)"
+        ).unwrap();
+        for p in &patterns {
+            stmt.execute(params![
+                p["id"].as_str().unwrap_or(""),
+                p["name"].as_str().unwrap_or(""),
+                p["description"].as_str().unwrap_or(""),
+                p["type"].as_str().unwrap_or("sequential"),
+                p["agents_json"].as_str().unwrap_or("[]"),
+                p["edges_json"].as_str().unwrap_or("[]"),
+                p["config_json"].as_str().unwrap_or("{}"),
+                p["memory_config_json"].as_str().unwrap_or("{}"),
+                p["icon"].as_str().unwrap_or(""),
+                p["is_builtin"].as_i64().unwrap_or(0),
+            ]).ok();
+        }
+    });
+    eprintln!("[catalog] Loaded {} patterns", count);
+}
+
+fn seed_workflows_json(data_dir: &str) {
+    let path = format!("{}/workflows.json", data_dir);
+    let data = match std::fs::read_to_string(&path) {
+        Ok(d) => d,
+        Err(_) => { eprintln!("[catalog] No workflows.json found"); return; }
+    };
+    let workflows: Vec<Value> = match serde_json::from_str(&data) {
+        Ok(w) => w,
+        Err(e) => { eprintln!("[catalog] Failed to parse workflows.json: {}", e); return; }
+    };
+    let count = workflows.len();
+    db::with_db(|conn| {
+        let mut stmt = conn.prepare_cached(
+            "INSERT OR REPLACE INTO workflows (id, name, description, phases_json, config_json, icon, is_builtin) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7)"
+        ).unwrap();
+        for w in &workflows {
+            stmt.execute(params![
+                w["id"].as_str().unwrap_or(""),
+                w["name"].as_str().unwrap_or(""),
+                w["description"].as_str().unwrap_or(""),
+                w["phases_json"].as_str().unwrap_or("[]"),
+                w["config_json"].as_str().unwrap_or("{}"),
+                w["icon"].as_str().unwrap_or(""),
+                w["is_builtin"].as_i64().unwrap_or(0),
+            ]).ok();
+        }
+    });
+    eprintln!("[catalog] Loaded {} workflows", count);
+}
+
+// ──────────────────────────────────────────
+// Fallback agents (if JSON not found)
+// ──────────────────────────────────────────
+
+fn seed_fallback_agents(cache: &mut HashMap<String, AgentInfo>) {
+    let fallback = [
+        ("rte-marie",     "Marie Lefevre",   "rte",           "Pragmatic RTE, coordinates the team"),
+        ("po-lucas",      "Lucas Martin",    "product_owner", "Product Owner, prioritizes backlog"),
+        ("archi-pierre",  "Pierre Garnier",  "architect",     "Solution architect, designs systems"),
+        ("lead-thomas",   "Thomas Dubois",   "lead_dev",      "Lead developer, code quality guardian"),
+        ("dev-emma",      "Clara Nguyen",    "developer",     "Frontend developer, React/TypeScript"),
+        ("dev-karim",     "Karim Benali",    "developer",     "Backend developer, Rust/Python"),
+        ("qa-sophie",     "Sophie Martin",   "qa",            "QA lead, testing specialist"),
+    ];
+
+    db::with_db(|conn| {
+        for (id, name, role, desc) in &fallback {
+            conn.execute(
+                "INSERT OR IGNORE INTO agents (id, name, role, description, persona) VALUES (?1,?2,?3,?4,?4)",
+                params![id, name, role, desc],
+            ).ok();
+            cache.insert(id.to_string(), AgentInfo {
+                id: id.to_string(),
+                name: name.to_string(),
+                role: role.to_string(),
+                persona: desc.to_string(),
+                system_prompt: String::new(),
+                avatar: String::new(),
+                color: "#f78166".to_string(),
+                tagline: String::new(),
+                tools: vec![], skills: vec![],
+                hierarchy_rank: 50,
+                can_veto: false,
+            });
+        }
+    });
+    eprintln!("[catalog] Loaded {} fallback agents", fallback.len());
+}
+
+// ──────────────────────────────────────────
+// Workflow lookup (from DB)
+// ──────────────────────────────────────────
+
+/// Get workflow phases from DB by workflow ID.
+pub fn get_workflow_phases(id: &str) -> Option<Vec<(String, String, Vec<String>)>> {
+    db::with_db(|conn| {
+        let phases_json: Option<String> = conn.query_row(
+            "SELECT phases_json FROM workflows WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        ).ok();
+
+        phases_json.and_then(|pj| {
+            let phases: Vec<Value> = serde_json::from_str(&pj).ok()?;
+            let result: Vec<(String, String, Vec<String>)> = phases.iter().filter_map(|p| {
+                let name = p.get("name").or_else(|| p.get("phase_name"))?.as_str()?.to_string();
+                let pattern = p.get("pattern").and_then(|v| v.as_str()).unwrap_or("sequential").to_string();
+                let agent_ids: Vec<String> = p.get("agent_ids")
+                    .or_else(|| p.get("agents"))
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|a| {
+                        a.as_str().map(|s| s.to_string())
+                            .or_else(|| a.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()))
+                    }).collect())
+                    .unwrap_or_default();
+                Some((name, pattern, agent_ids))
             }).collect();
-            let pj = serde_json::to_string(&phases_json).unwrap_or_else(|_| "[]".into());
-            conn.execute(
-                "INSERT INTO workflows (id, name, description, phases_json, is_builtin)
-                 VALUES (?1, ?2, ?3, ?4, 1)
-                 ON CONFLICT(id) DO UPDATE SET
-                   phases_json = excluded.phases_json,
-                   description = excluded.description",
-                params![wf.id, wf.name, wf.description, &pj],
-            ).unwrap();
-        }
-    });
+            if result.is_empty() { None } else { Some(result) }
+        })
+    })
 }
 
-/// Get a workflow definition by ID.
-pub fn get_workflow(id: &str) -> Option<&'static WorkflowDef> {
-    WORKFLOWS.iter().find(|w| w.id == id)
+/// List all workflows from DB.
+pub fn list_workflows() -> Vec<(String, String, String)> {
+    db::with_db(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description FROM workflows ORDER BY name"
+        ).unwrap();
+        stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        }).unwrap().filter_map(|r| r.ok()).collect()
+    })
 }
 
-/// List all workflow IDs.
-pub fn list_workflow_ids() -> Vec<&'static str> {
-    WORKFLOWS.iter().map(|w| w.id).collect()
-}
-
-/// Get agent definition by ID from the static catalog (no DB needed).
-pub fn get_agent_def(id: &str) -> Option<&'static AgentDef> {
-    AGENTS.iter().find(|a| a.id == id)
+/// Catalog stats: (agents, skills, patterns, workflows)
+pub fn catalog_stats() -> (usize, usize, usize, usize) {
+    db::with_db(|conn| {
+        let a: i64 = conn.query_row("SELECT COUNT(*) FROM agents", [], |r| r.get(0)).unwrap_or(0);
+        let s: i64 = conn.query_row("SELECT COUNT(*) FROM skills", [], |r| r.get(0)).unwrap_or(0);
+        let p: i64 = conn.query_row("SELECT COUNT(*) FROM patterns", [], |r| r.get(0)).unwrap_or(0);
+        let w: i64 = conn.query_row("SELECT COUNT(*) FROM workflows", [], |r| r.get(0)).unwrap_or(0);
+        (a as usize, s as usize, p as usize, w as usize)
+    })
 }
