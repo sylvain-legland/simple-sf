@@ -7,6 +7,8 @@ mod ideation;
 mod tools;
 mod protocols;
 mod guard;
+mod catalog;
+mod bench;
 mod ffi;
 
 pub use ffi::*;

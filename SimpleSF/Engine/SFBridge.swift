@@ -34,6 +34,12 @@ func _sf_mission_status(_ missionId: UnsafePointer<CChar>?) -> UnsafeMutablePoin
 @_silgen_name("sf_list_agents")
 func _sf_list_agents() -> UnsafeMutablePointer<CChar>?
 
+@_silgen_name("sf_list_workflows")
+func _sf_list_workflows() -> UnsafeMutablePointer<CChar>?
+
+@_silgen_name("sf_run_bench")
+func _sf_run_bench() -> UnsafeMutablePointer<CChar>?
+
 @_silgen_name("sf_start_ideation")
 func _sf_start_ideation(_ idea: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 
@@ -248,6 +254,24 @@ final class SFBridge: ObservableObject {
         _sf_free_string(ptr)
         guard let data = json.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([SFAgent].self, from: data)) ?? []
+    }
+
+    func listWorkflows() -> [[String: Any]] {
+        guard let ptr = _sf_list_workflows() else { return [] }
+        let json = String(cString: ptr)
+        _sf_free_string(ptr)
+        guard let data = json.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return arr
+    }
+
+    /// Run AC/LLM bench tests. Returns JSON array of results.
+    func runBench() -> String {
+        syncLLMConfig()
+        guard let ptr = _sf_run_bench() else { return "[]" }
+        let result = String(cString: ptr)
+        _sf_free_string(ptr)
+        return result
     }
 
     func startIdeation(idea: String) -> String? {

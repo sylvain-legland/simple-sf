@@ -330,6 +330,28 @@ pub extern "C" fn sf_list_agents() -> *mut c_char {
     c_str(&json).into_raw()
 }
 
+/// List available workflow templates (returns JSON array)
+#[unsafe(no_mangle)]
+pub extern "C" fn sf_list_workflows() -> *mut c_char {
+    let wfs: Vec<serde_json::Value> = crate::catalog::WORKFLOWS.iter().map(|w| {
+        serde_json::json!({
+            "id": w.id,
+            "name": w.name,
+            "description": w.description,
+            "phases": w.phases.len(),
+        })
+    }).collect();
+    let json = serde_json::to_string(&wfs).unwrap_or_else(|_| "[]".into());
+    c_str(&json).into_raw()
+}
+
+/// Run all AC bench tests. Returns JSON array of results.
+#[unsafe(no_mangle)]
+pub extern "C" fn sf_run_bench() -> *mut c_char {
+    let result = runtime().block_on(crate::bench::run_all());
+    c_str(&result).into_raw()
+}
+
 // ──────────────────────────────────────────
 // FFI: Free strings
 // ──────────────────────────────────────────

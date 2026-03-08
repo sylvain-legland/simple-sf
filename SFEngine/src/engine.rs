@@ -1,13 +1,14 @@
 use crate::agents::{self, Agent};
 use crate::executor::{self, AgentEvent, EventCallback};
 use crate::guard;
+use crate::catalog;
 use crate::db;
 use crate::llm::{self, LLMMessage};
 use crate::protocols;
 use rusqlite::params;
 use uuid::Uuid;
 
-/// SAFe workflow phases — now with network pattern for vision and review
+/// Fallback SAFe workflow phases (used if workflow not found in catalog)
 const SAFE_PHASES: &[(&str, &str, &[&str])] = &[
     ("vision",  "network",     &["rte-marie", "po-lucas"]),
     ("design",  "sequential",  &["lead-thomas"]),
@@ -199,14 +200,26 @@ pub async fn run_mission(
     workspace: &str,
     on_event: &EventCallback,
 ) -> Result<(), String> {
-    db::with_db(|conn| {
+    // Look up workflow from mission DB record, fall back to "safe-standard"
+    let workflow_id = db::with_db(|conn| {
         conn.execute("UPDATE missions SET status = 'running' WHERE id = ?1", params![mission_id]).ok();
+        conn.query_row(
+            "SELECT workflow FROM missions WHERE id = ?1", params![mission_id],
+            |row| row.get::<_, String>(0),
+        ).unwrap_or_else(|_| "safe-standard".into())
     });
+
+    // Get phases from catalog workflow, or fallback to hardcoded SAFE_PHASES
+    let phases: Vec<(&str, &str, Vec<&str>)> = if let Some(wf) = catalog::get_workflow(&workflow_id) {
+        wf.phases.iter().map(|p| (p.name, p.pattern, p.agent_ids.to_vec())).collect()
+    } else {
+        SAFE_PHASES.iter().map(|(n, p, a)| (*n, *p, a.to_vec())).collect()
+    };
 
     let mut phase_outputs: Vec<String> = Vec::new();
     let mut vetoed = false;
 
-    for (phase_name, pattern, agent_ids) in SAFE_PHASES {
+    for (phase_name, pattern, agent_ids) in &phases {
         if vetoed {
             on_event("engine", AgentEvent::Response {
                 content: format!("⚠️ Phase {} skipped — previous phase vetoed", phase_name),
@@ -231,10 +244,11 @@ pub async fn run_mission(
 
         let task = build_phase_task(phase_name, brief, &phase_outputs);
 
+        let agent_ids_slice: Vec<&str> = agent_ids.iter().map(|s| *s).collect();
         let result = match *pattern {
-            "network" => run_network(agent_ids, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
-            "parallel" => run_parallel(agent_ids, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
-            _ => run_sequential(agent_ids, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
+            "network" => run_network(&agent_ids_slice, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
+            "parallel" => run_parallel(&agent_ids_slice, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
+            _ => run_sequential(&agent_ids_slice, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
         };
 
         match result {
