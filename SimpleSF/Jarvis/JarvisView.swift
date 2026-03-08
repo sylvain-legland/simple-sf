@@ -11,7 +11,6 @@ enum JarvisAction {
     static func parse(_ text: String) -> [JarvisAction] {
         var actions: [JarvisAction] = []
 
-        // Extract name/description/tech from tag content
         func attr(_ key: String, in block: String) -> String? {
             guard let range = block.range(of: "\(key)=\"") else { return nil }
             let start = range.upperBound
@@ -19,7 +18,6 @@ enum JarvisAction {
             return String(block[start..<end])
         }
 
-        // Find all [TAG ...] blocks
         var i = text.startIndex
         while i < text.endIndex {
             guard let open = text[i...].firstIndex(of: "[") else { break }
@@ -57,13 +55,11 @@ enum JarvisAction {
             if !store.projects.contains(where: { $0.name.lowercased() == name.lowercased() }) {
                 store.add(Project(name: name, description: desc, tech: tech))
             }
-            // Also create in Rust engine
             let _ = bridge.createProject(name: name, description: desc, tech: tech)
         case .deleteProject(let name):
             if let p = store.projects.first(where: { $0.name.lowercased() == name.lowercased() }) {
                 store.delete(p.id)
             }
-            // Also delete from Rust engine
             let rustProjects = bridge.listProjects()
             if let rp = rustProjects.first(where: { $0.name.lowercased() == name.lowercased() }) {
                 bridge.deleteProject(id: rp.id)
@@ -74,11 +70,9 @@ enum JarvisAction {
                 store.setStatus(p.id, status: s)
             }
         case .startMission(let projectName, let brief):
-            // Find project in Rust engine, or create one
             var rustProjects = bridge.listProjects()
             var projectId = rustProjects.first(where: { $0.name.lowercased() == projectName.lowercased() })?.id
             if projectId == nil {
-                // Auto-create from Swift store if it exists there
                 if let swiftProj = store.projects.first(where: { $0.name.lowercased() == projectName.lowercased() }) {
                     projectId = bridge.createProject(name: swiftProj.name, description: swiftProj.description, tech: swiftProj.tech)
                 } else {
@@ -92,7 +86,6 @@ enum JarvisAction {
         }
     }
 
-    // Strip action tags from displayed text
     static func cleanDisplay(_ text: String) -> String {
         var out = text
         while let open = out.range(of: "[CREATE_PROJECT ") ?? out.range(of: "[DELETE_PROJECT ") ?? out.range(of: "[UPDATE_PROJECT ") ?? out.range(of: "[START_MISSION ") {
@@ -104,57 +97,29 @@ enum JarvisAction {
     }
 }
 
-// MARK: - System prompt with project tools
-
-private let jarvisSystemPrompt = """
-You are Jarvis, an AI project manager embedded in a native macOS Software Factory app.
-You do NOT write code yourself. You manage a team of 6 specialized AI agents who do the work.
-
-YOUR TEAM (embedded in the Rust SF engine):
-- Marie Lefevre (RTE) — Release Train Engineer, coordinates the team
-- Lucas Martin (PO) — Product Owner, defines user stories and acceptance criteria
-- Thomas Dubois (Lead Dev) — architecture, code review, task decomposition
-- Emma Laurent (Frontend Dev) — UI/frontend implementation
-- Karim Benali (Backend Dev) — backend/API implementation
-- Sophie Durand (QA) — testing, quality assurance, bug detection
-
-WORKFLOW: When you start a mission, the SAFe pipeline runs automatically:
-  Phase 1: VISION — RTE + PO define scope, user stories, acceptance criteria
-  Phase 2: DESIGN — Lead Dev designs architecture, decomposes into tasks
-  Phase 3: DEVELOPMENT — Frontend + Backend devs write all the code
-  Phase 4: QA — QA engineer reviews, tests, validates
-  Phase 5: REVIEW — Lead Dev + PO final review and approval
-
-AVAILABLE ACTIONS (embed these tags in your response — they are hidden from the user):
-
-[CREATE_PROJECT name="Name" description="Description" tech="Tech stack"]
-[DELETE_PROJECT name="Name"]
-[UPDATE_PROJECT name="Name" status="active"]
-[START_MISSION project="Name" brief="Detailed description of what to build, features, constraints"]
-
-CRITICAL RULES:
-1. You NEVER write code yourself. You are a manager, not a developer.
-2. When the user asks you to BUILD, CODE, CREATE, or DEVELOP anything:
-   a. Create the project with [CREATE_PROJECT ...] if it doesn't exist
-   b. Start a mission with [START_MISSION ...] with a DETAILED brief
-   c. Tell the user their team is on it and to check the Missions tab
-3. The brief in [START_MISSION] must be detailed: describe features, tech stack, structure, constraints.
-4. For simple questions or conversations, just answer normally (no tags needed).
-5. Action tags are invisible to the user — they only see your text.
-6. NEVER output raw code blocks. If the user asks for code, delegate to your team.
-"""
+// MARK: - Agent info for display
+private let agentInfo: [String: (name: String, icon: String, color: Color)] = [
+    "rte-marie":   ("Marie (RTE)", "person.badge.clock", .blue),
+    "po-lucas":    ("Lucas (PO)", "list.clipboard", .green),
+    "lead-thomas": ("Thomas (Lead)", "wrench.and.screwdriver", .orange),
+    "dev-emma":    ("Emma (Dev)", "laptopcomputer", .pink),
+    "dev-karim":   ("Karim (Dev)", "server.rack", .cyan),
+    "qa-sophie":   ("Sophie (QA)", "checkmark.shield", .yellow),
+    "jarvis":      ("Jarvis", "sparkles", .purple),
+    "engine":      ("Système", "gearshape", .gray),
+]
 
 // MARK: - JarvisView
 
 @MainActor
 struct JarvisView: View {
     @ObservedObject private var llm = LLMService.shared
+    @ObservedObject private var bridge = SFBridge.shared
     @ObservedObject private var chatStore = ChatStore.shared
     @ObservedObject private var projects = ProjectStore.shared
 
     @State private var inputText = ""
-    @State private var isStreaming = false
-    @State private var streamingContent = ""
+    @State private var isProcessing = false
     @State private var errorMessage: String?
 
     private var session: ChatSession? { chatStore.activeSession }
@@ -162,11 +127,9 @@ struct JarvisView: View {
 
     var body: some View {
         HSplitView {
-            // Session history sidebar
             sessionSidebar
                 .frame(minWidth: 180, maxWidth: 220)
 
-            // Main chat area
             VStack(spacing: 0) {
                 // Header
                 HStack {
@@ -189,22 +152,33 @@ struct JarvisView: View {
 
                 Divider()
 
-                // Messages
+                // Messages + discussion thread
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 12) {
-                            if messages.isEmpty && !isStreaming {
+                            if messages.isEmpty && !isProcessing && bridge.discussionEvents.isEmpty {
                                 emptyState
                             }
+
                             ForEach(Array(messages.enumerated()), id: \.offset) { _, msg in
                                 MessageRow(message: msg)
                             }
-                            if isStreaming {
-                                MessageRow(message: LLMMessage(
-                                    role: "assistant",
-                                    content: JarvisAction.cleanDisplay(streamingContent) + "▊"
-                                ))
+
+                            // Live discussion thread from Rust engine
+                            if !bridge.discussionEvents.isEmpty {
+                                discussionThread
                             }
+
+                            if isProcessing && bridge.discussionEvents.isEmpty {
+                                HStack(spacing: 8) {
+                                    ProgressView().controlSize(.small)
+                                    Text("L'équipe discute...")
+                                        .font(.callout)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.horizontal)
+                            }
+
                             if let err = errorMessage {
                                 Text(err)
                                     .foregroundColor(.red)
@@ -215,7 +189,7 @@ struct JarvisView: View {
                         .padding()
                         Color.clear.frame(height: 1).id("bottom")
                     }
-                    .onChange(of: streamingContent) { _ in
+                    .onChange(of: bridge.discussionEvents.count) { _ in
                         withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                     .onChange(of: messages.count) { _ in
@@ -233,21 +207,75 @@ struct JarvisView: View {
                         .padding(10)
                         .background(Color(.controlBackgroundColor))
                         .cornerRadius(8)
-                        .onSubmit { if !inputText.isEmpty && !isStreaming { Task { await sendMessage() } } }
+                        .onSubmit { if !inputText.isEmpty && !isProcessing { Task { await sendMessage() } } }
 
                     Button(action: { Task { await sendMessage() } }) {
-                        Image(systemName: isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill")
+                        Image(systemName: isProcessing ? "stop.circle.fill" : "arrow.up.circle.fill")
                             .font(.system(size: 28))
-                            .foregroundColor(isStreaming ? .red : .purple)
+                            .foregroundColor(isProcessing ? .red : .purple)
                     }
                     .buttonStyle(.plain)
-                    .disabled(inputText.isEmpty && !isStreaming)
+                    .disabled(inputText.isEmpty && !isProcessing)
                 }
                 .padding()
             }
         }
         .onAppear {
             if chatStore.activeSession == nil { chatStore.newSession() }
+        }
+        // Watch for discussion completion → process synthesis
+        .onChange(of: bridge.discussionRunning) { running in
+            if !running, let synthesis = bridge.discussionSynthesis {
+                Task { @MainActor in
+                    processDiscussionResult(synthesis)
+                }
+            }
+        }
+    }
+
+    // MARK: - Discussion Thread (shows each agent's contribution)
+
+    private var discussionThread: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(bridge.discussionEvents) { event in
+                if event.eventType == "discuss_response" {
+                    let info = agentInfo[event.agentId] ?? (event.agentId, "person.circle", .gray)
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: info.icon)
+                            .foregroundColor(info.color)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(info.name)
+                                .font(.caption.bold())
+                                .foregroundColor(info.color)
+                            Text(event.data)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(info.color.opacity(0.05))
+                    .cornerRadius(8)
+                } else if event.eventType == "discuss_thinking" {
+                    let info = agentInfo[event.agentId] ?? (event.agentId, "person.circle", .gray)
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.mini)
+                        Text("\(info.name) réfléchit…")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            if bridge.discussionRunning {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Discussion en cours…")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                }
+            }
         }
     }
 
@@ -312,7 +340,7 @@ struct JarvisView: View {
             Text("Ask Jarvis anything")
                 .font(.title3)
                 .foregroundColor(.secondary)
-            Text("Your local AI assistant. Manages your projects too.\nTry: \"Create a project called MyApp using SwiftUI\"")
+            Text("Your team of 6 AI agents will discuss and execute your requests.\nTry: \"Create a web app called HelloWorld\"")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -323,11 +351,14 @@ struct JarvisView: View {
 
     private func newChat() {
         chatStore.newSession()
+        bridge.discussionEvents.removeAll()
         errorMessage = nil
     }
 
+    // MARK: - Send message via Rust network discussion
+
     private func sendMessage() async {
-        guard !inputText.isEmpty, !isStreaming else { return }
+        guard !inputText.isEmpty, !isProcessing else { return }
         guard llm.activeProvider != nil else {
             errorMessage = "Configure an API key in API Keys first."
             return
@@ -340,35 +371,58 @@ struct JarvisView: View {
         let sid = session?.id ?? chatStore.newSession().id
         chatStore.appendMessage(LLMMessage(role: "user", content: userText), to: sid)
 
-        isStreaming = true
-        streamingContent = ""
+        isProcessing = true
+        bridge.discussionEvents.removeAll()
 
-        // Build context with current projects
+        // Build project context for the team
         let projectContext = projects.projects.isEmpty
             ? "No projects exist yet."
-            : "Current projects: " + projects.projects.map { "\($0.name) (\($0.status.displayName), tech: \($0.tech))" }.joined(separator: ", ")
+            : "Current projects: " + projects.projects.map {
+                "\($0.name) (\($0.status.displayName), tech: \($0.tech))"
+              }.joined(separator: ", ")
 
-        let langName = OnboardingView.languages.first(where: { $0.code == AppState.shared.selectedLang })?.name ?? "English"
-        let fullSystem = jarvisSystemPrompt + "\n\nCONTEXT:\n\(projectContext)\n\nIMPORTANT: Always respond in \(langName)."
+        // Trigger Rust network discussion (RTE + PO + Jarvis discuss)
+        bridge.syncLLMConfig()
+        let _ = bridge.startDiscussion(message: userText, projectContext: projectContext)
 
-        let history = chatStore.sessions.first(where: { $0.id == sid })?.messages ?? []
-        let stream = llm.stream(messages: history, system: fullSystem)
+        // The result is handled in .onChange(of: bridge.discussionRunning)
+    }
 
-        for await chunk in stream {
-            streamingContent += chunk
+    /// Called when the Rust discussion completes — process synthesis and execute actions.
+    private func processDiscussionResult(_ synthesis: String) {
+        let sid = session?.id ?? chatStore.newSession().id
+
+        // Build a summary of the discussion for the chat history
+        let discussionSummary = bridge.discussionEvents
+            .filter { $0.eventType == "discuss_response" }
+            .map { event -> String in
+                let info = agentInfo[event.agentId] ?? (event.agentId, "", .gray)
+                return "**\(info.name)**: \(event.data)"
+            }
+            .joined(separator: "\n\n---\n\n")
+
+        if !discussionSummary.isEmpty {
+            chatStore.appendMessage(
+                LLMMessage(role: "assistant", content: discussionSummary),
+                to: sid
+            )
         }
 
-        // Execute any actions in the response
-        let actions = JarvisAction.parse(streamingContent)
+        // Execute any actions from the synthesis (CREATE_PROJECT, START_MISSION, etc.)
+        let actions = JarvisAction.parse(synthesis)
         for action in actions { action.execute() }
 
-        // Store cleaned message (without action tags)
-        let displayText = JarvisAction.cleanDisplay(streamingContent)
+        // Show Jarvis's final synthesis (cleaned of action tags)
+        let displayText = JarvisAction.cleanDisplay(synthesis)
         if !displayText.isEmpty {
-            chatStore.appendMessage(LLMMessage(role: "assistant", content: displayText), to: sid)
+            chatStore.appendMessage(
+                LLMMessage(role: "assistant", content: "🎯 **Jarvis**: \(displayText)"),
+                to: sid
+            )
         }
-        streamingContent = ""
-        isStreaming = false
+
+        bridge.discussionEvents.removeAll()
+        isProcessing = false
     }
 }
 

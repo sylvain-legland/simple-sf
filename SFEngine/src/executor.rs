@@ -18,7 +18,8 @@ pub enum AgentEvent {
 
 pub type EventCallback = Box<dyn Fn(&str, AgentEvent) + Send + Sync>;
 
-/// Run one agent through the tool-calling loop
+/// Run one agent through the tool-calling loop.
+/// Now accepts an optional protocol that's injected into the system prompt.
 pub async fn run_agent(
     agent_id: &str,
     agent_name: &str,
@@ -28,18 +29,23 @@ pub async fn run_agent(
     workspace: &str,
     mission_id: &str,
     phase_id: &str,
+    protocol: Option<&str>,
     on_event: &EventCallback,
 ) -> Result<String, String> {
     let tool_schemas = tools::tool_schemas_for_role(agent_role);
 
+    // Build system prompt: persona + protocol + task context
+    let protocol_section = protocol.map(|p| format!("\n\n{}", p)).unwrap_or_default();
     let system = format!(
-        "{}\n\nYour task:\n{}\n\nWorkspace: {}. Use tools to complete the task. Write real, production-quality code.",
-        agent_persona, task, workspace
+        "{}{}\n\nYour task:\n{}\n\nWorkspace: {}. Use tools to complete the task. Write real, production-quality code.",
+        agent_persona, protocol_section, task, workspace
     );
 
     let mut messages: Vec<LLMMessage> = vec![
         LLMMessage { role: "user".into(), content: task.to_string() },
     ];
+
+    let mut tool_calls_log: Vec<String> = Vec::new();
 
     for round in 0..MAX_ROUNDS {
         on_event(agent_id, AgentEvent::Thinking);
@@ -52,7 +58,6 @@ pub async fn run_agent(
 
         // If has tool calls, execute them
         if !resp.tool_calls.is_empty() {
-            // Add assistant message with tool calls (for context)
             let tc_summary: Vec<String> = resp.tool_calls.iter()
                 .map(|tc| format!("{}({})", tc.name, truncate(&tc.arguments, 100)))
                 .collect();
@@ -76,7 +81,9 @@ pub async fn run_agent(
                     result: truncate(&result, 200).to_string(),
                 });
 
-                // Store message in DB
+                tool_calls_log.push(tc.name.clone());
+
+                // Store tool message in DB
                 db::with_db(|conn| {
                     conn.execute(
                         "INSERT INTO agent_messages (mission_id, phase_id, agent_id, agent_name, role, content, tool_calls)
@@ -108,7 +115,6 @@ pub async fn run_agent(
             return Ok(content);
         }
 
-        // No content and no tools — break
         break;
     }
 

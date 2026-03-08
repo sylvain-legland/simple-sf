@@ -225,6 +225,50 @@ pub extern "C" fn sf_mission_status(mission_id: *const c_char) -> *mut c_char {
 }
 
 // ──────────────────────────────────────────
+// FFI: Jarvis Network Discussion
+// ──────────────────────────────────────────
+
+/// Start a Jarvis intake discussion with RTE + PO (network pattern).
+/// The team discusses the user's request before taking action.
+/// Returns the session ID. Discussion events stream via the callback.
+#[unsafe(no_mangle)]
+pub extern "C" fn sf_jarvis_discuss(
+    message: *const c_char,
+    project_context: *const c_char,
+) -> *mut c_char {
+    let msg = from_c(message);
+    let ctx = from_c(project_context);
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let sid = session_id.clone();
+
+    let msg_clone = msg.clone();
+    let ctx_clone = ctx.clone();
+    let sid_clone = sid.clone();
+
+    runtime().spawn(async move {
+        let callback: EventCallback = Box::new(|agent_id: &str, event: AgentEvent| {
+            match event {
+                AgentEvent::Thinking => emit(agent_id, "discuss_thinking", ""),
+                AgentEvent::Response { content } => emit(agent_id, "discuss_response", &content),
+                AgentEvent::Error { message } => emit(agent_id, "error", &message),
+                _ => {}
+            }
+        });
+
+        match engine::run_intake(&msg_clone, &ctx_clone, &callback).await {
+            Ok(synthesis) => {
+                emit("jarvis", "discuss_complete", &synthesis);
+            }
+            Err(e) => {
+                emit("engine", "error", &format!("Discussion failed: {}", e));
+            }
+        }
+    });
+
+    c_str(&sid).into_raw()
+}
+
+// ──────────────────────────────────────────
 // FFI: Ideation (network discussion pattern)
 // ──────────────────────────────────────────
 

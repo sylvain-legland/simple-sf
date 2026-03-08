@@ -37,6 +37,9 @@ func _sf_list_agents() -> UnsafeMutablePointer<CChar>?
 @_silgen_name("sf_start_ideation")
 func _sf_start_ideation(_ idea: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 
+@_silgen_name("sf_jarvis_discuss")
+func _sf_jarvis_discuss(_ message: UnsafePointer<CChar>?, _ projectContext: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
+
 @_silgen_name("sf_free_string")
 func _sf_free_string(_ s: UnsafeMutablePointer<CChar>?)
 
@@ -81,37 +84,47 @@ final class SFBridge: ObservableObject {
 
     /// Pass LLM config from macOS Keychain to the Rust engine
     func syncLLMConfig() {
-        // Priority: Ollama > MLX > Cloud
-        let ollamaSvc = OllamaService.shared
-        if ollamaSvc.isRunning, let model = ollamaSvc.activeModel {
-            configureLLM(
-                provider: "ollama",
-                apiKey: "no-key",
-                baseUrl: ollamaSvc.openaiBaseURL,
-                model: model.name
-            )
-            return
+        let preferred = AppState.shared.preferredLocalProvider
+
+        // Check preferred provider first
+        if preferred == "mlx" {
+            let mlxSvc = MLXService.shared
+            if mlxSvc.isRunning {
+                configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: mlxSvc.baseURL,
+                             model: mlxSvc.activeModel?.name ?? "mlx-local")
+                return
+            }
         }
+
+        if preferred == "ollama" {
+            let ollamaSvc = OllamaService.shared
+            if ollamaSvc.isRunning, let model = ollamaSvc.activeModel {
+                configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: ollamaSvc.openaiBaseURL,
+                             model: model.name)
+                return
+            }
+        }
+
+        // Fallback: check any available local provider
         let mlxSvc = MLXService.shared
         if mlxSvc.isRunning {
-            let modelName = mlxSvc.activeModel?.name ?? "mlx-local"
-            configureLLM(
-                provider: "mlx",
-                apiKey: "no-key",
-                baseUrl: mlxSvc.baseURL,
-                model: modelName
-            )
+            configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: mlxSvc.baseURL,
+                         model: mlxSvc.activeModel?.name ?? "mlx-local")
             return
         }
+        let ollamaSvc = OllamaService.shared
+        if ollamaSvc.isRunning, let model = ollamaSvc.activeModel {
+            configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: ollamaSvc.openaiBaseURL,
+                         model: model.name)
+            return
+        }
+
+        // Cloud fallback
         let keychain = KeychainService.shared
         guard let provider = LLMProvider.cloudProviders.first(where: { keychain.key(for: $0) != nil }),
               let apiKey = keychain.key(for: provider) else { return }
-        configureLLM(
-            provider: provider.rawValue,
-            apiKey: apiKey,
-            baseUrl: provider.baseURL,
-            model: provider.defaultModel
-        )
+        configureLLM(provider: provider.rawValue, apiKey: apiKey,
+                     baseUrl: provider.baseURL, model: provider.defaultModel)
     }
 
     func configureLLM(provider: String, apiKey: String, baseUrl: String, model: String) {
@@ -251,19 +264,64 @@ final class SFBridge: ObservableObject {
         return result
     }
 
+    /// Start a Jarvis intake discussion (network pattern: RTE + PO discuss the request).
+    /// Events stream via the callback with "discuss_*" event types.
+    @Published var discussionEvents: [AgentEvent] = []
+    @Published var discussionRunning = false
+    @Published var discussionSynthesis: String?
+
+    func startDiscussion(message: String, projectContext: String) -> String? {
+        discussionEvents.removeAll()
+        discussionRunning = true
+        discussionSynthesis = nil
+        syncLLMConfig()
+        var result: String?
+        message.withCString { m in
+            projectContext.withCString { c in
+                if let r = _sf_jarvis_discuss(m, c) {
+                    result = String(cString: r)
+                    _sf_free_string(r)
+                }
+            }
+        }
+        return result
+    }
+
     // Called from the global C callback
     nonisolated func handleEvent(agentId: String, eventType: String, data: String) {
         Task { @MainActor in
             let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
-            if eventType == "ideation_response" || (eventType == "response" && agentId == "engine" && data.hasPrefix("---")) {
+
+            switch eventType {
+            // Discussion events (Jarvis intake)
+            case "discuss_thinking":
+                self.discussionEvents.append(event)
+            case "discuss_response":
+                self.discussionEvents.append(event)
+            case "discuss_complete":
+                self.discussionSynthesis = data
+                self.discussionRunning = false
+
+            // Ideation events
+            case "ideation_response":
                 self.ideationEvents.append(event)
-            } else if eventType == "ideation_complete" {
+            case "ideation_complete":
                 self.ideationRunning = false
-            } else {
+
+            // Mission events
+            case "mission_complete":
                 self.events.append(event)
-            }
-            if eventType == "mission_complete" {
                 self.isRunning = false
+            case "error":
+                self.events.append(event)
+                if self.discussionRunning { self.discussionRunning = false }
+            default:
+                // Mission phase events (thinking, tool_call, tool_result, response)
+                if agentId == "engine" && data.hasPrefix("---") {
+                    self.ideationEvents.append(event)
+                } else {
+                    self.events.append(event)
+                }
             }
         }
     }
