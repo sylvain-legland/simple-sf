@@ -107,40 +107,41 @@ enum JarvisAction {
 // MARK: - System prompt with project tools
 
 private let jarvisSystemPrompt = """
-You are Jarvis, a helpful software engineering AI assistant embedded in a native macOS app.
-Be concise and precise. You manage the user's projects and can launch SAFe missions.
+You are Jarvis, an AI project manager embedded in a native macOS Software Factory app.
+You do NOT write code yourself. You manage a team of 6 specialized AI agents who do the work.
 
-You have a full Software Factory engine embedded locally with a team of 6 agents:
-- Marie Lefevre (RTE) — coordinates the team
-- Lucas Martin (PO) — defines user stories and acceptance criteria
-- Thomas Dubois (Lead Dev) — architecture and code review
-- Emma Laurent (Frontend Dev) — UI implementation
-- Karim Benali (Backend Dev) — backend implementation
-- Sophie Durand (QA) — testing and quality
+YOUR TEAM (embedded in the Rust SF engine):
+- Marie Lefevre (RTE) — Release Train Engineer, coordinates the team
+- Lucas Martin (PO) — Product Owner, defines user stories and acceptance criteria
+- Thomas Dubois (Lead Dev) — architecture, code review, task decomposition
+- Emma Laurent (Frontend Dev) — UI/frontend implementation
+- Karim Benali (Backend Dev) — backend/API implementation
+- Sophie Durand (QA) — testing, quality assurance, bug detection
 
-AVAILABLE ACTIONS (include these tags in your response when needed):
+WORKFLOW: When you start a mission, the SAFe pipeline runs automatically:
+  Phase 1: VISION — RTE + PO define scope, user stories, acceptance criteria
+  Phase 2: DESIGN — Lead Dev designs architecture, decomposes into tasks
+  Phase 3: DEVELOPMENT — Frontend + Backend devs write all the code
+  Phase 4: QA — QA engineer reviews, tests, validates
+  Phase 5: REVIEW — Lead Dev + PO final review and approval
 
-To create a project:
-[CREATE_PROJECT name="Project Name" description="Short description" tech="Swift, Python, etc."]
+AVAILABLE ACTIONS (embed these tags in your response — they are hidden from the user):
 
-To delete a project:
-[DELETE_PROJECT name="Project Name"]
+[CREATE_PROJECT name="Name" description="Description" tech="Tech stack"]
+[DELETE_PROJECT name="Name"]
+[UPDATE_PROJECT name="Name" status="active"]
+[START_MISSION project="Name" brief="Detailed description of what to build, features, constraints"]
 
-To update a project status (idea, planning, active, paused, done):
-[UPDATE_PROJECT name="Project Name" status="active"]
-
-To start a SAFe mission (triggers the full agent team workflow):
-[START_MISSION project="Project Name" brief="Detailed description of what to build"]
-
-RULES:
-- When the user says "create a project", ALWAYS include a [CREATE_PROJECT ...] tag
-- When the user says "delete/remove a project", ALWAYS include a [DELETE_PROJECT ...] tag
-- When the user asks to BUILD, CODE, or DEVELOP something, ALWAYS:
-  1. Create the project first with [CREATE_PROJECT ...] if it doesn't exist
-  2. Then start a mission with [START_MISSION ...] with a detailed brief
-- The mission will trigger the SAFe workflow: Vision → Design → Development → QA → Review
-- The action tags will be hidden from the user, they only see your text
-- After starting a mission, tell the user to check the Missions tab to see progress
+CRITICAL RULES:
+1. You NEVER write code yourself. You are a manager, not a developer.
+2. When the user asks you to BUILD, CODE, CREATE, or DEVELOP anything:
+   a. Create the project with [CREATE_PROJECT ...] if it doesn't exist
+   b. Start a mission with [START_MISSION ...] with a DETAILED brief
+   c. Tell the user their team is on it and to check the Missions tab
+3. The brief in [START_MISSION] must be detailed: describe features, tech stack, structure, constraints.
+4. For simple questions or conversations, just answer normally (no tags needed).
+5. Action tags are invisible to the user — they only see your text.
+6. NEVER output raw code blocks. If the user asks for code, delegate to your team.
 """
 
 // MARK: - JarvisView
@@ -160,87 +161,147 @@ struct JarvisView: View {
     private var messages: [LLMMessage] { session?.messages ?? [] }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Image(systemName: "sparkles")
-                    .foregroundColor(.purple)
-                Text("Jarvis")
-                    .font(.title2.bold())
-                Spacer()
-                if let prov = llm.activeProvider {
-                    Label(prov.displayName, systemImage: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                } else {
-                    Label("No provider", systemImage: "exclamationmark.circle")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                }
-            }
-            .padding()
+        HSplitView {
+            // Session history sidebar
+            sessionSidebar
+                .frame(minWidth: 180, maxWidth: 220)
 
-            Divider()
-
-            // Messages
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        if messages.isEmpty && !isStreaming {
-                            emptyState
-                        }
-                        ForEach(Array(messages.enumerated()), id: \.offset) { _, msg in
-                            MessageRow(message: msg)
-                        }
-                        if isStreaming {
-                            MessageRow(message: LLMMessage(
-                                role: "assistant",
-                                content: JarvisAction.cleanDisplay(streamingContent) + "▊"
-                            ))
-                        }
-                        if let err = errorMessage {
-                            Text(err)
-                                .foregroundColor(.red)
-                                .font(.caption)
-                                .padding(.horizontal)
-                        }
+            // Main chat area
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Image(systemName: "sparkles")
+                        .foregroundColor(.purple)
+                    Text("Jarvis")
+                        .font(.title2.bold())
+                    Spacer()
+                    if let prov = llm.activeProvider {
+                        Label(prov.displayName, systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    } else {
+                        Label("No provider", systemImage: "exclamationmark.circle")
+                            .font(.caption)
+                            .foregroundColor(.orange)
                     }
-                    .padding()
-                    Color.clear.frame(height: 1).id("bottom")
                 }
-                .onChange(of: streamingContent) { _ in
-                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                .padding()
+
+                Divider()
+
+                // Messages
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            if messages.isEmpty && !isStreaming {
+                                emptyState
+                            }
+                            ForEach(Array(messages.enumerated()), id: \.offset) { _, msg in
+                                MessageRow(message: msg)
+                            }
+                            if isStreaming {
+                                MessageRow(message: LLMMessage(
+                                    role: "assistant",
+                                    content: JarvisAction.cleanDisplay(streamingContent) + "▊"
+                                ))
+                            }
+                            if let err = errorMessage {
+                                Text(err)
+                                    .foregroundColor(.red)
+                                    .font(.caption)
+                                    .padding(.horizontal)
+                            }
+                        }
+                        .padding()
+                        Color.clear.frame(height: 1).id("bottom")
+                    }
+                    .onChange(of: streamingContent) { _ in
+                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                    }
+                    .onChange(of: messages.count) { _ in
+                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                    }
                 }
-                .onChange(of: messages.count) { _ in
-                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+
+                Divider()
+
+                // Input
+                HStack(spacing: 8) {
+                    TextField("Message Jarvis…", text: $inputText, axis: .vertical)
+                        .lineLimit(1...6)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(Color(.controlBackgroundColor))
+                        .cornerRadius(8)
+                        .onSubmit { if !inputText.isEmpty && !isStreaming { Task { await sendMessage() } } }
+
+                    Button(action: { Task { await sendMessage() } }) {
+                        Image(systemName: isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(isStreaming ? .red : .purple)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(inputText.isEmpty && !isStreaming)
                 }
+                .padding()
             }
-
-            Divider()
-
-            // Input
-            HStack(spacing: 8) {
-                TextField("Message Jarvis…", text: $inputText, axis: .vertical)
-                    .lineLimit(1...6)
-                    .textFieldStyle(.plain)
-                    .padding(10)
-                    .background(Color(.controlBackgroundColor))
-                    .cornerRadius(8)
-                    .onSubmit { if !inputText.isEmpty && !isStreaming { Task { await sendMessage() } } }
-
-                Button(action: { Task { await sendMessage() } }) {
-                    Image(systemName: isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(isStreaming ? .red : .purple)
-                }
-                .buttonStyle(.plain)
-                .disabled(inputText.isEmpty && !isStreaming)
-            }
-            .padding()
         }
         .onAppear {
             if chatStore.activeSession == nil { chatStore.newSession() }
         }
+    }
+
+    // MARK: - Session Sidebar
+
+    private var sessionSidebar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("History")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button(action: { newChat() }) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.callout)
+                        .foregroundColor(.purple)
+                }
+                .buttonStyle(.plain)
+                .help("New conversation")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(chatStore.sessions) { sess in
+                        Button(action: { chatStore.activeSession = sess }) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(sess.title)
+                                        .font(.callout)
+                                        .lineLimit(1)
+                                        .foregroundColor(sess.id == session?.id ? .purple : .primary)
+                                    Text("\(sess.messages.count) messages")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(sess.id == session?.id ? Color.purple.opacity(0.1) : Color.clear)
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 4)
+            }
+        }
+        .background(Color(.controlBackgroundColor).opacity(0.5))
     }
 
     private var emptyState: some View {

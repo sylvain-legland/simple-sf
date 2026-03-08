@@ -152,6 +152,7 @@ struct SetupWizardView: View {
                     recommended: true
                 ) {
                     selectedModel = recommended
+                    appState.setPreferredProvider("mlx")
                     withAnimation { step = .mlxModelPick }
                 }
 
@@ -162,6 +163,7 @@ struct SetupWizardView: View {
                     subtitle: "Universal engine\nSupports thousands of models",
                     recommended: false
                 ) {
+                    appState.setPreferredProvider("ollama")
                     withAnimation { step = .ollamaSetup }
                 }
             }
