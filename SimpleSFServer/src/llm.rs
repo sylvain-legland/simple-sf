@@ -167,5 +167,30 @@ pub async fn chat_completion(
         .unwrap_or("")
         .to_string();
 
-    Ok(content)
+    Ok(strip_thinking(content))
+}
+
+/// Strip <think>...</think> blocks (MiniMax/DeepSeek) and ```json fences
+fn strip_thinking(s: String) -> String {
+    let mut out = s;
+    while let Some(start) = out.find("<think>") {
+        if let Some(end_tag) = out.find("</think>") {
+            let end = end_tag + "</think>".len();
+            if start <= end_tag {
+                out = format!("{}{}", &out[..start], &out[end..]);
+                continue;
+            }
+        }
+        break;
+    }
+    if out.trim_start().starts_with("```") {
+        if let Some(first_nl) = out.find('\n') {
+            if let Some(last_fence) = out.rfind("```") {
+                if last_fence > first_nl {
+                    out = out[first_nl + 1..last_fence].to_string();
+                }
+            }
+        }
+    }
+    out.trim().to_string()
 }
