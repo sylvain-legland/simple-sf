@@ -4,12 +4,39 @@ import Security
 @MainActor
 final class KeychainService: ObservableObject {
     static let shared = KeychainService()
-    private let service = "com.simple-sf.apikeys"
+    let service = "com.simple-sf.apikeys"
 
     @Published var storedProviders: Set<LLMProvider> = []
+    private var hasScanned = false
 
-    private init() {
-        storedProviders = Set(LLMProvider.allCases.filter { key(for: $0) != nil })
+    private init() {}
+
+    /// Scan stored providers on a background thread to avoid blocking the main thread.
+    /// SecItemCopyMatching can block if binary signature changed.
+    func scanIfNeeded() async {
+        guard !hasScanned else { return }
+        hasScanned = true
+        let svc = service
+        let found: Set<LLMProvider> = await Task.detached {
+            var result = Set<LLMProvider>()
+            for provider in LLMProvider.allCases {
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: svc,
+                    kSecAttrAccount as String: provider.rawValue,
+                    kSecReturnData as String: true,
+                    kSecMatchLimit as String: kSecMatchLimitOne
+                ]
+                var item: CFTypeRef?
+                if SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+                   let data = item as? Data,
+                   let str = String(data: data, encoding: .utf8), !str.isEmpty {
+                    result.insert(provider)
+                }
+            }
+            return result
+        }.value
+        storedProviders = found
     }
 
     func key(for provider: LLMProvider) -> String? {

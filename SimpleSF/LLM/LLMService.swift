@@ -122,7 +122,7 @@ final class LLMService: ObservableObject {
             switch sel {
             case .mlx where MLXService.shared.isRunning: return .mlx
             case .ollama where OllamaService.shared.isRunning: return .ollama
-            case let p where !p.isLocal && KeychainService.shared.key(for: p) != nil: return p
+            case let p where !p.isLocal && KeychainService.shared.storedProviders.contains(p): return p
             default: break // selection not available, fall through
             }
         }
@@ -132,7 +132,7 @@ final class LLMService: ObservableObject {
         if pref == "ollama" && OllamaService.shared.isRunning { return .ollama }
         if MLXService.shared.isRunning { return .mlx }
         if OllamaService.shared.isRunning { return .ollama }
-        return LLMProvider.cloudProviders.first { KeychainService.shared.key(for: $0) != nil }
+        return LLMProvider.cloudProviders.first { KeychainService.shared.storedProviders.contains($0) }
     }
 
     /// Human-readable provider + model for UI display
