@@ -98,6 +98,14 @@ enum LLMProvider: String, CaseIterable, Codable {
 struct LLMMessage: Codable {
     var role: String    // "user" | "assistant" | "system"
     var content: String
+    // Agent metadata (populated for discussion messages)
+    var agentId: String?
+    var agentName: String?
+    var agentRole: String?
+    var messageType: String?
+    var toAgents: [String]?
+
+    var isAgentMessage: Bool { agentId != nil }
 }
 
 // MARK: - LLMService (direct calls, no server)
