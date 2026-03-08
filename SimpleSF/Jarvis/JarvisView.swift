@@ -147,39 +147,39 @@ struct JarvisView: View {
     var body: some View {
         HSplitView {
             sessionSidebar
-                .frame(minWidth: 170, maxWidth: 210)
+                .frame(minWidth: 180, maxWidth: 220)
 
             VStack(spacing: 0) {
-                // Header
-                HStack(spacing: 8) {
+                // ── Header bar ──
+                HStack(spacing: 12) {
                     Image(systemName: "sparkles")
                         .foregroundColor(SF.Colors.purple)
-                        .font(.title3)
+                        .font(.system(size: 20))
                     Text("Jarvis")
-                        .font(SF.Font.title)
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundColor(SF.Colors.textPrimary)
                     Spacer()
-                    // Provider badge
-                    HStack(spacing: 4) {
-                        StatusDot(active: llm.activeProvider != nil)
+                    HStack(spacing: 6) {
+                        StatusDot(active: llm.activeProvider != nil, size: 8)
                         Text(llm.activeDisplayName)
-                            .font(SF.Font.caption)
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundColor(SF.Colors.textSecondary)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                     .background(SF.Colors.bgTertiary)
-                    .cornerRadius(SF.Radius.md)
+                    .cornerRadius(8)
                 }
-                .padding(.horizontal, SF.Spacing.lg)
-                .padding(.vertical, SF.Spacing.md)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 14)
+                .background(SF.Colors.bgSecondary)
 
                 Divider().background(SF.Colors.border)
 
-                // Messages + discussion thread
+                // ── Chat area ──
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: SF.Spacing.md) {
+                        VStack(alignment: .leading, spacing: 20) {
                             if messages.isEmpty && !isProcessing && bridge.discussionEvents.isEmpty {
                                 emptyState
                             }
@@ -188,35 +188,36 @@ struct JarvisView: View {
                                 MessageBubble(message: msg)
                             }
 
-                            // Live discussion thread from Rust engine
                             if !bridge.discussionEvents.isEmpty {
                                 discussionThread
                             }
 
                             if isProcessing && bridge.discussionEvents.isEmpty {
-                                HStack(spacing: 8) {
+                                HStack(spacing: 12) {
                                     ProgressView().controlSize(.small)
                                     Text("L'équipe se réunit…")
-                                        .font(SF.Font.body)
+                                        .font(.system(size: 14))
                                         .foregroundColor(SF.Colors.textMuted)
                                 }
-                                .padding(.horizontal, SF.Spacing.lg)
+                                .padding(.horizontal, 24)
                             }
 
                             if let err = errorMessage {
-                                HStack(spacing: 6) {
+                                HStack(spacing: 8) {
                                     Image(systemName: "exclamationmark.triangle.fill")
                                         .foregroundColor(SF.Colors.error)
                                     Text(err)
-                                        .font(SF.Font.caption)
+                                        .font(.system(size: 13))
                                         .foregroundColor(SF.Colors.error)
                                 }
-                                .padding(.horizontal, SF.Spacing.lg)
+                                .padding(.horizontal, 24)
                             }
                         }
-                        .padding(SF.Spacing.lg)
+                        .padding(.horizontal, 48)
+                        .padding(.vertical, 24)
                         Color.clear.frame(height: 1).id("bottom")
                     }
+                    .background(SF.Colors.bgPrimary)
                     .onChange(of: bridge.discussionEvents.count) { _ in
                         withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
@@ -227,33 +228,35 @@ struct JarvisView: View {
 
                 Divider().background(SF.Colors.border)
 
-                // Input
-                HStack(spacing: 8) {
+                // ── Input bar ──
+                HStack(spacing: 12) {
                     TextField("Message Jarvis…", text: $inputText, axis: .vertical)
                         .lineLimit(1...6)
                         .textFieldStyle(.plain)
-                        .font(SF.Font.body)
-                        .padding(SF.Spacing.md)
+                        .font(.system(size: 14))
+                        .padding(14)
                         .background(SF.Colors.bgTertiary)
-                        .cornerRadius(SF.Radius.md)
+                        .cornerRadius(12)
                         .overlay(
-                            RoundedRectangle(cornerRadius: SF.Radius.md)
+                            RoundedRectangle(cornerRadius: 12)
                                 .stroke(SF.Colors.border, lineWidth: 1)
                         )
                         .onSubmit { if !inputText.isEmpty && !isProcessing { Task { await sendMessage() } } }
 
                     Button(action: { Task { await sendMessage() } }) {
                         Image(systemName: isProcessing ? "stop.circle.fill" : "arrow.up.circle.fill")
-                            .font(.system(size: 28))
+                            .font(.system(size: 32))
                             .foregroundColor(isProcessing ? SF.Colors.error : SF.Colors.purple)
                     }
                     .buttonStyle(.plain)
                     .disabled(inputText.isEmpty && !isProcessing)
                 }
-                .padding(SF.Spacing.lg)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+                .background(SF.Colors.bgSecondary)
             }
-            .background(SF.Colors.bgPrimary)
         }
+        .background(SF.Colors.bgPrimary)
         .onAppear {
             if chatStore.activeSession == nil { chatStore.newSession() }
         }
@@ -269,154 +272,171 @@ struct JarvisView: View {
     // MARK: - Discussion Thread
 
     private var discussionThread: some View {
-        VStack(alignment: .leading, spacing: SF.Spacing.sm) {
-            // Phase/pattern header
-            HStack(spacing: SF.Spacing.sm) {
+        VStack(alignment: .leading, spacing: 16) {
+            // ── Phase header ──
+            HStack(spacing: 10) {
                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 14))
+                    .font(.system(size: 16))
                     .foregroundColor(SF.Colors.purple)
-                Text("Réunion de cadrage")
-                    .font(SF.Font.headline)
+                Text("Reunion de cadrage")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(SF.Colors.textPrimary)
                 PatternBadge(pattern: "network")
                 Spacer()
                 if bridge.discussionRunning {
-                    ProgressView().controlSize(.mini)
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("En cours")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(SF.Colors.textMuted)
+                    }
                 }
             }
-            .padding(.bottom, SF.Spacing.xs)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(SF.Colors.bgTertiary)
+            .cornerRadius(12)
 
-            // Participant pills
-            HStack(spacing: -6) {
+            // ── Participants bar ──
+            HStack(spacing: 10) {
+                HStack(spacing: -8) {
+                    ForEach(["rte", "architecte", "lead_dev", "product"], id: \.self) { id in
+                        AgentAvatarView(agentId: id, size: 32)
+                    }
+                }
+                .padding(.trailing, 4)
                 ForEach(["rte", "architecte", "lead_dev", "product"], id: \.self) { id in
-                    AgentAvatarView(agentId: id, size: 26)
+                    if let info = agentInfo[id] {
+                        Text(String(info.name.split(separator: " ").first ?? ""))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(SF.Colors.textSecondary)
+                    }
                 }
-                let names = ["rte", "architecte", "lead_dev", "product"]
-                    .compactMap { agentInfo[$0]?.name.split(separator: " ").first.map(String.init) }
-                Text(names.joined(separator: ", "))
-                    .font(SF.Font.caption)
-                    .foregroundColor(SF.Colors.textMuted)
-                    .padding(.leading, SF.Spacing.sm)
             }
-            .padding(.bottom, SF.Spacing.md)
+            .padding(.bottom, 4)
 
-            Divider().background(SF.Colors.border)
-
-            // Agent messages
+            // ── Agent messages ──
             ForEach(bridge.discussionEvents) { event in
                 if event.eventType == "discuss_response" {
                     agentMessageCard(event: event)
-                        .padding(.vertical, SF.Spacing.sm)
 
                 } else if event.eventType == "discuss_thinking" {
-                    let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
-                    HStack(spacing: SF.Spacing.sm) {
-                        AgentAvatarView(agentId: event.agentId, size: 24)
-                        ProgressView().controlSize(.mini)
-                        Text("\(info.name) réfléchit…")
-                            .font(SF.Font.caption)
-                            .foregroundColor(SF.Colors.textMuted)
-                    }
-                    .padding(.vertical, SF.Spacing.xs)
+                    thinkingIndicator(event: event)
 
                 } else if event.eventType == "discuss_synthesis" {
                     synthesisCard(event: event)
-                        .padding(.vertical, SF.Spacing.sm)
                 }
             }
         }
-        .padding(SF.Spacing.lg)
-        .background(SF.Colors.bgCard.opacity(0.5))
-        .cornerRadius(SF.Radius.lg)
+        .padding(24)
+        .background(SF.Colors.bgSecondary)
+        .cornerRadius(16)
         .overlay(
-            RoundedRectangle(cornerRadius: SF.Radius.lg)
+            RoundedRectangle(cornerRadius: 16)
                 .stroke(SF.Colors.border, lineWidth: 1)
         )
     }
 
-    /// Individual agent message card with avatar, name, role badge, recipients
+    // ── Agent message card ──
+
     @ViewBuilder
     private func agentMessageCard(event: SFBridge.AgentEvent) -> some View {
         let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
         let roleColor = roleColorFor(event.agentId)
 
-        VStack(alignment: .leading, spacing: SF.Spacing.sm) {
-            // Agent header
-            HStack(spacing: SF.Spacing.md) {
-                AgentAvatarView(agentId: event.agentId, size: 36)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(info.name)
-                        .font(SF.Font.headline)
-                        .foregroundColor(SF.Colors.textPrimary)
-                    RoleBadge(role: info.role, color: roleColor)
-                }
-                Spacer()
-                // Recipients
-                HStack(spacing: 3) {
-                    Image(systemName: "arrowshape.turn.up.right")
-                        .font(.system(size: 9))
-                        .foregroundColor(SF.Colors.textMuted)
-                    Text(recipientsFor(event.agentId))
-                        .font(SF.Font.badge)
-                        .foregroundColor(SF.Colors.textMuted)
-                }
-            }
+        HStack(alignment: .top, spacing: 16) {
+            AgentAvatarView(agentId: event.agentId, size: 40)
+                .overlay(Circle().stroke(roleColor.opacity(0.5), lineWidth: 2))
 
-            // Message content
-            Text(event.data)
-                .font(SF.Font.body)
-                .foregroundColor(SF.Colors.textPrimary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(SF.Spacing.lg)
-                .background(SF.Colors.bgSecondary)
-                .cornerRadius(SF.Radius.md)
-                .overlay(
-                    RoundedRectangle(cornerRadius: SF.Radius.md)
-                        .stroke(roleColor.opacity(0.15), lineWidth: 1)
-                )
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(info.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(roleColor)
+                    RoleBadge(role: info.role, color: roleColor)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrowshape.turn.up.right")
+                            .font(.system(size: 10))
+                            .foregroundColor(SF.Colors.textMuted)
+                        Text(recipientsFor(event.agentId))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(SF.Colors.textMuted)
+                    }
+                }
+
+                Text(event.data)
+                    .font(.system(size: 14))
+                    .foregroundColor(SF.Colors.textPrimary)
+                    .lineSpacing(5)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(SF.Colors.bgTertiary)
+                    .cornerRadius(12)
+            }
         }
-        .padding(SF.Spacing.md)
+        .padding(16)
         .background(roleColor.opacity(0.03))
-        .cornerRadius(SF.Radius.lg)
+        .cornerRadius(12)
     }
 
-    /// PO synthesis card — highlighted with success color
+    // ── Thinking indicator ──
+
+    @ViewBuilder
+    private func thinkingIndicator(event: SFBridge.AgentEvent) -> some View {
+        let info = agentInfo[event.agentId] ?? (event.agentId, "", "person.circle", .gray)
+        HStack(spacing: 12) {
+            AgentAvatarView(agentId: event.agentId, size: 32)
+            ProgressView().controlSize(.small)
+            Text("\(info.name) redige…")
+                .font(.system(size: 13))
+                .foregroundColor(SF.Colors.textMuted)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    // ── PO synthesis card ──
+
     @ViewBuilder
     private func synthesisCard(event: SFBridge.AgentEvent) -> some View {
         let info = agentInfo["product"] ?? ("PO", "Product Owner", "list.clipboard", .green)
 
-        VStack(alignment: .leading, spacing: SF.Spacing.sm) {
-            HStack(spacing: SF.Spacing.md) {
-                AgentAvatarView(agentId: "product", size: 36)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(info.name)
-                        .font(SF.Font.headline)
-                        .foregroundColor(SF.Colors.textPrimary)
-                    RoleBadge(role: "Synthèse", color: SF.Colors.po)
-                }
-                Spacer()
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundColor(SF.Colors.success)
-                    .font(.system(size: 16))
-            }
+        HStack(alignment: .top, spacing: 16) {
+            AgentAvatarView(agentId: "product", size: 40)
+                .overlay(Circle().stroke(SF.Colors.po.opacity(0.5), lineWidth: 2))
 
-            Text(event.data)
-                .font(SF.Font.body)
-                .foregroundColor(SF.Colors.textPrimary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(SF.Spacing.lg)
-                .background(SF.Colors.po.opacity(0.05))
-                .cornerRadius(SF.Radius.md)
-                .overlay(
-                    RoundedRectangle(cornerRadius: SF.Radius.md)
-                        .stroke(SF.Colors.po.opacity(0.2), lineWidth: 1)
-                )
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(info.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(SF.Colors.po)
+                    RoleBadge(role: "Synthese", color: SF.Colors.po)
+                    Spacer()
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(SF.Colors.success)
+                }
+
+                Text(event.data)
+                    .font(.system(size: 14))
+                    .foregroundColor(SF.Colors.textPrimary)
+                    .lineSpacing(5)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(SF.Colors.po.opacity(0.06))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(SF.Colors.po.opacity(0.2), lineWidth: 1)
+                    )
+            }
         }
-        .padding(SF.Spacing.md)
+        .padding(16)
         .background(SF.Colors.po.opacity(0.03))
-        .cornerRadius(SF.Radius.lg)
+        .cornerRadius(12)
     }
 
     /// Role-based color for agent
@@ -445,19 +465,19 @@ struct JarvisView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Historique")
-                    .font(SF.Font.headline)
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(SF.Colors.textSecondary)
                 Spacer()
                 Button(action: { newChat() }) {
                     Image(systemName: "square.and.pencil")
-                        .font(.callout)
+                        .font(.system(size: 14))
                         .foregroundColor(SF.Colors.purple)
                 }
                 .buttonStyle(.plain)
                 .help("Nouvelle conversation")
             }
-            .padding(.horizontal, SF.Spacing.md)
-            .padding(.vertical, SF.Spacing.md)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
 
             Divider().background(SF.Colors.border)
 
@@ -466,51 +486,52 @@ struct JarvisView: View {
                     ForEach(chatStore.sessions) { sess in
                         Button(action: { chatStore.activeSession = sess }) {
                             HStack {
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text(sess.title)
-                                        .font(SF.Font.body)
+                                        .font(.system(size: 13))
                                         .lineLimit(1)
                                         .foregroundColor(sess.id == session?.id ? SF.Colors.purple : SF.Colors.textPrimary)
                                     Text("\(sess.messages.count) messages")
-                                        .font(SF.Font.caption)
+                                        .font(.system(size: 11))
                                         .foregroundColor(SF.Colors.textMuted)
                                 }
                                 Spacer()
                             }
-                            .padding(.horizontal, SF.Spacing.md)
-                            .padding(.vertical, SF.Spacing.sm)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
                             .background(sess.id == session?.id ? SF.Colors.purple.opacity(0.1) : Color.clear)
-                            .cornerRadius(SF.Radius.md)
+                            .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, SF.Spacing.xs)
-                .padding(.top, SF.Spacing.xs)
+                .padding(.horizontal, 6)
+                .padding(.top, 6)
             }
         }
         .background(SF.Colors.bgSecondary)
     }
 
     private var emptyState: some View {
-        VStack(spacing: SF.Spacing.lg) {
-            // Team avatars
-            HStack(spacing: -8) {
+        VStack(spacing: 24) {
+            HStack(spacing: -10) {
                 ForEach(["rte", "architecte", "lead_dev", "product"], id: \.self) { id in
-                    AgentAvatarView(agentId: id, size: 40)
+                    AgentAvatarView(agentId: id, size: 56)
+                        .overlay(Circle().stroke(SF.Colors.bgPrimary, lineWidth: 3))
                 }
             }
 
-            Text("Votre équipe est prête")
-                .font(SF.Font.title)
+            Text("Votre equipe est prete")
+                .font(.system(size: 22, weight: .bold))
                 .foregroundColor(SF.Colors.textPrimary)
-            Text("192 agents · 1286 skills · 19 patterns\nEssayez : « Fais-moi un Pacman en SwiftUI »")
-                .font(SF.Font.body)
+            Text("192 agents  ·  1286 skills  ·  19 patterns\nEssayez : « Fais-moi un Pacman en SwiftUI »")
+                .font(.system(size: 14))
                 .foregroundColor(SF.Colors.textMuted)
                 .multilineTextAlignment(.center)
+                .lineSpacing(4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 60)
+        .padding(.top, 80)
     }
 
     private func newChat() {
@@ -575,40 +596,44 @@ struct MessageBubble: View {
 
     var body: some View {
         let isUser = message.role == "user"
-        HStack(alignment: .top, spacing: SF.Spacing.md) {
+        HStack(alignment: .top, spacing: 12) {
             if isUser {
-                Spacer(minLength: 60)
+                Spacer(minLength: 80)
             }
 
             if !isUser {
                 Image(systemName: "sparkles")
+                    .font(.system(size: 14))
                     .foregroundColor(SF.Colors.purple)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 36, height: 36)
                     .background(SF.Colors.purple.opacity(0.12))
                     .clipShape(Circle())
             }
 
             Text(message.content)
-                .font(SF.Font.body)
+                .font(.system(size: 14))
                 .foregroundColor(SF.Colors.textPrimary)
+                .lineSpacing(4)
                 .textSelection(.enabled)
-                .padding(SF.Spacing.md)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
                 .background(isUser ? SF.Colors.purple.opacity(0.12) : SF.Colors.bgSecondary)
-                .cornerRadius(SF.Radius.lg)
+                .cornerRadius(isUser ? 16 : 12)
                 .overlay(
-                    RoundedRectangle(cornerRadius: SF.Radius.lg)
+                    RoundedRectangle(cornerRadius: isUser ? 16 : 12)
                         .stroke(isUser ? SF.Colors.purple.opacity(0.2) : SF.Colors.border, lineWidth: 0.5)
                 )
-                .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+                .frame(maxWidth: 700, alignment: isUser ? .trailing : .leading)
 
             if isUser {
                 Image(systemName: "person.circle.fill")
+                    .font(.system(size: 16))
                     .foregroundColor(SF.Colors.textSecondary)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 36, height: 36)
             }
 
             if !isUser {
-                Spacer(minLength: 60)
+                Spacer(minLength: 80)
             }
         }
     }

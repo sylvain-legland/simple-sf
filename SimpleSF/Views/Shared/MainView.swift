@@ -60,8 +60,10 @@ struct SidebarView: View {
         List(selection: $selection) {
             Section {
                 ForEach([SidebarItem.jarvis, .projects, .ideation, .teams], id: \.self) { item in
-                    HStack {
-                        Label(item.label, systemImage: item.icon).tag(item)
+                    HStack(spacing: 8) {
+                        Label(item.label, systemImage: item.icon)
+                            .font(.system(size: 13))
+                            .tag(item)
                         if item == .teams && bridge.isRunning {
                             Spacer()
                             ProgressView().scaleEffect(0.5)
@@ -72,17 +74,18 @@ struct SidebarView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "hammer.fill")
                         .foregroundColor(SF.Colors.purple)
-                        .font(.caption)
+                        .font(.system(size: 11))
                     Text("Software Factory")
-                        .font(SF.Font.badge)
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(SF.Colors.textSecondary)
                     Spacer()
-                    StatusDot(active: bridge.engineReady)
+                    StatusDot(active: bridge.engineReady, size: 7)
                 }
             }
 
             Section {
                 Label(SidebarItem.settings.label, systemImage: SidebarItem.settings.icon)
+                    .font(.system(size: 13))
                     .tag(SidebarItem.settings)
             }
         }
@@ -94,12 +97,12 @@ struct SidebarView: View {
 
     private var providerBadge: some View {
         HStack(spacing: 6) {
-            StatusDot(active: llm.activeProvider != nil)
+            StatusDot(active: llm.activeProvider != nil, size: 7)
             Text(llm.activeDisplayName)
-                .font(SF.Font.caption)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(llm.activeProvider != nil ? SF.Colors.textSecondary : SF.Colors.warning)
                 .lineLimit(1)
         }
-        .padding(SF.Spacing.md)
+        .padding(12)
     }
 }
