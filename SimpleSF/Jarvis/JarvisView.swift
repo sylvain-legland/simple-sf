@@ -97,36 +97,7 @@ enum JarvisAction {
     }
 }
 
-// MARK: - Agent info for display
-private let agentInfo: [String: (name: String, role: String, icon: String, color: Color)] = [
-    // Intake team (matching SF platform DB IDs)
-    "rte":            ("Marc Delacroix",    "RTE",           "person.badge.clock",        .blue),
-    "product":        ("Laura Vidal",       "Product Owner", "list.clipboard",            .green),
-    "architecte":     ("Pierre Duval",      "Architecte",    "building.2",                .indigo),
-    "lead_dev":       ("Thomas Dubois",     "Lead Dev",      "wrench.and.screwdriver",    .orange),
-    // Dev team
-    "dev":            ("Maxime Bernard",    "Developer",     "laptopcomputer",            .cyan),
-    "dev_frontend":   ("Emma Laurent",      "Dev Frontend",  "paintbrush",                .pink),
-    "dev_backend":    ("Julien Moreau",     "Dev Backend",   "server.rack",               .mint),
-    "dev_fullstack":  ("Alex Petit",        "Dev Fullstack", "macbook.and.iphone",        .purple),
-    "dev_mobile":     ("Romain Faure",      "Dev Mobile",    "iphone",                    .orange),
-    // QA & Ops
-    "qa_lead":        ("Claire Rousseau",   "QA Lead",       "checkmark.shield",          .yellow),
-    "tester":         ("Éric Fontaine",     "QA",            "checklist",                 .yellow),
-    "devops":         ("Karim Diallo",      "DevOps",        "cloud",                     .blue),
-    "securite":       ("Marc Lefranc",      "Sécurité",      "lock.shield",               .red),
-    "ux_designer":    ("Chloé Bernard",     "UX Designer",   "paintpalette",              .pink),
-    "data_engineer":  ("Antoine Roux",      "Data Engineer", "chart.bar",                 .green),
-    "tech_writer":    ("Valérie Morin",     "Tech Writer",   "doc.text",                  .gray),
-    "cloud_architect":("Romain Vasseur",    "Cloud Archi",   "cloud.bolt",                .blue),
-    // Strategic
-    "strat-cto":      ("Karim Benali",      "CTO",           "gear.badge.checkmark",      .purple),
-    "strat-cpo":      ("Julie Marchand",    "CPO",           "star.circle",               .orange),
-    "brain":          ("Gabriel Mercier",   "Orchestrateur", "brain.head.profile",        .purple),
-    // System
-    "jarvis":         ("Jarvis",            "Chef de projet","sparkles",                  .purple),
-    "engine":         ("Système",           "",              "gearshape",                 .gray),
-]
+// Agent info is loaded from SFCatalog (192 agents from platform JSON)
 
 // MARK: - JarvisView
 
@@ -136,6 +107,7 @@ struct JarvisView: View {
     @ObservedObject private var bridge = SFBridge.shared
     @ObservedObject private var chatStore = ChatStore.shared
     @ObservedObject private var projects = ProjectStore.shared
+    @ObservedObject private var catalog = SFCatalog.shared
 
     @State private var inputText = ""
     @State private var isProcessing = false
@@ -332,11 +304,11 @@ struct JarvisView: View {
     @ViewBuilder
     private func agentMessageCardFromStored(_ msg: LLMMessage) -> some View {
         let aid = msg.agentId ?? "engine"
-        let name = msg.agentName ?? agentInfo[aid]?.name ?? aid
-        let role = msg.agentRole ?? agentInfo[aid]?.role ?? ""
+        let name = msg.agentName ?? catalog.agentName(aid)
+        let role = msg.agentRole ?? catalog.agentRole(aid)
         let mtype = msg.messageType ?? "response"
         let recipients = msg.toAgents ?? []
-        let roleColor = roleColorFor(aid)
+        let roleColor = catalog.agentColor(aid)
         let borderColor = borderColorFor(mtype)
 
         HStack(alignment: .top, spacing: 0) {
@@ -415,9 +387,8 @@ struct JarvisView: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(SF.Colors.textMuted)
             ForEach(toAgents, id: \.self) { agentId in
-                let info = agentInfo[agentId]
-                let displayName = info?.name ?? (agentId == "all" ? "Tous" : agentId)
-                let color = roleColorFor(agentId)
+                let displayName = agentId == "all" ? "Tous" : catalog.agentName(agentId)
+                let color = catalog.agentColor(agentId)
                 HStack(spacing: 4) {
                     AgentAvatarView(agentId: agentId, size: 20)
                     Text(displayName)
@@ -437,7 +408,7 @@ struct JarvisView: View {
     @ViewBuilder
     private func thinkingIndicator(event: SFBridge.AgentEvent) -> some View {
         let name = event.agentName.isEmpty
-            ? (agentInfo[event.agentId]?.name ?? event.agentId)
+            ? catalog.agentName(event.agentId)
             : event.agentName
         HStack(spacing: 12) {
             AgentAvatarView(agentId: event.agentId, size: 32)
@@ -495,17 +466,6 @@ struct JarvisView: View {
     }
 
     /// Role-based color for agent
-    private func roleColorFor(_ agentId: String) -> Color {
-        switch agentId {
-        case "rte":          return SF.Colors.rte
-        case "product":      return SF.Colors.po
-        case "architecte":   return SF.Colors.architect
-        case "lead_dev":     return SF.Colors.lead
-        default:
-            let info = agentInfo[agentId]
-            return info?.color ?? SF.Colors.textMuted
-        }
-    }
 
     // MARK: - Session Sidebar
 

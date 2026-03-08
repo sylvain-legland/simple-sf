@@ -11,7 +11,7 @@ SimpleSF/Resources/platform/
 SimpleSF/Resources/site-packages/
 *.pyc
 __pycache__/
-data/
+/data/
 *.key
 .env
 SimpleSFServer/target/
