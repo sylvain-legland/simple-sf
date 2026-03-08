@@ -9,17 +9,17 @@ struct MainView: View {
         } detail: {
             detailView(for: selection)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(SF.Colors.bgPrimary)
         }
     }
 
     @ViewBuilder
     private func detailView(for item: SidebarItem) -> some View {
         switch item {
-        case .projects:  ProjectsView()
         case .jarvis:    JarvisView()
+        case .projects:  ProjectsView()
         case .ideation:  IdeationView()
-        case .missions:  MissionView()
-        case .agents:    AgentsView()
+        case .teams:     MissionView()
         case .settings:  OnboardingView()
         }
     }
@@ -28,26 +28,24 @@ struct MainView: View {
 // MARK: - Sidebar
 
 enum SidebarItem: String, Hashable {
-    case projects, jarvis, ideation, missions, agents, settings
+    case jarvis, projects, ideation, teams, settings
 
     var label: String {
         switch self {
-        case .projects:  return "Projects"
         case .jarvis:    return "Jarvis"
+        case .projects:  return "Projects"
         case .ideation:  return "Ideation"
-        case .missions:  return "Missions"
-        case .agents:    return "Agents"
+        case .teams:     return "Teams"
         case .settings:  return "Settings"
         }
     }
 
     var icon: String {
         switch self {
-        case .projects:  return "folder.fill"
         case .jarvis:    return "sparkles"
+        case .projects:  return "folder.fill"
         case .ideation:  return "lightbulb.fill"
-        case .missions:  return "play.circle.fill"
-        case .agents:    return "person.3.fill"
+        case .teams:     return "person.3.sequence.fill"
         case .settings:  return "gearshape.fill"
         }
     }
@@ -61,34 +59,25 @@ struct SidebarView: View {
     var body: some View {
         List(selection: $selection) {
             Section {
-                ForEach([SidebarItem.projects, .jarvis, .ideation], id: \.self) { item in
-                    Label(item.label, systemImage: item.icon).tag(item)
-                }
-            } header: {
-                HStack {
-                    Image(systemName: "sparkles").foregroundColor(.purple)
-                    Text("Simple").fontWeight(.semibold)
-                }
-            }
-
-            Section {
-                ForEach([SidebarItem.missions, .agents], id: \.self) { item in
+                ForEach([SidebarItem.jarvis, .projects, .ideation, .teams], id: \.self) { item in
                     HStack {
                         Label(item.label, systemImage: item.icon).tag(item)
-                        if item == .missions && bridge.isRunning {
+                        if item == .teams && bridge.isRunning {
                             Spacer()
                             ProgressView().scaleEffect(0.5)
                         }
                     }
                 }
             } header: {
-                HStack {
-                    Image(systemName: "cpu").foregroundColor(.purple)
-                    Text("Factory").fontWeight(.semibold)
+                HStack(spacing: 6) {
+                    Image(systemName: "hammer.fill")
+                        .foregroundColor(SF.Colors.purple)
+                        .font(.caption)
+                    Text("Software Factory")
+                        .font(SF.Font.badge)
+                        .foregroundColor(SF.Colors.textSecondary)
                     Spacer()
-                    Circle()
-                        .fill(bridge.engineReady ? Color.green : Color.gray)
-                        .frame(width: 7, height: 7)
+                    StatusDot(active: bridge.engineReady)
                 }
             }
 
@@ -97,7 +86,7 @@ struct SidebarView: View {
                     .tag(SidebarItem.settings)
             }
         }
-        .navigationSplitViewColumnWidth(min: 180, ideal: 210)
+        .navigationSplitViewColumnWidth(min: 160, ideal: 190)
         .safeAreaInset(edge: .bottom) {
             providerBadge
         }
@@ -105,19 +94,12 @@ struct SidebarView: View {
 
     private var providerBadge: some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(llm.activeProvider != nil ? Color.green : Color.gray)
-                .frame(width: 7, height: 7)
-            if let prov = llm.activeProvider {
-                Text(prov.displayName)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            } else {
-                Text("No LLM configured")
-                    .font(.caption2)
-                    .foregroundColor(.orange)
-            }
+            StatusDot(active: llm.activeProvider != nil)
+            Text(llm.activeDisplayName)
+                .font(SF.Font.caption)
+                .foregroundColor(llm.activeProvider != nil ? SF.Colors.textSecondary : SF.Colors.warning)
+                .lineLimit(1)
         }
-        .padding(10)
+        .padding(SF.Spacing.md)
     }
 }
