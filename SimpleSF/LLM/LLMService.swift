@@ -3,10 +3,11 @@ import Foundation
 // MARK: - Provider definitions
 
 enum LLMProvider: String, CaseIterable, Codable {
-    case openai, anthropic, gemini, minimax, kimi, openrouter, alibaba, glm
+    case mlx, openai, anthropic, gemini, minimax, kimi, openrouter, alibaba, glm
 
     var displayName: String {
         switch self {
+        case .mlx:        return "MLX (Local)"
         case .openai:     return "OpenAI"
         case .anthropic:  return "Anthropic"
         case .gemini:     return "Google Gemini"
@@ -20,6 +21,7 @@ enum LLMProvider: String, CaseIterable, Codable {
 
     var envVar: String {
         switch self {
+        case .mlx:        return "MLX_LOCAL"
         case .openai:     return "OPENAI_API_KEY"
         case .anthropic:  return "ANTHROPIC_API_KEY"
         case .gemini:     return "GEMINI_API_KEY"
@@ -33,6 +35,7 @@ enum LLMProvider: String, CaseIterable, Codable {
 
     var baseURL: String {
         switch self {
+        case .mlx:        return "http://127.0.0.1:8800/v1"
         case .openai:     return "https://api.openai.com/v1"
         case .anthropic:  return "https://api.anthropic.com/v1"
         case .gemini:     return "https://generativelanguage.googleapis.com/v1beta"
@@ -46,6 +49,7 @@ enum LLMProvider: String, CaseIterable, Codable {
 
     var defaultModel: String {
         switch self {
+        case .mlx:        return "mlx-local"
         case .openai:     return "gpt-4o-mini"
         case .anthropic:  return "claude-3-5-haiku-20241022"
         case .gemini:     return "gemini-2.0-flash"
@@ -59,6 +63,7 @@ enum LLMProvider: String, CaseIterable, Codable {
 
     var docURL: String {
         switch self {
+        case .mlx:        return "https://github.com/ml-explore/mlx-lm"
         case .openai:     return "https://platform.openai.com/api-keys"
         case .anthropic:  return "https://console.anthropic.com/settings/keys"
         case .gemini:     return "https://aistudio.google.com/app/apikey"
@@ -68,6 +73,13 @@ enum LLMProvider: String, CaseIterable, Codable {
         case .alibaba:    return "https://bailian.console.aliyun.com/#/api-key"
         case .glm:        return "https://open.bigmodel.cn/usercenter/apikeys"
         }
+    }
+
+    var isLocal: Bool { self == .mlx }
+
+    /// Cloud providers that need API keys
+    static var cloudProviders: [LLMProvider] {
+        allCases.filter { !$0.isLocal }
     }
 }
 
@@ -85,9 +97,10 @@ final class LLMService: ObservableObject {
     static let shared = LLMService()
     private init() {}
 
-    // Active provider = first one with a key
+    // Active provider = MLX if running, else first cloud provider with a key
     var activeProvider: LLMProvider? {
-        LLMProvider.allCases.first { KeychainService.shared.key(for: $0) != nil }
+        if MLXService.shared.isRunning { return .mlx }
+        return LLMProvider.cloudProviders.first { KeychainService.shared.key(for: $0) != nil }
     }
 
     // MARK: - One-shot completion
@@ -95,7 +108,13 @@ final class LLMService: ObservableObject {
     func complete(messages: [LLMMessage], system: String? = nil, provider: LLMProvider? = nil) async throws -> String {
         let prov = provider ?? activeProvider
         guard let prov else { throw LLMError.noProvider }
-        guard let key = KeychainService.shared.key(for: prov) else { throw LLMError.noKey(prov) }
+        let key: String
+        if prov.isLocal {
+            key = "no-key"
+        } else {
+            guard let k = KeychainService.shared.key(for: prov) else { throw LLMError.noKey(prov) }
+            key = k
+        }
 
         var all: [[String: String]] = []
         if let sys = system { all.append(["role": "system", "content": sys]) }
@@ -142,7 +161,13 @@ final class LLMService: ObservableObject {
                 do {
                     let prov = self.activeProvider
                     guard let prov else { throw LLMError.noProvider }
-                    guard let key = KeychainService.shared.key(for: prov) else { throw LLMError.noKey(prov) }
+                    let key: String
+                    if prov.isLocal {
+                        key = "no-key"
+                    } else {
+                        guard let k = KeychainService.shared.key(for: prov) else { throw LLMError.noKey(prov) }
+                        key = k
+                    }
 
                     var all: [[String: String]] = []
                     if let sys = system { all.append(["role": "system", "content": sys]) }
@@ -198,6 +223,9 @@ final class LLMService: ObservableObject {
     // MARK: - Test connection
 
     func testConnection(provider: LLMProvider, key: String) async -> Bool {
+        if provider.isLocal {
+            return await MLXService.shared.fetchServerModels().count > 0
+        }
         let body: [String: Any] = [
             "model": provider.defaultModel,
             "messages": [["role": "user", "content": "hi"]],

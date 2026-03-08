@@ -76,9 +76,21 @@ final class SFBridge: ObservableObject {
 
     /// Pass LLM config from macOS Keychain to the Rust engine
     func syncLLMConfig() {
+        let mlx = MLXService.shared
+        if mlx.isRunning {
+            // Use local MLX server
+            let modelName = mlx.activeModel?.name ?? "mlx-local"
+            configureLLM(
+                provider: "mlx",
+                apiKey: "no-key",
+                baseUrl: mlx.baseURL,
+                model: modelName
+            )
+            return
+        }
         let keychain = KeychainService.shared
-        // Find first provider with a key (same logic as LLMService.activeProvider)
-        guard let provider = LLMProvider.allCases.first(where: { keychain.key(for: $0) != nil }),
+        // Find first cloud provider with a key
+        guard let provider = LLMProvider.cloudProviders.first(where: { keychain.key(for: $0) != nil }),
               let apiKey = keychain.key(for: provider) else { return }
         configureLLM(
             provider: provider.rawValue,

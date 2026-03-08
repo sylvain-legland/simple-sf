@@ -1,0 +1,210 @@
+import Foundation
+import SwiftUI
+
+/// Manages the local MLX LLM server (mlx_lm.server)
+@MainActor
+final class MLXService: ObservableObject {
+    static let shared = MLXService()
+
+    enum ServerState: Equatable {
+        case stopped
+        case starting
+        case running(pid: Int32)
+        case error(String)
+
+        static func == (lhs: ServerState, rhs: ServerState) -> Bool {
+            switch (lhs, rhs) {
+            case (.stopped, .stopped): return true
+            case (.starting, .starting): return true
+            case (.running(let a), .running(let b)): return a == b
+            case (.error(let a), .error(let b)): return a == b
+            default: return false
+            }
+        }
+    }
+
+    struct MLXModel: Identifiable, Hashable {
+        var id: String { path }
+        let name: String
+        let path: String
+    }
+
+    @Published var state: ServerState = .stopped
+    @Published var availableModels: [MLXModel] = []
+    @Published var activeModel: MLXModel?
+    @Published var logLines: [String] = []
+
+    let port: Int = 8800
+    private var process: Process?
+
+    var baseURL: String { "http://127.0.0.1:\(port)/v1" }
+    var isRunning: Bool {
+        if case .running = state { return true }
+        return false
+    }
+
+    private init() {
+        scanModels()
+    }
+
+    // MARK: - Scan for installed MLX models
+
+    func scanModels() {
+        var models: [MLXModel] = []
+        let home = FileManager.default.homeDirectoryForCurrentUser
+
+        // HuggingFace hub cache
+        let hubDir = home.appendingPathComponent(".cache/huggingface/hub")
+        if let entries = try? FileManager.default.contentsOfDirectory(atPath: hubDir.path) {
+            for entry in entries where entry.hasPrefix("models--mlx-community--") {
+                let name = entry
+                    .replacingOccurrences(of: "models--mlx-community--", with: "")
+                    .replacingOccurrences(of: "--", with: "/")
+                let snapshotsDir = hubDir.appendingPathComponent(entry).appendingPathComponent("snapshots")
+                if let snapshots = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
+                   let latest = snapshots.sorted().last {
+                    let fullPath = snapshotsDir.appendingPathComponent(latest).path
+                    models.append(MLXModel(name: name, path: fullPath))
+                } else {
+                    models.append(MLXModel(name: name, path: "mlx-community/\(name)"))
+                }
+            }
+        }
+
+        // Direct ~/.cache/mlx-models/ directory
+        let mlxDir = home.appendingPathComponent(".cache/mlx-models")
+        if let entries = try? FileManager.default.contentsOfDirectory(atPath: mlxDir.path) {
+            for entry in entries {
+                let fullPath = mlxDir.appendingPathComponent(entry).path
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir), isDir.boolValue {
+                    models.append(MLXModel(name: entry, path: fullPath))
+                }
+            }
+        }
+
+        availableModels = models
+        // Default to Qwen3.5 if available
+        if activeModel == nil {
+            activeModel = models.first(where: { $0.name.lowercased().contains("qwen3.5") })
+                ?? models.first
+        }
+    }
+
+    // MARK: - Start server
+
+    func start(model: MLXModel? = nil) {
+        guard !isRunning else { return }
+        let chosen = model ?? activeModel
+        guard let chosen else {
+            state = .error("No MLX model selected")
+            return
+        }
+
+        activeModel = chosen
+        state = .starting
+        logLines = []
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        proc.arguments = [
+            "python3", "-m", "mlx_lm", "server",
+            "--model", chosen.path,
+            "--host", "127.0.0.1",
+            "--port", String(port)
+        ]
+        proc.environment = ProcessInfo.processInfo.environment
+
+        let pipe = Pipe()
+        let errPipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = errPipe
+
+        // Read stderr for startup logs
+        errPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty, let line = String(data: data, encoding: .utf8) else { return }
+            Task { @MainActor [weak self] in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    self?.logLines.append(trimmed)
+                    if self?.logLines.count ?? 0 > 50 {
+                        self?.logLines.removeFirst()
+                    }
+                }
+            }
+        }
+
+        proc.terminationHandler = { [weak self] p in
+            Task { @MainActor [weak self] in
+                if case .running = self?.state {
+                    self?.state = .stopped
+                }
+                self?.process = nil
+            }
+        }
+
+        do {
+            try proc.run()
+            process = proc
+            // Poll for server readiness
+            Task {
+                var ready = false
+                for _ in 0..<30 {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    if await checkHealth() {
+                        ready = true
+                        break
+                    }
+                }
+                if ready {
+                    state = .running(pid: proc.processIdentifier)
+                } else if proc.isRunning {
+                    state = .running(pid: proc.processIdentifier)
+                } else {
+                    state = .error("Server failed to start")
+                }
+            }
+        } catch {
+            state = .error(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Stop server
+
+    func stop() {
+        if let proc = process, proc.isRunning {
+            proc.terminate()
+        }
+        process = nil
+        state = .stopped
+    }
+
+    // MARK: - Health check
+
+    private nonisolated func checkHealth() async -> Bool {
+        let url = URL(string: "http://127.0.0.1:8800/v1/models")!
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 2
+        do {
+            let (_, response) = try await URLSession.shared.data(for: req)
+            return (response as? HTTPURLResponse)?.statusCode == 200
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: - List models from running server
+
+    nonisolated func fetchServerModels() async -> [String] {
+        let url = URL(string: "http://127.0.0.1:8800/v1/models")!
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let models = json["data"] as? [[String: Any]] {
+                return models.compactMap { $0["id"] as? String }
+            }
+        } catch {}
+        return []
+    }
+}

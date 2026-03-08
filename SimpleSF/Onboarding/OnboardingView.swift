@@ -4,44 +4,57 @@ import SwiftUI
 struct OnboardingView: View {
     @ObservedObject private var keychain = KeychainService.shared
     @ObservedObject private var llm = LLMService.shared
+    @ObservedObject private var mlx = MLXService.shared
     @State private var keys: [LLMProvider: String] = [:]
     @State private var testing: LLMProvider? = nil
     @State private var testResults: [LLMProvider: Bool] = [:]
-    @State private var selectedProvider: LLMProvider = .minimax
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Image(systemName: "key.fill").foregroundColor(.yellow)
-                Text("API Keys")
+                Text("LLM Configuration")
                     .font(.title2.bold())
                 Spacer()
-                if let prov = llm.activeProvider {
-                    Label("Active: \(prov.displayName)", systemImage: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                }
+                activeBadge
             }
             .padding()
 
             Divider()
 
             ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(LLMProvider.allCases, id: \.self) { provider in
-                        ProviderRow(
-                            provider: provider,
-                            storedKey: keychain.key(for: provider),
-                            draftKey: Binding(
-                                get: { keys[provider] ?? "" },
-                                set: { keys[provider] = $0 }
-                            ),
-                            isTesting: testing == provider,
-                            testResult: testResults[provider],
-                            onSave: { save(provider: provider) },
-                            onTest: { Task { await test(provider: provider) } },
-                            onDelete: { keychain.delete(for: provider) }
-                        )
+                VStack(spacing: 16) {
+                    // MLX Local section
+                    mlxSection
+
+                    Divider().padding(.horizontal)
+
+                    // Cloud providers
+                    VStack(spacing: 8) {
+                        HStack {
+                            Image(systemName: "cloud.fill")
+                                .foregroundColor(.blue)
+                            Text("Cloud Providers")
+                                .font(.headline)
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+
+                        ForEach(LLMProvider.cloudProviders, id: \.self) { provider in
+                            ProviderRow(
+                                provider: provider,
+                                storedKey: keychain.key(for: provider),
+                                draftKey: Binding(
+                                    get: { keys[provider] ?? "" },
+                                    set: { keys[provider] = $0 }
+                                ),
+                                isTesting: testing == provider,
+                                testResult: testResults[provider],
+                                onSave: { save(provider: provider) },
+                                onTest: { Task { await test(provider: provider) } },
+                                onDelete: { keychain.delete(for: provider) }
+                            )
+                        }
                     }
                 }
                 .padding()
@@ -49,24 +62,163 @@ struct OnboardingView: View {
 
             Divider()
 
-            // Footer info
             VStack(spacing: 4) {
                 Text("Keys stored in macOS Keychain — never sent anywhere except directly to the provider.")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text("All LLM calls go directly from this app to the provider. No relay server.")
+                Text("MLX runs 100% locally on your Mac. No data leaves your machine.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             .padding()
         }
         .onAppear {
-            // Pre-fill text fields with existing keys
-            for p in LLMProvider.allCases {
+            for p in LLMProvider.cloudProviders {
                 if let k = keychain.key(for: p) { keys[p] = k }
             }
+            mlx.scanModels()
         }
     }
+
+    // MARK: - Active provider badge
+
+    @ViewBuilder
+    private var activeBadge: some View {
+        if mlx.isRunning {
+            Label("MLX Local", systemImage: "cpu")
+                .font(.caption)
+                .foregroundColor(.green)
+        } else if let prov = llm.activeProvider {
+            Label(prov.displayName, systemImage: "checkmark.circle.fill")
+                .font(.caption)
+                .foregroundColor(.green)
+        } else {
+            Label("No provider", systemImage: "exclamationmark.circle")
+                .font(.caption)
+                .foregroundColor(.orange)
+        }
+    }
+
+    // MARK: - MLX Section
+
+    private var mlxSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "cpu")
+                    .foregroundColor(.purple)
+                Text("MLX Local")
+                    .font(.headline)
+                Spacer()
+                mlxStatusBadge
+            }
+
+            // Model picker
+            if !mlx.availableModels.isEmpty {
+                HStack {
+                    Text("Model:")
+                        .font(.callout)
+                    Picker("", selection: $mlx.activeModel) {
+                        ForEach(mlx.availableModels) { model in
+                            Text(model.name).tag(model as MLXService.MLXModel?)
+                        }
+                    }
+                    .labelsHidden()
+                }
+            } else {
+                Text("No MLX models found in ~/.cache/huggingface/hub/")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            // Start / Stop buttons
+            HStack(spacing: 12) {
+                if mlx.isRunning {
+                    Button(action: {
+                        mlx.stop()
+                    }) {
+                        Label("Stop Server", systemImage: "stop.circle.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+
+                    Text("Port \(mlx.port)")
+                        .font(.caption.monospaced())
+                        .foregroundColor(.secondary)
+                } else {
+                    Button(action: {
+                        mlx.start()
+                        // Sync to Rust engine after a delay
+                        Task {
+                            try? await Task.sleep(nanoseconds: 5_000_000_000)
+                            if mlx.isRunning {
+                                SFBridge.shared.syncLLMConfig()
+                            }
+                        }
+                    }) {
+                        Label("Start Server", systemImage: "play.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
+                    .disabled(mlx.activeModel == nil)
+
+                    Button(action: { mlx.scanModels() }) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            // Log output
+            if !mlx.logLines.isEmpty {
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(mlx.logLines.suffix(5).enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.caption2.monospaced())
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 60)
+            }
+        }
+        .padding()
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(mlx.isRunning ? Color.green.opacity(0.4) : Color.purple.opacity(0.2), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private var mlxStatusBadge: some View {
+        switch mlx.state {
+        case .stopped:
+            Label("Stopped", systemImage: "circle")
+                .font(.caption)
+                .foregroundColor(.gray)
+        case .starting:
+            HStack(spacing: 4) {
+                ProgressView().scaleEffect(0.6)
+                Text("Starting...")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        case .running:
+            Label("Running", systemImage: "circle.fill")
+                .font(.caption)
+                .foregroundColor(.green)
+        case .error(let msg):
+            Label(msg, systemImage: "exclamationmark.circle.fill")
+                .font(.caption)
+                .foregroundColor(.red)
+                .lineLimit(1)
+        }
+    }
+
+    // MARK: - Actions
 
     private func save(provider: LLMProvider) {
         let key = (keys[provider] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
