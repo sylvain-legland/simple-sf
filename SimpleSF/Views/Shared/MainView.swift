@@ -35,7 +35,7 @@ enum SidebarItem: String, Hashable {
         case .jarvis:    return "Jarvis"
         case .projects:  return "Projects"
         case .ideation:  return "Ideation"
-        case .teams:     return "Teams"
+        case .teams:     return "Value Stream"
         case .settings:  return "Settings"
         }
     }
@@ -45,7 +45,7 @@ enum SidebarItem: String, Hashable {
         case .jarvis:    return "sparkles"
         case .projects:  return "folder.fill"
         case .ideation:  return "lightbulb.fill"
-        case .teams:     return "person.3.sequence.fill"
+        case .teams:     return "flowchart.fill"
         case .settings:  return "gearshape.fill"
         }
     }

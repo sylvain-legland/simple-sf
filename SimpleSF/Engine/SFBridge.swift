@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 // MARK: - C FFI declarations (mirrors sf_engine.h)
 
@@ -149,9 +150,54 @@ final class SFBridge: ObservableObject {
         engineReady = true
     }
 
-    /// Pass LLM config from macOS Keychain to the Rust engine
+    /// Synchronous config sync — used after user-initiated provider changes.
+    /// NOTE: calls SecItemCopyMatching which may block if keychain is locked.
     func syncLLMConfig() {
         let state = AppState.shared
+        if let provider = state.selectedProvider {
+            let model = state.selectedModel.isEmpty ? provider.defaultModel : state.selectedModel
+            switch provider {
+            case .mlx:
+                if MLXService.shared.isRunning {
+                    configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
+                                 model: MLXService.shared.activeModel?.name ?? model)
+                    return
+                }
+            case .ollama:
+                if OllamaService.shared.isRunning, let m = OllamaService.shared.activeModel {
+                    configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: OllamaService.shared.openaiBaseURL,
+                                 model: m.name)
+                    return
+                }
+            default:
+                if let apiKey = KeychainService.shared.key(for: provider) {
+                    configureLLM(provider: provider.rawValue, apiKey: apiKey,
+                                 baseUrl: provider.baseURL, model: model)
+                    return
+                }
+            }
+        }
+        if MLXService.shared.isRunning {
+            configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
+                         model: MLXService.shared.activeModel?.name ?? "mlx-local")
+            return
+        }
+        if OllamaService.shared.isRunning, let m = OllamaService.shared.activeModel {
+            configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: OllamaService.shared.openaiBaseURL,
+                         model: m.name)
+            return
+        }
+        let keychain = KeychainService.shared
+        guard let provider = LLMProvider.cloudProviders.first(where: { keychain.storedProviders.contains($0) }),
+              let apiKey = keychain.key(for: provider) else { return }
+        configureLLM(provider: provider.rawValue, apiKey: apiKey,
+                     baseUrl: provider.baseURL, model: provider.defaultModel)
+    }
+
+    /// Async variant — runs keychain access on background thread.
+    func syncLLMConfigAsync() async {
+        let state = AppState.shared
+        let keychain = KeychainService.shared
 
         // 1. Explicit user selection takes priority
         if let provider = state.selectedProvider {
@@ -172,53 +218,71 @@ final class SFBridge: ObservableObject {
                     return
                 }
             default:
-                if let apiKey = KeychainService.shared.key(for: provider) {
-                    configureLLM(provider: provider.rawValue, apiKey: apiKey,
-                                 baseUrl: provider.baseURL, model: model)
-                    return
+                if keychain.storedProviders.contains(provider) {
+                    let svc = keychain.service
+                    let raw = provider.rawValue
+                    let apiKey: String? = await Task.detached(operation: {
+                        Self.keychainLookup(service: svc, account: raw)
+                    }).value
+                    if let apiKey {
+                        configureLLM(provider: provider.rawValue, apiKey: apiKey,
+                                     baseUrl: provider.baseURL, model: model)
+                        return
+                    }
                 }
             }
         }
 
-        // 2. Auto-detect: prefer local providers
+        // 2. Local providers
         let preferred = state.preferredLocalProvider
-        if preferred == "mlx" {
-            let mlxSvc = MLXService.shared
-            if mlxSvc.isRunning {
-                configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: mlxSvc.baseURL,
-                             model: mlxSvc.activeModel?.name ?? "mlx-local")
-                return
-            }
-        }
-        if preferred == "ollama" {
-            let ollamaSvc = OllamaService.shared
-            if ollamaSvc.isRunning, let model = ollamaSvc.activeModel {
-                configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: ollamaSvc.openaiBaseURL,
-                             model: model.name)
-                return
-            }
-        }
-
-        // 3. Any running local
-        let mlxSvc = MLXService.shared
-        if mlxSvc.isRunning {
-            configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: mlxSvc.baseURL,
-                         model: mlxSvc.activeModel?.name ?? "mlx-local")
+        if preferred == "mlx", MLXService.shared.isRunning {
+            configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
+                         model: MLXService.shared.activeModel?.name ?? "mlx-local")
             return
         }
-        let ollamaSvc = OllamaService.shared
-        if ollamaSvc.isRunning, let model = ollamaSvc.activeModel {
-            configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: ollamaSvc.openaiBaseURL,
-                         model: model.name)
+        if preferred == "ollama", OllamaService.shared.isRunning, let m = OllamaService.shared.activeModel {
+            configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: OllamaService.shared.openaiBaseURL,
+                         model: m.name)
+            return
+        }
+        if MLXService.shared.isRunning {
+            configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
+                         model: MLXService.shared.activeModel?.name ?? "mlx-local")
+            return
+        }
+        if OllamaService.shared.isRunning, let m = OllamaService.shared.activeModel {
+            configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: OllamaService.shared.openaiBaseURL,
+                         model: m.name)
             return
         }
 
-        // 4. First cloud with key
-        let keychain = KeychainService.shared
-        guard let provider = LLMProvider.cloudProviders.first(where: { keychain.key(for: $0) != nil }),
-              let apiKey = keychain.key(for: provider) else { return }
+        // 3. First cloud with key
+        guard let provider = LLMProvider.cloudProviders.first(where: { keychain.storedProviders.contains($0) }) else { return }
+        let svc = keychain.service
+        let raw = provider.rawValue
+        let apiKey: String? = await Task.detached(operation: {
+            Self.keychainLookup(service: svc, account: raw)
+        }).value
+        guard let apiKey else { return }
         configureLLM(provider: provider.rawValue, apiKey: apiKey,
                      baseUrl: provider.baseURL, model: provider.defaultModel)
+    }
+
+    /// Thread-safe keychain lookup (no @MainActor)
+    private nonisolated static func keychainLookup(service: String, account: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data,
+              let str = String(data: data, encoding: .utf8), !str.isEmpty
+        else { return nil }
+        return str
     }
 
     func configureLLM(provider: String, apiKey: String, baseUrl: String, model: String) {

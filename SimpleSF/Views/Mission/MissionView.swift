@@ -1,264 +1,578 @@
 import SwiftUI
 
+// MARK: - Value Stream View (SF Legacy "Value Stream - Epics")
+// Horizontal phase timeline per epic, click-to-drill agent discussions.
+// Phases from product-lifecycle workflow: 14 phases, each with pattern + gate.
+
 struct MissionView: View {
     @ObservedObject private var bridge = SFBridge.shared
+    @ObservedObject private var catalog = SFCatalog.shared
     @State private var selectedProject: SFBridge.SFProject?
     @State private var brief = ""
     @State private var status: SFBridge.MissionStatus?
+    @State private var selectedPhaseIndex: Int?
     @State private var pollTimer: Timer?
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "play.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.purple)
-                Text("Mission Control")
-                    .font(.title2.bold())
-                Spacer()
-                if bridge.isRunning {
-                    HStack(spacing: 6) {
-                        ProgressView().scaleEffect(0.7)
-                        Text("Running...")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
-                }
-            }
-            .padding()
-
-            Divider()
-
             if !bridge.isRunning && bridge.currentMissionId == nil {
                 launchForm
             } else {
-                missionTimeline
+                valueStreamView
             }
         }
+        .background(SF.Colors.bgPrimary)
         .onAppear { startPolling() }
         .onDisappear { stopPolling() }
     }
 
+    // MARK: - Launch Form
+
     private var launchForm: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            Image(systemName: "rocket.fill")
-                .font(.system(size: 56))
-                .foregroundColor(.purple.opacity(0.6))
-
-            Text("Start a new mission")
-                .font(.title3.bold())
-            Text("Describe what you want to build. The agent team will handle vision, design, development, QA, and review.")
-                .font(.callout)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 500)
-
-            let projects = bridge.listProjects()
-            if !projects.isEmpty {
-                Picker("Project", selection: $selectedProject) {
-                    Text("Select a project...").tag(nil as SFBridge.SFProject?)
-                    ForEach(projects) { p in
-                        Text(p.name).tag(p as SFBridge.SFProject?)
-                    }
-                }
-                .frame(maxWidth: 400)
+        VStack(spacing: 0) {
+            // Header
+            HStack(spacing: 10) {
+                Image(systemName: "flowchart.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(SF.Colors.purple)
+                Text("Value Stream")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(SF.Colors.textPrimary)
+                Spacer()
             }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
 
-            TextEditor(text: $brief)
-                .font(.body.monospaced())
-                .frame(maxWidth: 500, minHeight: 120, maxHeight: 120)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.purple.opacity(0.3), lineWidth: 1)
-                )
-
-            Button(action: launchMission) {
-                Label("Launch Mission", systemImage: "play.fill")
-                    .font(.headline)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.purple)
-            .disabled(brief.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Divider().background(SF.Colors.border)
 
             Spacer()
-        }
-        .padding()
-    }
 
-    private var missionTimeline: some View {
-        HSplitView {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        if let phases = status?.phases {
-                            phasesSection(phases)
-                        }
+            VStack(spacing: 24) {
+                Image(systemName: "rocket.fill")
+                    .font(.system(size: 52))
+                    .foregroundColor(SF.Colors.purple.opacity(0.5))
 
-                        Divider().padding(.vertical, 8)
+                Text("Lancer un Epic")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(SF.Colors.textPrimary)
 
-                        ForEach(bridge.events) { event in
-                            eventRow(event).id(event.id)
-                        }
-                    }
-                    .padding()
-                }
-                .onChange(of: bridge.events.count) { _, _ in
-                    if let last = bridge.events.last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                    }
-                }
-            }
-            .frame(minWidth: 400)
+                Text("Décrivez votre produit. L'équipe SAFe enchaîne 14 phases :\nIdéation → Comité Stratégique → Architecture → Sprints Dev → QA → Deploy Prod → TMA")
+                    .font(.system(size: 13))
+                    .foregroundColor(SF.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 600)
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    if let messages = status?.messages {
-                        ForEach(messages.reversed()) { msg in
-                            messageRow(msg)
+                let projects = bridge.listProjects()
+                if !projects.isEmpty {
+                    Picker("Projet", selection: $selectedProject) {
+                        Text("Sélectionner un projet…").tag(nil as SFBridge.SFProject?)
+                        ForEach(projects) { p in
+                            Text(p.name).tag(p as SFBridge.SFProject?)
                         }
                     }
+                    .frame(maxWidth: 400)
                 }
-                .padding()
+
+                TextEditor(text: $brief)
+                    .font(.system(size: 13).monospaced())
+                    .foregroundColor(SF.Colors.textPrimary)
+                    .scrollContentBackground(.hidden)
+                    .frame(maxWidth: 600, minHeight: 100, maxHeight: 120)
+                    .padding(12)
+                    .background(SF.Colors.bgTertiary)
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(SF.Colors.border, lineWidth: 1)
+                    )
+
+                Button(action: launchMission) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "play.fill")
+                        Text("Lancer le Workflow SAFe")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(SF.Colors.purple)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                .disabled(brief.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .frame(minWidth: 300)
+
+            Spacer()
         }
     }
 
-    private func phasesSection(_ phases: [SFBridge.PhaseInfo]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("SAFe Workflow").font(.headline)
-            HStack(spacing: 8) {
-                ForEach(phases) { phase in
-                    phaseChip(phase)
-                }
-            }
+    // MARK: - Value Stream (Epic Timeline + Phase Detail)
+
+    private var valueStreamView: some View {
+        VStack(spacing: 0) {
+            epicHeader
+            Divider().background(SF.Colors.border)
+            phaseTimeline
+            Divider().background(SF.Colors.border)
+            phaseDetailOrFeed
         }
     }
 
-    private func phaseChip(_ phase: SFBridge.PhaseInfo) -> some View {
-        HStack(spacing: 4) {
-            phaseIcon(phase.status)
-            Text(phase.phase_name.capitalized)
-                .font(.caption.bold())
+    // ── Epic header banner ──
+
+    private var epicHeader: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "flowchart.fill")
+                .font(.system(size: 18))
+                .foregroundColor(SF.Colors.purple)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Cycle de Vie Produit Complet")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(SF.Colors.textPrimary)
+                Text(status?.mission?.brief.prefix(120) ?? brief.prefix(120))
+                    .font(.system(size: 12))
+                    .foregroundColor(SF.Colors.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            missionStatusBadge
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(phaseColor(phase.status).opacity(0.15))
-        .foregroundColor(phaseColor(phase.status))
-        .cornerRadius(12)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(SF.Colors.bgSecondary)
     }
 
     @ViewBuilder
-    private func phaseIcon(_ status: String) -> some View {
-        switch status {
-        case "completed":
-            Image(systemName: "checkmark.circle.fill").font(.caption)
-        case "running":
-            ProgressView().scaleEffect(0.5)
-        case "failed":
-            Image(systemName: "xmark.circle.fill").font(.caption)
-        default:
-            Image(systemName: "circle").font(.caption)
+    private var missionStatusBadge: some View {
+        let s = status?.mission?.status ?? "running"
+        let (label, color, icon): (String, Color, String) = {
+            switch s {
+            case "completed": return ("Terminé", SF.Colors.success, "checkmark.circle.fill")
+            case "failed":    return ("Échoué", SF.Colors.error, "xmark.circle.fill")
+            case "vetoed":    return ("Véto", SF.Colors.warning, "exclamationmark.triangle.fill")
+            default:          return ("En cours", SF.Colors.purple, "play.circle.fill")
+            }
+        }()
+        HStack(spacing: 6) {
+            if s == "running" { ProgressView().scaleEffect(0.6) }
+            Image(systemName: icon).font(.system(size: 12))
+            Text(label).font(.system(size: 12, weight: .semibold))
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.12))
+        .cornerRadius(8)
+    }
+
+    // ── Horizontal phase timeline ──
+
+    private var phaseTimeline: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                let phases = status?.phases ?? []
+                ForEach(Array(phases.enumerated()), id: \.element.id) { index, phase in
+                    HStack(spacing: 0) {
+                        phaseNode(index: index, phase: phase)
+                        if index < phases.count - 1 {
+                            phaseConnector(done: phase.status == "completed")
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+        }
+        .frame(height: 110)
+        .background(SF.Colors.bgSecondary.opacity(0.5))
+    }
+
+    private func phaseNode(index: Int, phase: SFBridge.PhaseInfo) -> some View {
+        let isSelected = selectedPhaseIndex == index
+        let isActive = phase.status == "running"
+        let isDone = phase.status == "completed"
+        let isFailed = phase.status == "failed" || phase.status == "vetoed"
+
+        return Button(action: { withAnimation(.easeInOut(duration: 0.2)) { selectedPhaseIndex = index } }) {
+            VStack(spacing: 6) {
+                // Numbered circle
+                ZStack {
+                    Circle()
+                        .fill(phaseCircleFill(status: phase.status))
+                        .frame(width: 36, height: 36)
+                    if isActive {
+                        Circle()
+                            .stroke(SF.Colors.purple, lineWidth: 2)
+                            .frame(width: 42, height: 42)
+                            .opacity(0.6)
+                    }
+                    if isDone {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                    } else if isFailed {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                    } else if isActive {
+                        ProgressView()
+                            .scaleEffect(0.55)
+                            .tint(.white)
+                    } else {
+                        Text("\(index + 1)")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(SF.Colors.textMuted)
+                    }
+                }
+
+                // Phase name
+                Text(phaseShortName(phase.phase_name))
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .foregroundColor(isSelected ? SF.Colors.purple : (isDone ? SF.Colors.textSecondary : SF.Colors.textMuted))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 72)
+
+                // Pattern badge
+                Text(phase.pattern)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(patternColor(phase.pattern))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(patternColor(phase.pattern).opacity(0.1))
+                    .cornerRadius(4)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 6)
+        .background(isSelected ? SF.Colors.purple.opacity(0.08) : Color.clear)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? SF.Colors.purple.opacity(0.4) : Color.clear, lineWidth: 1)
+        )
+    }
+
+    private func phaseConnector(done: Bool) -> some View {
+        Rectangle()
+            .fill(done ? SF.Colors.success.opacity(0.5) : SF.Colors.border)
+            .frame(width: 20, height: 2)
+            .padding(.bottom, 30)
+    }
+
+    // ── Phase detail + agent feed ──
+
+    @ViewBuilder
+    private var phaseDetailOrFeed: some View {
+        let phases = status?.phases ?? []
+        if let idx = selectedPhaseIndex, idx < phases.count {
+            phaseDetailPanel(phases[idx], index: idx)
+        } else {
+            liveEventsFeed
         }
     }
 
-    private func phaseColor(_ status: String) -> Color {
-        switch status {
-        case "completed": return .green
-        case "running":   return .orange
-        case "failed":    return .red
-        default:          return .gray
+    private func phaseDetailPanel(_ phase: SFBridge.PhaseInfo, index: Int) -> some View {
+        VStack(spacing: 0) {
+            // Phase detail header
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(phaseCircleFill(status: phase.status))
+                        .frame(width: 32, height: 32)
+                    if phase.status == "completed" {
+                        Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+                    } else {
+                        Text("\(index + 1)").font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(phase.phase_name)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(SF.Colors.textPrimary)
+                    HStack(spacing: 8) {
+                        PatternBadge(pattern: phase.pattern)
+                        phaseStatusChip(phase.status)
+                        if let started = phase.started_at {
+                            Text(started.prefix(16))
+                                .font(.system(size: 11))
+                                .foregroundColor(SF.Colors.textMuted)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Agent avatars for this phase
+                agentAvatarStack(phase.agent_ids)
+
+                Button(action: { selectedPhaseIndex = nil }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(SF.Colors.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(SF.Colors.bgSecondary)
+
+            Divider().background(SF.Colors.border)
+
+            // Phase messages
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    // Filter messages for this phase
+                    let phaseMessages = messagesForPhase(phase)
+                    if phaseMessages.isEmpty {
+                        HStack {
+                            Spacer()
+                            VStack(spacing: 8) {
+                                Image(systemName: phase.status == "pending" ? "clock" : "bubble.left.and.bubble.right")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(SF.Colors.textMuted)
+                                Text(phase.status == "pending" ? "Phase en attente" : "Discussion en cours…")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(SF.Colors.textMuted)
+                            }
+                            .padding(.top, 40)
+                            Spacer()
+                        }
+                    } else {
+                        ForEach(phaseMessages) { msg in
+                            phaseMessageCard(msg)
+                        }
+                    }
+
+                    // Phase output (summary)
+                    if let output = phase.output, !output.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(SF.Colors.textSecondary)
+                                Text("Résultat de phase")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(SF.Colors.textSecondary)
+                            }
+                            MarkdownView(output, fontSize: 13)
+                                .textSelection(.enabled)
+                        }
+                        .padding(16)
+                        .background(SF.Colors.bgTertiary)
+                        .cornerRadius(10)
+                    }
+                }
+                .padding(20)
+            }
+        }
+    }
+
+    private func phaseMessageCard(_ msg: SFBridge.MessageInfo) -> some View {
+        let aid = msg.role
+        let color = catalog.agentColor(aid)
+
+        return HStack(alignment: .top, spacing: 0) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color)
+                .frame(width: 3)
+
+            HStack(alignment: .top, spacing: 12) {
+                AgentAvatarView(agentId: aid, size: 36)
+                    .overlay(Circle().stroke(color.opacity(0.5), lineWidth: 2))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(msg.agent_name)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(color)
+                        Text(catalog.agentRole(aid))
+                            .font(.system(size: 11).italic())
+                            .foregroundColor(SF.Colors.textSecondary)
+                        Spacer()
+                        Text(msg.created_at.suffix(8))
+                            .font(.system(size: 10))
+                            .foregroundColor(SF.Colors.textMuted)
+                    }
+                    MarkdownView(msg.content, fontSize: 13)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+        }
+        .background(SF.Colors.bgCard)
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(SF.Colors.border.opacity(0.4), lineWidth: 0.5)
+        )
+    }
+
+    // ── Live events feed (no phase selected) ──
+
+    private var liveEventsFeed: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(bridge.events) { event in
+                        eventRow(event).id(event.id)
+                    }
+                }
+                .padding(20)
+            }
+            .onChange(of: bridge.events.count) { _, _ in
+                if let last = bridge.events.last {
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
         }
     }
 
     private func eventRow(_ event: SFBridge.AgentEvent) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            agentAvatar(event.agentId)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(event.agentId)
-                        .font(.caption.bold())
-                        .foregroundColor(.purple)
+        let color = catalog.agentColor(event.agentId)
+        return HStack(alignment: .top, spacing: 10) {
+            AgentAvatarView(agentId: event.agentId, size: 28)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(catalog.agentName(event.agentId))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(color)
                     Text(eventLabel(event.eventType))
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundColor(SF.Colors.textMuted)
                     Spacer()
                     Text(event.timestamp, style: .time)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10))
+                        .foregroundColor(SF.Colors.textMuted)
                 }
                 if !event.data.isEmpty && event.eventType != "thinking" {
-                    Text(String(event.data.prefix(500)))
-                        .font(.caption.monospaced())
-                        .foregroundColor(eventColor(event.eventType))
-                        .lineLimit(6)
+                    MarkdownView(String(event.data.prefix(600)), fontSize: 12)
                 }
             }
         }
-        .padding(8)
-        .background(Color.gray.opacity(0.05))
+        .padding(10)
+        .background(SF.Colors.bgCard)
         .cornerRadius(8)
     }
 
-    private func agentAvatar(_ agentId: String) -> some View {
-        let initial = String(agentId.split(separator: "-").last?.prefix(1).uppercased() ?? "?")
-        return Text(initial)
-            .font(.caption2.bold())
-            .frame(width: 24, height: 24)
-            .background(agentColor(agentId))
-            .foregroundColor(.white)
-            .clipShape(Circle())
+    // MARK: - Helpers
+
+    private func phaseCircleFill(status: String) -> Color {
+        switch status {
+        case "completed": return SF.Colors.success
+        case "running":   return SF.Colors.purple
+        case "failed":    return SF.Colors.error
+        case "vetoed":    return SF.Colors.warning
+        default:          return SF.Colors.bgTertiary
+        }
     }
 
-    private func agentColor(_ agentId: String) -> Color {
-        if agentId.contains("rte") { return .blue }
-        if agentId.contains("po") { return .green }
-        if agentId.contains("lead") { return .orange }
-        if agentId.contains("dev") { return .purple }
-        if agentId.contains("qa") { return .red }
-        return .gray
+    private func phaseStatusChip(_ status: String) -> some View {
+        let (label, color): (String, Color) = {
+            switch status {
+            case "completed": return ("✓ Terminé", SF.Colors.success)
+            case "running":   return ("⏳ En cours", SF.Colors.purple)
+            case "failed":    return ("✗ Échoué", SF.Colors.error)
+            case "vetoed":    return ("⚠ Véto", SF.Colors.warning)
+            default:          return ("En attente", SF.Colors.textMuted)
+            }
+        }()
+        return Text(label)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.1))
+            .cornerRadius(6)
+    }
+
+    private func patternColor(_ pattern: String) -> Color {
+        switch pattern {
+        case "network":           return SF.Colors.info
+        case "sequential":        return SF.Colors.success
+        case "parallel":          return .cyan
+        case "hierarchical":      return SF.Colors.purple
+        case "loop":              return SF.Colors.warning
+        case "aggregator":        return .teal
+        case "human-in-the-loop": return SF.Colors.accent
+        case "router":            return .mint
+        default:                  return SF.Colors.textMuted
+        }
+    }
+
+    private func phaseShortName(_ name: String) -> String {
+        // Shorten long phase names for the timeline
+        let map: [String: String] = [
+            "ideation": "Idéation",
+            "strategic-committee": "Comité Strat.",
+            "project-setup": "Constitution",
+            "architecture": "Architecture",
+            "design-system": "Design Sys.",
+            "dev-sprint": "Sprints Dev",
+            "build-verify": "Build & Verify",
+            "cicd": "Pipeline CI",
+            "ux-review": "Revue UX",
+            "qa-campaign": "Campagne QA",
+            "qa-execution": "Exécution",
+            "deploy-prod": "Deploy Prod",
+            "tma-router": "Routage",
+            "tma-fix": "Correctif",
+        ]
+        return map[name] ?? name.replacingOccurrences(of: "-", with: " ").capitalized
+    }
+
+    private func agentAvatarStack(_ agentIdsJson: String) -> some View {
+        let ids: [String] = {
+            guard let data = agentIdsJson.data(using: .utf8),
+                  let arr = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+            return arr
+        }()
+        return HStack(spacing: -8) {
+            ForEach(ids.prefix(5), id: \.self) { aid in
+                AgentAvatarView(agentId: aid, size: 28)
+                    .overlay(Circle().stroke(SF.Colors.bgSecondary, lineWidth: 2))
+            }
+            if ids.count > 5 {
+                Text("+\(ids.count - 5)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(SF.Colors.textSecondary)
+                    .frame(width: 28, height: 28)
+                    .background(SF.Colors.bgTertiary)
+                    .clipShape(Circle())
+            }
+        }
+    }
+
+    private func messagesForPhase(_ phase: SFBridge.PhaseInfo) -> [SFBridge.MessageInfo] {
+        guard let messages = status?.messages else { return [] }
+        // Filter by agent IDs in this phase
+        let ids: [String] = {
+            guard let data = phase.agent_ids.data(using: .utf8),
+                  let arr = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+            return arr
+        }()
+        if ids.isEmpty { return Array(messages.reversed()) }
+        return messages.reversed().filter { msg in
+            ids.contains(msg.role) || ids.contains(msg.agent_name.lowercased())
+        }
     }
 
     private func eventLabel(_ type: String) -> String {
         switch type {
-        case "thinking":         return "is thinking..."
-        case "tool_call":        return "called a tool"
-        case "tool_result":      return "got result"
-        case "response":         return "responded"
-        case "error":            return "error"
-        case "mission_complete": return "mission complete"
+        case "thinking":         return "réfléchit…"
+        case "tool_call":        return "utilise un outil"
+        case "tool_result":      return "résultat"
+        case "response":         return "a répondu"
+        case "error":            return "erreur"
+        case "mission_complete": return "mission terminée"
         default:                 return type
         }
-    }
-
-    private func eventColor(_ type: String) -> Color {
-        switch type {
-        case "tool_call":   return .blue
-        case "tool_result": return .cyan
-        case "response":    return .primary
-        case "error":       return .red
-        default:            return .secondary
-        }
-    }
-
-    private func messageRow(_ msg: SFBridge.MessageInfo) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(msg.agent_name)
-                    .font(.caption.bold())
-                    .foregroundColor(.purple)
-                Text("(\(msg.role))")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-            Text(String(msg.content.prefix(300)))
-                .font(.caption)
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(6)
     }
 
     private func launchMission() {
