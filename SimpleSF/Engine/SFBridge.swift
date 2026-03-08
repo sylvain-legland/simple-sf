@@ -85,9 +85,24 @@ final class SFBridge: ObservableObject {
             sfDataPath = bundleURL.path
         } else if let bundleURL = Bundle.main.url(forResource: "SFData", withExtension: nil) {
             sfDataPath = bundleURL.path
+        } else if let moduleBundle = Bundle.main.url(forResource: "SimpleSF_SimpleSF", withExtension: "bundle"),
+                  let nested = Bundle(url: moduleBundle)?.url(forResource: "SFData", withExtension: nil) {
+            sfDataPath = nested.path
         } else {
-            sfDataPath = ""
-            print("[SFBridge] WARNING: SFData not found in bundle — using fallback agents")
+            // Direct path fallback for SPM builds
+            let execURL = Bundle.main.executableURL?.deletingLastPathComponent()
+            let candidates = [
+                execURL?.appendingPathComponent("SimpleSF_SimpleSF.bundle/SFData"),
+                execURL?.deletingLastPathComponent().appendingPathComponent("Resources/SFData"),
+                Bundle.main.resourceURL?.appendingPathComponent("SFData"),
+            ]
+            sfDataPath = candidates.compactMap { $0 }.first(where: {
+                FileManager.default.fileExists(atPath: $0.appendingPathComponent("agents.json").path)
+            })?.path ?? ""
+            if sfDataPath.isEmpty {
+                print("[SFBridge] WARNING: SFData not found in bundle — using fallback agents")
+                print("[SFBridge] Searched: \(candidates.compactMap { $0?.path })")
+            }
         }
 
         dbPath.withCString { dbPtr in

@@ -10,11 +10,11 @@ use uuid::Uuid;
 
 /// Fallback SAFe workflow phases (used if workflow not found in catalog)
 const SAFE_PHASES: &[(&str, &str, &[&str])] = &[
-    ("vision",  "network",     &["rte-marie", "po-lucas"]),
-    ("design",  "sequential",  &["lead-thomas"]),
-    ("dev",     "parallel",    &["dev-emma", "dev-karim"]),
-    ("qa",      "sequential",  &["qa-sophie"]),
-    ("review",  "network",     &["lead-thomas", "po-lucas"]),
+    ("vision",  "network",     &["rte", "product"]),
+    ("design",  "sequential",  &["lead_dev", "architecte"]),
+    ("dev",     "parallel",    &["dev", "dev_frontend"]),
+    ("qa",      "sequential",  &["qa_lead"]),
+    ("review",  "network",     &["lead_dev", "product"]),
 ];
 
 const MAX_NETWORK_ROUNDS: usize = 3;
@@ -32,7 +32,8 @@ const CONTEXT_BUDGET: usize = 6000;
 // PO is the decision-maker, NOT Jarvis.
 
 /// Intake team — the agents who participate in the intake discussion.
-const INTAKE_TEAM: &[&str] = &["rte-marie", "archi-pierre", "lead-thomas", "po-lucas"];
+/// IDs match the SF platform DB: rte, architecte, lead_dev, product
+const INTAKE_TEAM: &[&str] = &["rte", "architecte", "lead_dev", "product"];
 
 /// Run a SAFe intake discussion with the direction team.
 /// Flow: RTE frames → Experts discuss (2 rounds) → PO decides and proposes mission.
@@ -72,7 +73,7 @@ pub async fn run_intake(
         content: "── Réunion de cadrage ──".into(),
     });
 
-    let rte = &agents_data[0]; // rte-marie
+    let rte = &agents_data[0]; // rte (Marc Delacroix)
     on_event(&rte.id, AgentEvent::Thinking);
 
     let rte_prompt = format!(
@@ -183,7 +184,7 @@ pub async fn run_intake(
 
     // ── Phase 3: PO synthesizes and proposes mission ──
     // The PO is the decision-maker — they decide whether to create a project and start a mission.
-    let po = agents_data.iter().find(|a| a.id == "po-lucas")
+    let po = agents_data.iter().find(|a| a.id == "product")
         .unwrap_or(agents_data.last().unwrap());
 
     on_event(&po.id, AgentEvent::Thinking);
