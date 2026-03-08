@@ -1,341 +1,295 @@
-# Simple SF
+<p align="center">
+  <img src="docs/screenshots/chat.png" alt="SimpleSF — Jarvis Chat" width="720" />
+</p>
 
-> 🌍 [English](#english) · [Français](#français) · [Deutsch](#deutsch) · [中文](#中文) · [日本語](#日本語) · [Español](#español) · [Português](#português) · [Русский](#русский) · [한국어](#한국어) · [العربية](#العربية) · [हिन्दी](#हिन्दी) · [Italiano](#italiano) · [Nederlands](#nederlands) · [Polski](#polski) · [Türkçe](#türkçe) · [Tiếng Việt](#tiếng-việt) · [Indonesia](#indonesia) · [ไทย](#ไทย) · [Čeština](#čeština) · [Svenska](#svenska) · [Dansk](#dansk) · [Suomi](#suomi) · [Norsk](#norsk) · [Română](#română) · [Magyar](#magyar) · [Ελληνικά](#ελληνικά) · [עברית](#עברית) · [Slovenčina](#slovenčina) · [Hrvatski](#hrvatski) · [Slovenščina](#slovenščina) · [Srpski](#srpski) · [Українська](#українська) · [Català](#català) · [Melayu](#melayu) · [Filipino](#filipino) · [বাংলা](#বাংলা) · [اردو](#اردو) · [Afrikaans](#afrikaans) · [Lietuvių](#lietuvių) · [Latviešu](#latviešu)
+<h1 align="center">Simple Software Factory</h1>
+
+<p align="center">
+  <strong>A native macOS multi-agent AI app — no server, no Docker, zero config.</strong><br/>
+  SwiftUI · Rust FFI · 10 LLM providers · 22 AI agents · Dark mode
+</p>
+
+<p align="center">
+  🌍 <a href="#english">English</a> · <a href="#français">Français</a> · <a href="#español">Español</a> · <a href="#deutsch">Deutsch</a> · <a href="#中文">中文</a> · <a href="#日本語">日本語</a> · <a href="#한국어">한국어</a> · <a href="#العربية">العربية</a> · <a href="#português">Português</a> · <a href="#italiano">Italiano</a>
+</p>
 
 ---
 
 ## English
 
-**Simple SF** is a native macOS app that packages the entire [Software Factory](https://github.com/sylvain-legland/software-factory) platform inside a single `.app` — no server setup, no Docker, no external dependencies.
+**Simple Software Factory** is a native macOS app that runs a complete multi-agent AI software factory — entirely offline, on your Mac. No server, no Docker, no cloud required. Just build and run.
+
+Agents collaborate in real-time discussions (network pattern) with distinct roles (RTE, Architect, Lead Dev, Product Owner), producing rich markdown output with tables, code blocks, and structured deliverables.
+
+### Screenshots
+
+| Jarvis Chat — Agent Discussion | Settings — Model Selector |
+|:---:|:---:|
+| ![Chat](docs/screenshots/chat.png) | ![Settings](docs/screenshots/settings.png) |
 
 ### Features
-- **Jarvis** — streaming AI assistant with full context
-- **Ideation** — AI teams brainstorming in parallel (3–5 agents, real personas)
-- **Projects** — progress bar · start / pause / stop buttons · live spinner
-- **Full SF in Advanced mode** — 133+ agents, 12 patterns, SAFe, A2A, RLM
-- **8 LLM providers** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 languages** — full i18n, auto-detected from system locale
-- **ZIP export** — package your project as a `.zip` with one click
-- **Git push** — push directly to GitHub or GitLab (private or public)
 
-### Requirements
-- macOS 14 (Sonoma) or later
-- Xcode 15+ (to build from source)
-
-### Quick start
-```bash
-git clone https://github.com/sylvain-legland/simple-sf
-cd simple-sf
-./Scripts/embed_python.sh   # bundles Python 3.12 + SF backend (~5 min, once)
-open Package.swift           # opens in Xcode → Build & Run
-```
-
-### Simple ↔ Advanced mode
-Toggle in the toolbar. **Simple** shows 3 views (Projects, Jarvis, Ideation). **Advanced** unlocks the full SF platform: Portfolio, PI Board, ART, Backlog, Metrics, Live, Workflows, Agents.
+- **Jarvis AI Assistant** — chat with context-aware AI that orchestrates multi-agent discussions
+- **Multi-Agent Discussions** — 22 agents with real personas, avatars, roles, and colored cards
+- **Rich Markdown Rendering** — headers, bold, lists, tables, code blocks, blockquotes — all native SwiftUI
+- **10 LLM Providers** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax · Kimi · OpenRouter · Alibaba Qwen · Zhipu GLM
+- **Model Selector** — pick any provider + model, override defaults, switch with one click
+- **Local-First** — Ollama and MLX run 100% on your Mac, zero data leaves your machine
+- **Dark Mode** — GitHub Dark color palette, designed for long coding sessions
+- **12 Languages** — French, English, Spanish, German, Italian, Portuguese, Japanese, Korean, Chinese, Arabic, Russian, Dutch
+- **Chat History** — sessions persist across restarts with full agent metadata
 
 ### Architecture
+
 ```
 SimpleSF.app
-├── MacOS/SimpleSF              Swift binary
-├── Frameworks/Python.framework Python 3.12 runtime (embedded)
-└── Resources/
-    ├── platform/               SF Python backend (FastAPI)
-    ├── site-packages/          pip dependencies
-    └── *.lproj/                40 language bundles
+├── MacOS/SimpleSF                 Swift binary (SwiftUI)
+├── Resources/
+│   └── SimpleSF_SimpleSF.bundle/
+│       └── Avatars/               Agent photos (22 JPG)
+└── Frameworks/
+    └── libsf_engine.a             Rust static library (C FFI)
+```
+
+**Tech stack:** Swift 6 + SwiftUI → C FFI (`@_silgen_name`) → Rust `staticlib` (~30 MB `.a`).  
+The Rust engine handles LLM calls, agent orchestration, and the discussion protocol.  
+Swift handles UI, persistence, and provider management.
+
+### Quick Start
+
+```bash
+git clone https://github.com/sylvain-legland/simple-sf.git
+cd simple-sf
+
+# Build the Rust engine
+cd SFEngine && cargo build --release && cd ..
+
+# Build the Swift app
+xcrun swift build
+
+# Bundle as .app
+mkdir -p dist/SimpleSF.app/Contents/{MacOS,Resources}
+cp .build/arm64-apple-macosx/debug/SimpleSF dist/SimpleSF.app/Contents/MacOS/
+cp -R .build/arm64-apple-macosx/debug/SimpleSF_SimpleSF.bundle dist/SimpleSF.app/Contents/Resources/
+codesign --force --sign - dist/SimpleSF.app
+
+# Launch
+open dist/SimpleSF.app
+```
+
+### Requirements
+
+- macOS 14 (Sonoma) or later
+- Rust 1.75+ (for the engine)
+- Xcode 15+ / Swift 5.9+ (for the UI)
+- At least one LLM provider: local (Ollama or MLX) or cloud API key
+
+### Project Structure
+
+```
+simple-sf/
+├── Package.swift              SPM manifest (links Rust .a)
+├── SimpleSF/
+│   ├── App/                   AppState, main entry
+│   ├── Engine/                SFBridge (Swift↔Rust FFI)
+│   ├── Jarvis/                Chat UI, agent cards
+│   ├── LLM/                   LLMService, providers, Keychain
+│   ├── Onboarding/            Settings, setup wizard
+│   ├── Data/                  ChatStore (JSON persistence)
+│   ├── Views/Shared/          DesignTokens, MarkdownView, avatars
+│   └── Resources/Avatars/     22 agent photos
+├── SFEngine/
+│   ├── src/engine.rs          Discussion orchestrator
+│   ├── src/llm.rs             Multi-provider LLM client
+│   ├── src/ffi.rs             C FFI exports
+│   └── Cargo.toml             Rust dependencies
+└── docs/screenshots/          App screenshots
 ```
 
 ---
 
 ## Français
 
-**Simple SF** est une application macOS native qui embarque l'intégralité de la plateforme [Software Factory](https://github.com/sylvain-legland/software-factory) dans un seul `.app` — pas de serveur à configurer, pas de Docker, aucune dépendance externe.
+**Simple Software Factory** est une application macOS native qui exécute une usine logicielle multi-agents IA — entièrement hors-ligne, sur votre Mac. Aucun serveur, Docker ou cloud nécessaire.
+
+Les agents collaborent en discussions temps réel (pattern network) avec des rôles distincts (RTE, Architecte, Lead Dev, Product Owner), produisant du contenu riche en markdown : tableaux, blocs de code, livrables structurés.
+
+### Captures d'écran
+
+| Chat Jarvis — Discussion d'agents | Réglages — Sélecteur de modèle |
+|:---:|:---:|
+| ![Chat](docs/screenshots/chat.png) | ![Réglages](docs/screenshots/settings.png) |
 
 ### Fonctionnalités
-- **Jarvis** — assistant IA en streaming avec contexte complet
-- **Idéation** — équipes IA qui brainstorment en parallèle (3–5 agents, vrais personas)
-- **Projets** — barre de progression · boutons démarrer / pause / arrêt · spinner live
-- **SF complète en mode Avancé** — 133+ agents, 12 patterns, SAFe, A2A, RLM
-- **8 fournisseurs LLM** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 langues** — i18n complète, détection automatique depuis la langue système
-- **Export ZIP** — packager votre projet en `.zip` en un clic
-- **Git push** — pousser directement sur GitHub ou GitLab (privé ou public)
+
+- **Assistant IA Jarvis** — chat avec IA contextuelle orchestrant des discussions multi-agents
+- **Discussions Multi-Agents** — 22 agents avec personas, avatars, rôles et cartes colorées
+- **Rendu Markdown Natif** — titres, gras, listes, tableaux, blocs de code, citations — tout en SwiftUI natif
+- **10 Fournisseurs LLM** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax · Kimi · OpenRouter · Alibaba Qwen · Zhipu GLM
+- **Sélecteur de Modèle** — choisissez un fournisseur + modèle, changez en un clic
+- **Local-First** — Ollama et MLX tournent 100% sur votre Mac, aucune donnée ne sort
+- **Mode Sombre** — palette GitHub Dark, pensée pour les longues sessions
+- **12 Langues** — français, anglais, espagnol, allemand, italien, portugais, japonais, coréen, chinois, arabe, russe, néerlandais
+
+### Démarrage Rapide
+
+```bash
+git clone https://github.com/sylvain-legland/simple-sf.git
+cd simple-sf
+cd SFEngine && cargo build --release && cd ..
+xcrun swift build
+# Voir la section English pour le bundling .app complet
+open dist/SimpleSF.app
+```
 
 ### Prérequis
-- macOS 14 (Sonoma) ou supérieur
-- Xcode 15+ (pour compiler depuis les sources)
 
-### Démarrage rapide
+- macOS 14 (Sonoma) ou ultérieur
+- Rust 1.75+ · Xcode 15+ / Swift 5.9+
+- Au moins un fournisseur LLM : local (Ollama ou MLX) ou clé API cloud
+
+---
+
+## Español
+
+**Simple Software Factory** es una aplicación macOS nativa que ejecuta una fábrica de software multi-agente IA — completamente offline, en tu Mac.
+
+### Capturas de Pantalla
+
+| Chat Jarvis | Configuración — Selector de Modelo |
+|:---:|:---:|
+| ![Chat](docs/screenshots/chat.png) | ![Config](docs/screenshots/settings.png) |
+
+### Características
+
+- **Asistente IA Jarvis** — chat con orquestación multi-agente
+- **22 Agentes IA** — con avatares, roles y tarjetas de colores
+- **Renderizado Markdown** — tablas, bloques de código, listas — todo nativo SwiftUI
+- **10 Proveedores LLM** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax y más
+- **Local-First** — los modelos locales funcionan 100% en tu Mac
+- **Modo Oscuro** — paleta GitHub Dark
+
+### Inicio Rápido
+
 ```bash
-git clone https://github.com/sylvain-legland/simple-sf
-cd simple-sf
-./Scripts/embed_python.sh   # embarque Python 3.12 + backend SF (~5 min, une fois)
-open Package.swift           # ouvre dans Xcode → Build & Run
+git clone https://github.com/sylvain-legland/simple-sf.git
+cd simple-sf && cd SFEngine && cargo build --release && cd ..
+xcrun swift build && open dist/SimpleSF.app
 ```
 
 ---
 
 ## Deutsch
 
-**Simple SF** ist eine native macOS-App, die die gesamte [Software Factory](https://github.com/sylvain-legland/software-factory)-Plattform in einer einzigen `.app` bündelt — kein Server-Setup, kein Docker, keine externen Abhängigkeiten.
+**Simple Software Factory** ist eine native macOS-App, die eine komplette Multi-Agenten-KI-Softwarefabrik ausführt — vollständig offline auf Ihrem Mac.
 
 ### Funktionen
-- **Jarvis** — Streaming-KI-Assistent mit vollem Kontext
-- **Ideation** — KI-Teams, die parallel brainstormen (3–5 Agents, echte Personas)
-- **Projekte** — Fortschrittsbalken · Start / Pause / Stopp · Live-Spinner
-- **Vollständige SF im Erweiterten Modus** — 133+ Agents, 12 Muster, SAFe, A2A, RLM
-- **8 LLM-Anbieter** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 Sprachen** — vollständige i18n, automatisch aus Systemsprache erkannt
 
-### Schnellstart
-```bash
-git clone https://github.com/sylvain-legland/simple-sf
-./Scripts/embed_python.sh && open Package.swift
-```
+- **Jarvis KI-Assistent** — Chat mit Multi-Agenten-Orchestrierung
+- **22 KI-Agenten** — mit Avataren, Rollen und farbigen Karten
+- **Markdown-Rendering** — Tabellen, Code-Blöcke, Listen — alles natives SwiftUI
+- **10 LLM-Anbieter** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax und mehr
+- **Local-First** — lokale Modelle laufen 100% auf Ihrem Mac
+
+| Jarvis Chat | Einstellungen |
+|:---:|:---:|
+| ![Chat](docs/screenshots/chat.png) | ![Einstellungen](docs/screenshots/settings.png) |
 
 ---
 
 ## 中文
 
-**Simple SF** 是一款原生 macOS 应用，将完整的 [Software Factory](https://github.com/sylvain-legland/software-factory) 平台打包进单个 `.app` — 无需配置服务器，无需 Docker，无外部依赖。
+**Simple Software Factory** 是一个原生 macOS 应用，在您的 Mac 上运行完整的多智能体 AI 软件工厂 — 完全离线，无需服务器。
 
 ### 功能特点
-- **Jarvis** — 具有完整上下文的流式 AI 助手
-- **创意工坊** — AI 团队并行头脑风暴（3–5 个智能体，真实人物角色）
-- **项目管理** — 进度条 · 开始 / 暂停 / 停止按钮 · 实时加载指示器
-- **高级模式完整 SF** — 133+ 智能体、12 种模式、SAFe、A2A、RLM
-- **8 个 LLM 提供商** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 种语言** — 完整国际化，自动检测系统语言
 
-### 快速开始
-```bash
-git clone https://github.com/sylvain-legland/simple-sf
-./Scripts/embed_python.sh && open Package.swift
-```
+- **Jarvis AI 助手** — 多智能体协作对话
+- **22 个 AI 智能体** — 带头像、角色和彩色卡片
+- **原生 Markdown 渲染** — 表格、代码块、列表 — 全部原生 SwiftUI
+- **10 个 LLM 提供商** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax 等
+- **本地优先** — 本地模型 100% 在您的 Mac 上运行
+- **暗色模式** — GitHub Dark 配色方案
+
+| Jarvis 聊天 | 设置 |
+|:---:|:---:|
+| ![聊天](docs/screenshots/chat.png) | ![设置](docs/screenshots/settings.png) |
 
 ---
 
 ## 日本語
 
-**Simple SF** は、[Software Factory](https://github.com/sylvain-legland/software-factory) プラットフォーム全体を1つの `.app` にパッケージした ネイティブ macOS アプリです — サーバーのセットアップ不要、Docker不要、外部依存なし。
+**Simple Software Factory** は、Mac 上でマルチエージェント AI ソフトウェアファクトリーを実行するネイティブ macOS アプリです。サーバー不要、完全オフライン。
 
 ### 機能
-- **Jarvis** — フルコンテキストのストリーミング AI アシスタント
-- **アイデア出し** — AI チームが並行してブレインストーミング（3〜5 エージェント、リアルなペルソナ）
-- **プロジェクト** — 進捗バー · 開始 / 一時停止 / 停止ボタン · ライブスピナー
-- **高度モードの完全 SF** — 133以上のエージェント、12パターン、SAFe、A2A、RLM
-- **8 LLM プロバイダー** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 言語** — 完全 i18n、システムロケールから自動検出
 
-### クイックスタート
-```bash
-git clone https://github.com/sylvain-legland/simple-sf
-./Scripts/embed_python.sh && open Package.swift
-```
+- **Jarvis AI アシスタント** — マルチエージェント協調チャット
+- **22 AI エージェント** — アバター、役割、カラーカード付き
+- **ネイティブ Markdown レンダリング** — テーブル、コードブロック、リスト
+- **10 LLM プロバイダー** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax 他
+- **ローカルファースト** — ローカルモデルは Mac 上で 100% 動作
 
----
-
-## Español
-
-**Simple SF** es una aplicación nativa de macOS que empaqueta toda la plataforma [Software Factory](https://github.com/sylvain-legland/software-factory) en una sola `.app` — sin configuración de servidor, sin Docker, sin dependencias externas.
-
-### Características
-- **Jarvis** — asistente de IA en streaming con contexto completo
-- **Ideación** — equipos de IA haciendo brainstorming en paralelo (3–5 agentes, personas reales)
-- **Proyectos** — barra de progreso · botones iniciar / pausar / detener · spinner en vivo
-- **SF completa en modo Avanzado** — 133+ agentes, 12 patrones, SAFe, A2A, RLM
-- **8 proveedores LLM** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 idiomas** — i18n completa, detección automática desde el idioma del sistema
-
----
-
-## Português
-
-**Simple SF** é um app nativo para macOS que empacota toda a plataforma [Software Factory](https://github.com/sylvain-legland/software-factory) em um único `.app` — sem configuração de servidor, sem Docker, sem dependências externas.
-
-### Funcionalidades
-- **Jarvis** — assistente de IA em streaming com contexto completo
-- **Ideação** — equipes de IA fazendo brainstorming em paralelo (3–5 agentes, personas reais)
-- **Projetos** — barra de progresso · botões iniciar / pausar / parar · spinner ao vivo
-- **SF completa no modo Avançado** — 133+ agentes, 12 padrões, SAFe, A2A, RLM
-- **8 provedores LLM** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 idiomas** — i18n completa, detecção automática pelo idioma do sistema
-
----
-
-## Русский
-
-**Simple SF** — нативное приложение для macOS, которое упаковывает всю платформу [Software Factory](https://github.com/sylvain-legland/software-factory) в один `.app` — без настройки сервера, без Docker, без внешних зависимостей.
-
-### Возможности
-- **Jarvis** — потоковый ИИ-ассистент с полным контекстом
-- **Идеация** — команды ИИ, проводящие мозговой штурм параллельно (3–5 агентов, реальные персоны)
-- **Проекты** — прогресс-бар · кнопки старт / пауза / стоп · живой спиннер
-- **Полная SF в расширенном режиме** — 133+ агентов, 12 паттернов, SAFe, A2A, RLM
-- **8 провайдеров LLM** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 языков** — полная i18n, автоопределение из системной локали
+| Jarvis チャット | 設定 |
+|:---:|:---:|
+| ![チャット](docs/screenshots/chat.png) | ![設定](docs/screenshots/settings.png) |
 
 ---
 
 ## 한국어
 
-**Simple SF**는 전체 [Software Factory](https://github.com/sylvain-legland/software-factory) 플랫폼을 단일 `.app`으로 패키징한 네이티브 macOS 앱입니다 — 서버 설정 불필요, Docker 불필요, 외부 종속성 없음.
+**Simple Software Factory**는 Mac에서 멀티 에이전트 AI 소프트웨어 팩토리를 실행하는 네이티브 macOS 앱입니다. 서버 불필요, 완전 오프라인.
 
 ### 기능
-- **Jarvis** — 전체 컨텍스트를 갖춘 스트리밍 AI 어시스턴트
-- **아이디어 발상** — AI 팀이 병렬로 브레인스토밍 (3–5 에이전트, 실제 페르소나)
-- **프로젝트** — 진행률 표시줄 · 시작 / 일시정지 / 정지 버튼 · 라이브 스피너
-- **고급 모드 전체 SF** — 133+ 에이전트, 12 패턴, SAFe, A2A, RLM
-- **8개 LLM 제공업체** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40개 언어** — 완전한 i18n, 시스템 로케일에서 자동 감지
+
+- **Jarvis AI 어시스턴트** — 멀티 에이전트 협업 채팅
+- **22개 AI 에이전트** — 아바타, 역할, 컬러 카드
+- **네이티브 Markdown 렌더링** — 테이블, 코드 블록, 목록
+- **10개 LLM 제공업체** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax 등
+- **로컬 우선** — 로컬 모델은 Mac에서 100% 실행
 
 ---
 
 ## العربية
 
-**Simple SF** هو تطبيق macOS أصلي يحزم منصة [Software Factory](https://github.com/sylvain-legland/software-factory) بالكامل في ملف `.app` واحد — بدون إعداد خادم، بدون Docker، بدون تبعيات خارجية.
+**Simple Software Factory** هو تطبيق macOS أصلي يشغّل مصنع برمجيات متعدد الوكلاء بالذكاء الاصطناعي — بالكامل دون اتصال، على جهاز Mac الخاص بك.
 
-### المميزات
-- **Jarvis** — مساعد ذكاء اصطناعي متدفق مع سياق كامل
-- **توليد الأفكار** — فرق الذكاء الاصطناعي تعصف ذهنياً بالتوازي (3–5 وكلاء، شخصيات حقيقية)
-- **المشاريع** — شريط تقدم · أزرار البدء / الإيقاف المؤقت / الإيقاف · مؤشر دوار مباشر
-- **SF كاملة في الوضع المتقدم** — 133+ وكيل، 12 نمطاً، SAFe، A2A، RLM
-- **8 مزودي LLM** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 لغة** — i18n كاملة، اكتشاف تلقائي من لغة النظام
+### الميزات
+
+- **مساعد Jarvis الذكي** — محادثة مع تنسيق متعدد الوكلاء
+- **22 وكيل ذكاء اصطناعي** — مع صور رمزية وأدوار وبطاقات ملونة
+- **عرض Markdown أصلي** — جداول وكتل برمجية وقوائم
+- **10 مزودي نماذج لغوية** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax والمزيد
+- **المحلي أولاً** — النماذج المحلية تعمل 100% على جهاز Mac
 
 ---
 
-## हिन्दी
+## Português
 
-**Simple SF** एक नेटिव macOS ऐप है जो पूरे [Software Factory](https://github.com/sylvain-legland/software-factory) प्लेटफ़ॉर्म को एक `.app` में पैकेज करती है — कोई सर्वर सेटअप नहीं, कोई Docker नहीं, कोई बाहरी निर्भरता नहीं।
+**Simple Software Factory** é um app macOS nativo que executa uma fábrica de software multi-agente IA — totalmente offline, no seu Mac.
 
-### विशेषताएं
-- **Jarvis** — पूर्ण संदर्भ के साथ स्ट्रीमिंग AI सहायक
-- **विचार-मंथन** — AI टीमें समानांतर में ब्रेनस्टॉर्म करती हैं (3–5 एजेंट, वास्तविक पर्सोना)
-- **प्रोजेक्ट** — प्रगति बार · शुरू / रोकें / बंद करें बटन · लाइव स्पिनर
-- **उन्नत मोड में पूर्ण SF** — 133+ एजेंट, 12 पैटर्न, SAFe, A2A, RLM
-- **8 LLM प्रदाता** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 भाषाएं** — पूर्ण i18n, सिस्टम लोकेल से स्वचालित पहचान
+### Funcionalidades
+
+- **Assistente IA Jarvis** — chat com orquestração multi-agente
+- **22 Agentes IA** — com avatares, papéis e cartões coloridos
+- **Renderização Markdown Nativa** — tabelas, blocos de código, listas — tudo SwiftUI nativo
+- **10 Provedores LLM** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax e mais
+- **Local-First** — modelos locais rodam 100% no seu Mac
 
 ---
 
 ## Italiano
 
-**Simple SF** è un'app nativa per macOS che racchiude l'intera piattaforma [Software Factory](https://github.com/sylvain-legland/software-factory) in un unico `.app` — nessuna configurazione server, nessun Docker, nessuna dipendenza esterna.
+**Simple Software Factory** è un'app macOS nativa che esegue una software factory multi-agente IA — completamente offline, sul tuo Mac.
 
-### Funzionalità
-- **Jarvis** — assistente AI in streaming con contesto completo
-- **Ideazione** — team AI che fanno brainstorming in parallelo (3–5 agenti, persone reali)
-- **Progetti** — barra di avanzamento · pulsanti avvia / pausa / ferma · spinner live
-- **SF completa in modalità Avanzata** — 133+ agenti, 12 pattern, SAFe, A2A, RLM
-- **8 provider LLM** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 lingue** — i18n completa, rilevamento automatico dalla lingua di sistema
+### Caratteristiche
 
----
-
-## Nederlands
-
-**Simple SF** is een native macOS-app die het volledige [Software Factory](https://github.com/sylvain-legland/software-factory)-platform verpakt in één `.app` — geen serverinstallatie, geen Docker, geen externe afhankelijkheden.
-
-### Functies
-- **Jarvis** — streaming AI-assistent met volledige context
-- **Ideation** — AI-teams brainstormen parallel (3–5 agents, echte persona's)
-- **Projecten** — voortgangsbalk · start / pauzeer / stop knoppen · live spinner
-- **Volledige SF in Geavanceerde modus** — 133+ agents, 12 patronen, SAFe, A2A, RLM
-- **8 LLM-aanbieders** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 talen** — volledige i18n, automatische detectie van systeemtaal
-
----
-
-## Polski
-
-**Simple SF** to natywna aplikacja macOS, która pakuje całą platformę [Software Factory](https://github.com/sylvain-legland/software-factory) w jeden plik `.app` — bez konfiguracji serwera, bez Dockera, bez zewnętrznych zależności.
-
-### Funkcje
-- **Jarvis** — strumieniowy asystent AI z pełnym kontekstem
-- **Ideacja** — zespoły AI przeprowadzające burzę mózgów równolegle (3–5 agentów, prawdziwe persony)
-- **Projekty** — pasek postępu · przyciski start / pauza / stop · live spinner
-- **Pełna SF w trybie Zaawansowanym** — 133+ agentów, 12 wzorców, SAFe, A2A, RLM
-- **8 dostawców LLM** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 języków** — pełna i18n, automatyczne wykrywanie języka systemu
-
----
-
-## Türkçe
-
-**Simple SF**, [Software Factory](https://github.com/sylvain-legland/software-factory) platformunun tamamını tek bir `.app` içinde paketleyen yerel bir macOS uygulamasıdır — sunucu kurulumu yok, Docker yok, harici bağımlılık yok.
-
-### Özellikler
-- **Jarvis** — tam bağlamlı akış AI asistanı
-- **Fikir Üretimi** — AI ekipleri paralel olarak beyin fırtınası yapıyor (3–5 ajan, gerçek kişilikler)
-- **Projeler** — ilerleme çubuğu · başlat / duraklat / durdur düğmeleri · canlı döndürücü
-- **Gelişmiş modda tam SF** — 133+ ajan, 12 desen, SAFe, A2A, RLM
-- **8 LLM sağlayıcısı** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 dil** — tam i18n, sistem dilinden otomatik algılama
-
----
-
-## Tiếng Việt
-
-**Simple SF** là ứng dụng macOS gốc đóng gói toàn bộ nền tảng [Software Factory](https://github.com/sylvain-legland/software-factory) vào một `.app` duy nhất — không cần cài đặt máy chủ, không Docker, không phụ thuộc bên ngoài.
-
-### Tính năng
-- **Jarvis** — trợ lý AI phát trực tuyến với đầy đủ ngữ cảnh
-- **Ý tưởng** — các nhóm AI cùng brainstorm song song (3–5 tác nhân, nhân vật thực)
-- **Dự án** — thanh tiến trình · nút bắt đầu / tạm dừng / dừng · spinner trực tiếp
-- **SF đầy đủ trong chế độ Nâng cao** — 133+ tác nhân, 12 mẫu, SAFe, A2A, RLM
-- **8 nhà cung cấp LLM** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 ngôn ngữ** — i18n đầy đủ, tự động phát hiện từ ngôn ngữ hệ thống
-
----
-
-## Indonesia
-
-**Simple SF** adalah aplikasi macOS asli yang mengemas seluruh platform [Software Factory](https://github.com/sylvain-legland/software-factory) ke dalam satu `.app` — tanpa pengaturan server, tanpa Docker, tanpa dependensi eksternal.
-
-### Fitur
-- **Jarvis** — asisten AI streaming dengan konteks penuh
-- **Ideasi** — tim AI melakukan brainstorming secara paralel (3–5 agen, persona nyata)
-- **Proyek** — bilah kemajuan · tombol mulai / jeda / berhenti · spinner langsung
-- **SF lengkap dalam mode Lanjutan** — 133+ agen, 12 pola, SAFe, A2A, RLM
-- **8 penyedia LLM** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 bahasa** — i18n lengkap, deteksi otomatis dari bahasa sistem
-
----
-
-## ไทย
-
-**Simple SF** คือแอป macOS แบบเนทีฟที่รวมแพลตฟอร์ม [Software Factory](https://github.com/sylvain-legland/software-factory) ทั้งหมดไว้ใน `.app` เดียว — ไม่ต้องตั้งค่าเซิร์ฟเวอร์ ไม่ต้องใช้ Docker ไม่มีการพึ่งพาภายนอก
-
-### คุณสมบัติ
-- **Jarvis** — ผู้ช่วย AI แบบสตรีมมิ่งพร้อมบริบทเต็มรูปแบบ
-- **ระดมความคิด** — ทีม AI ระดมความคิดแบบขนาน (3–5 เอเจนต์ บุคลิกที่แท้จริง)
-- **โครงการ** — แถบความคืบหน้า · ปุ่มเริ่ม / หยุดชั่วคราว / หยุด · สปินเนอร์สด
-- **SF เต็มรูปแบบในโหมดขั้นสูง** — 133+ เอเจนต์ 12 รูปแบบ SAFe A2A RLM
-- **ผู้ให้บริการ LLM 8 ราย** — OpenRouter · OpenAI · Anthropic · Gemini · Kimi · MiniMax · Qwen · GLM
-- **40 ภาษา** — i18n เต็มรูปแบบ ตรวจจับอัตโนมัติจากภาษาของระบบ
-
----
-
-## Čeština · Svenska · Dansk · Suomi · Norsk · Română · Magyar · Ελληνικά · עברית · Slovenčina · Hrvatski · Slovenščina · Srpski · Українська · Català · Melayu · Filipino · বাংলা · اردو · Afrikaans · Lietuvių · Latviešu
-
-> Tyto jazyky jsou plně podporovány v aplikaci. / Dessa språk stöds fullt ut i appen. / Disse sprog understøttes fuldt ud i appen. / Nämä kielet ovat täysin tuettuja sovelluksessa.
-
-**Simple SF** packages the entire Software Factory into a single macOS app with full support for 40 languages. Each language is auto-detected from your system locale and can be changed in Settings → Language.
-
----
-
-## Screenshots
-
-> Real data from a live SF instance
-
-![Projects view with running missions](docs/screenshots/projects.png)
-![Jarvis AI chat streaming](docs/screenshots/jarvis.png)
-![Ideation — AI team debate](docs/screenshots/ideation.png)
-![Advanced mode — Portfolio](docs/screenshots/portfolio.png)
-![Onboarding — LLM providers](docs/screenshots/onboarding.png)
+- **Assistente IA Jarvis** — chat con orchestrazione multi-agente
+- **22 Agenti IA** — con avatar, ruoli e schede colorate
+- **Rendering Markdown Nativo** — tabelle, blocchi di codice, liste — tutto SwiftUI nativo
+- **10 Provider LLM** — Ollama · MLX · OpenAI · Anthropic · Gemini · MiniMax e altri
+- **Local-First** — i modelli locali girano al 100% sul tuo Mac
 
 ---
 
 ## License
 
-MIT — © 2026 [Macaron Software](https://macaron-software.com)
+MIT © [Sylvain Legland](https://github.com/sylvain-legland)
