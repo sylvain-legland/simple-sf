@@ -151,9 +151,37 @@ final class SFBridge: ObservableObject {
 
     /// Pass LLM config from macOS Keychain to the Rust engine
     func syncLLMConfig() {
-        let preferred = AppState.shared.preferredLocalProvider
+        let state = AppState.shared
 
-        // Check preferred provider first
+        // 1. Explicit user selection takes priority
+        if let provider = state.selectedProvider {
+            let model = state.selectedModel.isEmpty ? provider.defaultModel : state.selectedModel
+            switch provider {
+            case .mlx:
+                let svc = MLXService.shared
+                if svc.isRunning {
+                    configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: svc.baseURL,
+                                 model: svc.activeModel?.name ?? model)
+                    return
+                }
+            case .ollama:
+                let svc = OllamaService.shared
+                if svc.isRunning, let m = svc.activeModel {
+                    configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: svc.openaiBaseURL,
+                                 model: m.name)
+                    return
+                }
+            default:
+                if let apiKey = KeychainService.shared.key(for: provider) {
+                    configureLLM(provider: provider.rawValue, apiKey: apiKey,
+                                 baseUrl: provider.baseURL, model: model)
+                    return
+                }
+            }
+        }
+
+        // 2. Auto-detect: prefer local providers
+        let preferred = state.preferredLocalProvider
         if preferred == "mlx" {
             let mlxSvc = MLXService.shared
             if mlxSvc.isRunning {
@@ -162,7 +190,6 @@ final class SFBridge: ObservableObject {
                 return
             }
         }
-
         if preferred == "ollama" {
             let ollamaSvc = OllamaService.shared
             if ollamaSvc.isRunning, let model = ollamaSvc.activeModel {
@@ -172,7 +199,7 @@ final class SFBridge: ObservableObject {
             }
         }
 
-        // Fallback: check any available local provider
+        // 3. Any running local
         let mlxSvc = MLXService.shared
         if mlxSvc.isRunning {
             configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: mlxSvc.baseURL,
@@ -186,7 +213,7 @@ final class SFBridge: ObservableObject {
             return
         }
 
-        // Cloud fallback
+        // 4. First cloud with key
         let keychain = KeychainService.shared
         guard let provider = LLMProvider.cloudProviders.first(where: { keychain.key(for: $0) != nil }),
               let apiKey = keychain.key(for: provider) else { return }

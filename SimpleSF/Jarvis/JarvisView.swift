@@ -623,23 +623,9 @@ struct JarvisView: View {
 
     /// Called when the Rust discussion completes — process synthesis and execute actions.
     private func processDiscussionResult(_ synthesis: String) {
+        // Execute any actions from the synthesis (CREATE_PROJECT, etc.)
         let actions = JarvisAction.parse(synthesis)
         for action in actions { action.execute() }
-
-        let displayText = JarvisAction.cleanDisplay(synthesis)
-        if !displayText.isEmpty, let sid = session?.id {
-            let msg = LLMMessage(
-                role: "assistant",
-                content: displayText,
-                agentId: "product",
-                agentName: agentInfo["product"]?.name,
-                agentRole: "Product Owner",
-                messageType: "synthesis",
-                toAgents: ["all"]
-            )
-            chatStore.appendMessage(msg, to: sid)
-        }
-
         isProcessing = false
     }
 }

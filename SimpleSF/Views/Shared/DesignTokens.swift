@@ -139,7 +139,7 @@ struct AgentAvatarView: View {
     static func loadAvatar(_ agentId: String) -> NSImage? {
         if let cached = cache[agentId] { return cached }
 
-        // Try SPM module bundle first (most reliable for packaged resources)
+        // Try SPM module bundle first
         if let bundle = spmBundle {
             for subdir in ["Avatars", "Resources/Avatars", nil] as [String?] {
                 if let url = bundle.url(forResource: agentId, withExtension: "jpg", subdirectory: subdir),
@@ -156,6 +156,21 @@ struct AgentAvatarView: View {
                let img = NSImage(contentsOf: url) {
                 cache[agentId] = img
                 return img
+            }
+        }
+
+        // Direct file path fallback — scan near the executable
+        if let execURL = Bundle.main.executableURL {
+            let searchRoots = [
+                execURL.deletingLastPathComponent().appendingPathComponent("SimpleSF_SimpleSF.bundle/Avatars"),
+                execURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources/SimpleSF_SimpleSF.bundle/Avatars"),
+            ]
+            for root in searchRoots {
+                let fileURL = root.appendingPathComponent("\(agentId).jpg")
+                if let img = NSImage(contentsOf: fileURL) {
+                    cache[agentId] = img
+                    return img
+                }
             }
         }
 
