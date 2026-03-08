@@ -21,12 +21,21 @@ const MAX_NETWORK_ROUNDS: usize = 3;
 const CONTEXT_BUDGET: usize = 6000;
 
 // ──────────────────────────────────────────
-// Jarvis Intake Discussion (network pattern)
+// Jarvis Intake Discussion (SAFe network pattern)
 // ──────────────────────────────────────────
+//
+// Real SAFe intake flow:
+//   1. RTE frames the discussion, assigns roles
+//   2. Archi + Lead Dev give technical analysis
+//   3. PO synthesizes and proposes mission (with CREATE_PROJECT/START_MISSION tags)
+//
+// PO is the decision-maker, NOT Jarvis.
 
-/// Run a Jarvis intake discussion with RTE + PO.
-/// This is the network discussion pattern where agents discuss before acting.
-/// Returns the full discussion as a string with each agent's contributions.
+/// Intake team — the agents who participate in the intake discussion.
+const INTAKE_TEAM: &[&str] = &["rte-marie", "archi-pierre", "lead-thomas", "po-lucas"];
+
+/// Run a SAFe intake discussion with the direction team.
+/// Flow: RTE frames → Experts discuss (2 rounds) → PO decides and proposes mission.
 pub async fn run_intake(
     topic: &str,
     project_context: &str,
@@ -41,9 +50,8 @@ pub async fn run_intake(
         ).ok();
     });
 
-    let agent_ids = &["rte-marie", "po-lucas"];
     let mut agents_data: Vec<Agent> = Vec::new();
-    for id in agent_ids {
+    for id in INTAKE_TEAM {
         if let Some(a) = agents::get_agent(id) {
             agents_data.push(a);
         }
@@ -57,28 +65,34 @@ pub async fn run_intake(
         .collect();
     let team_str = team_list.join(", ");
 
-    let mut all_outputs: Vec<(String, String, String)> = Vec::new(); // (id, name, content)
+    let mut all_outputs: Vec<(String, String, String, String)> = Vec::new(); // (id, name, role, content)
 
-    // ── Round 1: RTE frames the discussion ──
+    // ── Phase 1: RTE cadre la discussion ──
     on_event("engine", AgentEvent::Response {
-        content: "── Équipe de direction en discussion ──".into(),
+        content: "── Réunion de cadrage ──".into(),
     });
 
-    let rte = &agents_data[0];
+    let rte = &agents_data[0]; // rte-marie
     on_event(&rte.id, AgentEvent::Thinking);
 
     let rte_prompt = format!(
-        "Tu diriges cette session de cadrage. Voici ton équipe : {}.\n\n\
-         1. Cadre le sujet en 2-3 phrases\n\
-         2. Assigne à CHAQUE membre ce que tu attends de lui\n\
-         3. Pose 1-2 questions clés pour orienter la discussion\n\n\
-         Contexte projets existants: {}\n\n\
-         Demande du client :\n{}",
-        team_str, project_context, topic
+        "Tu es {} et tu diriges cette session de cadrage avec ton équipe : {}.\n\n\
+         Le client demande : \"{}\"\n\n\
+         Contexte projets existants : {}\n\n\
+         En tant que RTE :\n\
+         1. Cadre le sujet : de quoi s'agit-il, quel type de projet ?\n\
+         2. Adresse-toi à chaque membre par son prénom : dis à @Pierre (Architecte) ce que tu attends \
+            de lui sur la stack technique, à @Thomas (Lead Dev) sur la faisabilité et la décomposition, \
+            et à @Lucas (PO) sur le scope produit et les priorités.\n\
+         3. Pose 1-2 questions clés pour orienter la discussion.\n\
+         4. Estime une durée et un niveau de complexité.\n\n\
+         Sois directe et structurée. Pas de code, pas de longs paragraphes.",
+        rte.name, team_str, topic, project_context
     );
 
     let rte_system = format!(
-        "{}\n\n{}\n\nRespond in the same language as the user request.",
+        "{}\n\n{}\n\nTu t'adresses à tes collègues par leur prénom avec @. \
+         Réponds dans la même langue que la demande client.",
         rte.persona, protocols::RESEARCH_PROTOCOL
     );
 
@@ -87,41 +101,58 @@ pub async fn run_intake(
         Some(&rte_system),
         None,
     ).await?;
-    let rte_content = rte_result.content.unwrap_or_else(|| "(no response)".into());
+    let rte_content = rte_result.content.unwrap_or_else(|| "(pas de réponse)".into());
 
     on_event(&rte.id, AgentEvent::Response { content: rte_content.clone() });
     store_discussion_msg(&session_id, &rte.id, &rte.name, &rte.role, 0, &rte_content);
-    all_outputs.push((rte.id.clone(), rte.name.clone(), rte_content.clone()));
+    all_outputs.push((rte.id.clone(), rte.name.clone(), rte.role.clone(), rte_content.clone()));
 
-    // ── Round 2: Each agent responds to the brief ──
-    let mut prev_round = rte_content.clone();
+    // ── Phase 2: Experts respond (2 rounds of discussion) ──
+    // Round 1: each expert responds to RTE's brief
+    // Round 2: they react to each other and refine
+
+    let experts = &agents_data[1..]; // archi, lead, po
+    let mut prev_context = format!("**{} ({})** :\n{}", rte.name, rte.role, rte_content);
 
     for round in 0..2 {
-        for agent in &agents_data {
+        for agent in experts {
             on_event(&agent.id, AgentEvent::Thinking);
+
+            let colleagues: Vec<String> = agents_data.iter()
+                .filter(|a| a.id != agent.id)
+                .map(|a| format!("@{} ({})", a.name, a.role))
+                .collect();
 
             let prompt = if round == 0 {
                 format!(
-                    "Le RTE a briefé l'équipe (ci-dessous). \
-                     Réponds en tant que {} à ce qui te concerne. \
-                     Donne ton analyse d'expert et tes recommandations.\n\n\
-                     Demande client: {}\n\n\
-                     [Brief du RTE]:\n{}",
-                    agent.role, topic, prev_round
+                    "La RTE @{} a cadré la discussion (voir ci-dessous).\n\n\
+                     Tu es {} ({}). Tes collègues : {}.\n\n\
+                     Demande client : \"{}\"\n\n\
+                     [Brief de la RTE] :\n{}\n\n\
+                     Réponds en tant qu'expert dans ton domaine :\n\
+                     - Donne ton analyse technique/produit\n\
+                     - Réponds aux questions de @{}\n\
+                     - Adresse-toi aux autres par @prénom si tu as des questions pour eux\n\
+                     - Propose des recommandations concrètes",
+                    rte.name, agent.name, agent.role, colleagues.join(", "),
+                    topic, prev_context, rte.name
                 )
             } else {
                 format!(
-                    "Poursuis la discussion. Réagis aux points soulevés, \
-                     réponds aux questions, affine tes recommandations.\n\n\
-                     Demande client: {}\n\n\
-                     [Échanges précédents]:\n{}",
-                    topic, prev_round
+                    "La discussion continue (round 2). Tu es {} ({}).\n\n\
+                     Demande client : \"{}\"\n\n\
+                     [Échanges précédents] :\n{}\n\n\
+                     Réagis aux points des collègues, affine tes recommandations, \
+                     réponds aux questions qui t'ont été posées via @{}.\n\
+                     Sois concis — on converge vers une décision.",
+                    agent.name, agent.role, topic, prev_context, agent.name
                 )
             };
 
             let system = format!(
-                "{}\n\n{}\n\nRespond in the same language as the user request.",
-                agent.persona, protocols::RESEARCH_PROTOCOL
+                "{}\n\nTu t'adresses à tes collègues par @prénom. \
+                 Réponds dans la même langue que la demande client.",
+                agent.persona
             );
 
             let result = llm::chat_completion(
@@ -131,53 +162,67 @@ pub async fn run_intake(
             ).await;
 
             let content = match result {
-                Ok(r) => r.content.unwrap_or_else(|| "(no response)".into()),
-                Err(e) => format!("(error: {})", e),
+                Ok(r) => r.content.unwrap_or_else(|| "(pas de réponse)".into()),
+                Err(e) => format!("(erreur: {})", e),
             };
 
             on_event(&agent.id, AgentEvent::Response { content: content.clone() });
             store_discussion_msg(&session_id, &agent.id, &agent.name, &agent.role, (round + 1) as i32, &content);
-            all_outputs.push((agent.id.clone(), agent.name.clone(), content.clone()));
+            all_outputs.push((agent.id.clone(), agent.name.clone(), agent.role.clone(), content.clone()));
         }
 
-        // Build context for next round (with budget)
-        prev_round = all_outputs.iter()
-            .map(|(_, name, content)| format!("**{}**: {}", name, truncate_ctx(content, 400)))
+        // Build context for next round (keep recent, within budget)
+        prev_context = all_outputs.iter()
+            .map(|(_, name, role, content)| format!("**{} ({})** :\n{}", name, role, truncate_ctx(content, 500)))
             .collect::<Vec<_>>()
             .join("\n\n---\n\n");
-        if prev_round.len() > CONTEXT_BUDGET {
-            prev_round = prev_round[..CONTEXT_BUDGET].to_string();
+        if prev_context.len() > CONTEXT_BUDGET {
+            prev_context = prev_context[..CONTEXT_BUDGET].to_string();
         }
     }
 
-    // ── Final: Jarvis synthesizes ──
-    on_event("jarvis", AgentEvent::Thinking);
+    // ── Phase 3: PO synthesizes and proposes mission ──
+    // The PO is the decision-maker — they decide whether to create a project and start a mission.
+    let po = agents_data.iter().find(|a| a.id == "po-lucas")
+        .unwrap_or(agents_data.last().unwrap());
 
-    let synthesis_prompt = format!(
-        "Tu es Jarvis, chef de projet. Ton équipe vient de discuter de la demande du client.\n\n\
-         Synthétise la discussion et décide des actions:\n\
-         - Si c'est un projet à créer: inclus [CREATE_PROJECT name=\"...\" description=\"...\" tech=\"...\"]\n\
-         - Si c'est une mission à lancer: inclus [START_MISSION project=\"...\" brief=\"description détaillée\"]\n\
-         - Si c'est juste une question: réponds directement\n\n\
-         Le brief doit être DÉTAILLÉ: fonctionnalités, stack technique, structure, contraintes.\n\n\
-         Discussion de l'équipe:\n{}\n\n\
-         Demande originale du client: {}",
-        prev_round, topic
+    on_event(&po.id, AgentEvent::Thinking);
+
+    let po_synthesis_prompt = format!(
+        "Tu es {} (Product Owner). L'équipe vient de discuter la demande du client.\n\n\
+         Demande originale : \"{}\"\n\n\
+         Discussion de l'équipe :\n{}\n\n\
+         En tant que PO, tu as l'autorité pour décider. Fais ta synthèse :\n\
+         1. Résume les points clés de la discussion (2-3 lignes)\n\
+         2. Décide du scope MVP et de la stack technique retenue\n\
+         3. Si un nouveau projet doit être créé, inclus exactement ce tag (le système le parsera) :\n\
+            [CREATE_PROJECT name=\"NomDuProjet\" description=\"description courte\" tech=\"technologies\"]\n\
+         4. Si une mission de développement doit être lancée, inclus ce tag :\n\
+            [START_MISSION project=\"NomDuProjet\" brief=\"description détaillée du brief de dev\"]\n\
+         5. Si c'est juste une question ou un conseil, réponds directement sans tags.\n\n\
+         Le brief dans START_MISSION doit être DÉTAILLÉ : features, structure de fichiers, contraintes, \
+         critères d'acceptation.\n\n\
+         Adresse-toi au client directement (\"Je vous propose...\", \"Nous allons...\").",
+        po.name, topic, prev_context
     );
 
-    let jarvis_system = "You are Jarvis, an AI project manager. You synthesize your team's \
-        discussion and take action. Include action tags [CREATE_PROJECT ...] and [START_MISSION ...] \
-        when appropriate. These tags are invisible to the user.\n\
-        Respond in the same language as the user request.";
+    let po_system = format!(
+        "{}\n\nTu es le décideur produit. Tu synthétises la discussion et tu décides.\n\
+         Les tags [CREATE_PROJECT ...] et [START_MISSION ...] sont invisibles pour le client \
+         — ils déclenchent des actions automatiques.\n\
+         Réponds dans la même langue que la demande client.",
+        po.persona
+    );
 
     let synthesis = llm::chat_completion(
-        &[LLMMessage { role: "user".into(), content: synthesis_prompt }],
-        Some(jarvis_system),
+        &[LLMMessage { role: "user".into(), content: po_synthesis_prompt }],
+        Some(&po_system),
         None,
     ).await?;
 
-    let jarvis_content = synthesis.content.unwrap_or_else(|| "(no synthesis)".into());
-    on_event("jarvis", AgentEvent::Response { content: jarvis_content.clone() });
+    let po_content = synthesis.content.unwrap_or_else(|| "(pas de synthèse)".into());
+    on_event(&po.id, AgentEvent::Response { content: po_content.clone() });
+    store_discussion_msg(&session_id, &po.id, &po.name, &po.role, 99, &po_content);
 
     db::with_db(|conn| {
         conn.execute(
@@ -186,7 +231,8 @@ pub async fn run_intake(
         ).ok();
     });
 
-    Ok(jarvis_content)
+    // Return the PO's synthesis — Swift will parse the action tags
+    Ok(po_content)
 }
 
 // ──────────────────────────────────────────
@@ -210,16 +256,16 @@ pub async fn run_mission(
     });
 
     // Get phases from catalog workflow, or fallback to hardcoded SAFE_PHASES
-    let phases: Vec<(&str, &str, Vec<&str>)> = if let Some(wf) = catalog::get_workflow(&workflow_id) {
-        wf.phases.iter().map(|p| (p.name, p.pattern, p.agent_ids.to_vec())).collect()
+    let owned_phases: Vec<(String, String, Vec<String>)> = if let Some(wf) = catalog::get_workflow_phases(&workflow_id) {
+        wf
     } else {
-        SAFE_PHASES.iter().map(|(n, p, a)| (*n, *p, a.to_vec())).collect()
+        SAFE_PHASES.iter().map(|(n, p, a)| (n.to_string(), p.to_string(), a.iter().map(|s| s.to_string()).collect())).collect()
     };
 
     let mut phase_outputs: Vec<String> = Vec::new();
     let mut vetoed = false;
 
-    for (phase_name, pattern, agent_ids) in &phases {
+    for (phase_name, pattern, agent_ids) in &owned_phases {
         if vetoed {
             on_event("engine", AgentEvent::Response {
                 content: format!("⚠️ Phase {} skipped — previous phase vetoed", phase_name),
@@ -244,8 +290,8 @@ pub async fn run_mission(
 
         let task = build_phase_task(phase_name, brief, &phase_outputs);
 
-        let agent_ids_slice: Vec<&str> = agent_ids.iter().map(|s| *s).collect();
-        let result = match *pattern {
+        let agent_ids_slice: Vec<&str> = agent_ids.iter().map(|s| s.as_str()).collect();
+        let result = match pattern.as_str() {
             "network" => run_network(&agent_ids_slice, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
             "parallel" => run_parallel(&agent_ids_slice, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
             _ => run_sequential(&agent_ids_slice, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,

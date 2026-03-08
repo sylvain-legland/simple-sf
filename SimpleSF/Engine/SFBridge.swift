@@ -8,7 +8,7 @@ import Foundation
 typealias SFEventCallback = @convention(c) (UnsafePointer<CChar>?, UnsafePointer<CChar>?, UnsafePointer<CChar>?) -> Void
 
 @_silgen_name("sf_init")
-func _sf_init(_ dbPath: UnsafePointer<CChar>?)
+func _sf_init(_ dbPath: UnsafePointer<CChar>?, _ dataDir: UnsafePointer<CChar>?)
 
 @_silgen_name("sf_set_callback")
 func _sf_set_callback(_ cb: SFEventCallback)
@@ -75,11 +75,25 @@ final class SFBridge: ObservableObject {
     func initialize() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let sfDir = appSupport.appendingPathComponent("SimpleSF")
-        try? FileManager.default.createDirectory(at: sfDir, withIntermediateDirectories: true)
+        let dataDir = sfDir.appendingPathComponent("data")
+        try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
         let dbPath = sfDir.appendingPathComponent("sf_engine.db").path
 
-        dbPath.withCString { ptr in
-            _sf_init(ptr)
+        // Find bundled SFData directory with agents/skills/patterns/workflows JSON
+        let sfDataPath: String
+        if let bundleURL = Bundle.main.url(forResource: "SFData", withExtension: nil, subdirectory: "Resources") {
+            sfDataPath = bundleURL.path
+        } else if let bundleURL = Bundle.main.url(forResource: "SFData", withExtension: nil) {
+            sfDataPath = bundleURL.path
+        } else {
+            sfDataPath = ""
+            print("[SFBridge] WARNING: SFData not found in bundle — using fallback agents")
+        }
+
+        dbPath.withCString { dbPtr in
+            sfDataPath.withCString { dataPtr in
+                _sf_init(dbPtr, dataPtr)
+            }
         }
 
         // Set callback (routes through a global C function)

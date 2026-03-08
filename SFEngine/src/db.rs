@@ -39,24 +39,74 @@ CREATE TABLE IF NOT EXISTS missions (
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
+-- Full agent schema matching SF platform (192 agents)
 CREATE TABLE IF NOT EXISTS agents (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     role TEXT NOT NULL,
-    persona TEXT DEFAULT '',
+    description TEXT DEFAULT '',
+    system_prompt TEXT DEFAULT '',
+    provider TEXT DEFAULT 'local',
     model TEXT DEFAULT 'default',
-    tools TEXT DEFAULT '[]',
-    skills TEXT DEFAULT '[]',
-    can_veto INTEGER DEFAULT 0,
-    hierarchy_rank INTEGER DEFAULT 50
+    temperature REAL DEFAULT 0.7,
+    max_tokens INTEGER DEFAULT 4096,
+    skills_json TEXT DEFAULT '[]',
+    tools_json TEXT DEFAULT '[]',
+    mcps_json TEXT DEFAULT '[]',
+    permissions_json TEXT DEFAULT '{}',
+    tags_json TEXT DEFAULT '[]',
+    icon TEXT DEFAULT 'bot',
+    color TEXT DEFAULT '#f78166',
+    is_builtin INTEGER DEFAULT 0,
+    avatar TEXT DEFAULT '',
+    tagline TEXT DEFAULT '',
+    persona TEXT DEFAULT '',
+    motivation TEXT DEFAULT '',
+    hierarchy_rank INTEGER DEFAULT 50,
+    project_id TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Skills (1286 skills from SF platform)
+CREATE TABLE IF NOT EXISTS skills (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    content TEXT DEFAULT '',
+    source TEXT DEFAULT '',
+    source_url TEXT DEFAULT '',
+    tags_json TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Organizational patterns (19 patterns)
+CREATE TABLE IF NOT EXISTS patterns (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    type TEXT NOT NULL,
+    agents_json TEXT DEFAULT '[]',
+    edges_json TEXT DEFAULT '[]',
+    config_json TEXT DEFAULT '{}',
+    memory_config_json TEXT DEFAULT '{}',
+    icon TEXT DEFAULT '',
+    is_builtin INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Workflow templates (42 workflows)
 CREATE TABLE IF NOT EXISTS workflows (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
     phases_json TEXT DEFAULT '[]',
-    is_builtin INTEGER DEFAULT 0
+    config_json TEXT DEFAULT '{}',
+    icon TEXT DEFAULT '',
+    is_builtin INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS memory (
@@ -146,8 +196,7 @@ CREATE TABLE IF NOT EXISTS discussion_messages (
 );
 ";
 
-/// Seed default SAFe agents from the catalog (20 agents with rich personas)
-pub fn seed_agents() {
-    crate::catalog::seed_all_agents();
-    crate::catalog::seed_all_workflows();
+/// Seed all SF platform data from bundled JSON files
+pub fn seed_from_json(data_dir: &str) {
+    crate::catalog::seed_from_json(data_dir);
 }
