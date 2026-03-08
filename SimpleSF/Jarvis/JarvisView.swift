@@ -177,10 +177,6 @@ struct JarvisView: View {
                         .font(.caption)
                         .foregroundColor(.orange)
                 }
-                Button(action: newChat) {
-                    Image(systemName: "square.and.pencil")
-                }
-                .buttonStyle(.plain)
             }
             .padding()
 
