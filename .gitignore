@@ -1,0 +1,16 @@
+.DS_Store
+*.xcuserstate
+xcuserdata/
+.build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+SimpleSF/Resources/Python.framework/
+SimpleSF/Resources/platform/
+SimpleSF/Resources/site-packages/
+*.pyc
+__pycache__/
+data/
+*.key
+.env
