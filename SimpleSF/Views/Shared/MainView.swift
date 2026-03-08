@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MainView: View {
-    @State private var selection: SidebarItem = .projects
+    @State private var selection: SidebarItem = .jarvis
 
     var body: some View {
         NavigationSplitView {
