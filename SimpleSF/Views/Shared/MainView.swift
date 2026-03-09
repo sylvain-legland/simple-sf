@@ -182,9 +182,7 @@ struct SidebarView: View {
         switch provider {
         case .mlx:
             let name = MLXService.shared.activeModel?.name ?? "loading…"
-            let short = name.split(separator: "/").last.map(String.init) ?? name
-            // Strip quantization suffix for display: "Qwen3.5-35B-A3B-4bit" → "Qwen3.5-35B-A3B"
-            return short
+            return name.split(separator: "/").last.map(String.init) ?? name
         case .ollama:
             return OllamaService.shared.activeModel?.name ?? "loading…"
         default:

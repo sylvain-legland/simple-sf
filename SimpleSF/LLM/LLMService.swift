@@ -8,7 +8,7 @@ enum LLMProvider: String, CaseIterable, Codable {
     var displayName: String {
         switch self {
         case .ollama:     return "Ollama"
-        case .mlx:        return "MLX"
+        case .mlx:        return "Apple MLX"
         case .openai:     return "OpenAI"
         case .anthropic:  return "Anthropic"
         case .gemini:     return "Google Gemini"
@@ -17,6 +17,21 @@ enum LLMProvider: String, CaseIterable, Codable {
         case .openrouter: return "OpenRouter"
         case .alibaba:    return "Alibaba Qwen"
         case .glm:        return "Zhipu GLM"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .ollama:     return "Local · llama.cpp engine"
+        case .mlx:        return "Local · Apple Silicon optimized"
+        case .openai:     return "Cloud · GPT-4o, o1, o3"
+        case .anthropic:  return "Cloud · Claude Sonnet, Opus"
+        case .gemini:     return "Cloud · Gemini 2.0 Flash/Pro"
+        case .minimax:    return "Cloud · MiniMax-M2.5"
+        case .kimi:       return "Cloud · Moonshot"
+        case .openrouter: return "Cloud · Multi-model gateway"
+        case .alibaba:    return "Cloud · Qwen-Turbo/Max"
+        case .glm:        return "Cloud · GLM-4 Flash"
         }
     }
 
@@ -139,15 +154,14 @@ final class LLMService: ObservableObject {
 
     /// Human-readable provider + model for UI display
     var activeDisplayName: String {
-        guard let prov = activeProvider else { return "No LLM" }
+        guard let prov = activeProvider else { return "No LLM configured" }
         switch prov {
         case .mlx:
-            let model = MLXService.shared.activeModel?.name ?? "MLX"
-            // Show short name: "Qwen3.5-35B" instead of full path
+            let model = MLXService.shared.activeModel?.name ?? "loading…"
             let short = model.split(separator: "/").last.map(String.init) ?? model
-            return "MLX · \(short)"
+            return "Apple MLX · \(short)"
         case .ollama:
-            let model = OllamaService.shared.activeModel?.name ?? "Ollama"
+            let model = OllamaService.shared.activeModel?.name ?? "loading…"
             return "Ollama · \(model)"
         default:
             return prov.displayName

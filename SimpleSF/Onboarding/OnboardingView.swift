@@ -85,16 +85,19 @@ struct OnboardingView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Active Model")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(SF.Colors.textSecondary)
                     if let prov = llm.activeProvider {
+                        Text(activeProviderLabel(prov))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(SF.Colors.textSecondary)
                         Text(activeModelDescription(prov))
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 15, weight: .bold, design: .monospaced))
                             .foregroundColor(SF.Colors.textPrimary)
                     } else {
-                        Text("No model configured")
-                            .font(.system(size: 16, weight: .bold))
+                        Text("No model active")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(SF.Colors.textSecondary)
+                        Text("Select a provider below")
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundColor(.orange)
                     }
                 }
@@ -134,14 +137,20 @@ struct OnboardingView: View {
     private func activeModelDescription(_ prov: LLMProvider) -> String {
         switch prov {
         case .mlx:
-            let name = MLXService.shared.activeModel?.name ?? "MLX"
-            return "MLX · \(name.split(separator: "/").last.map(String.init) ?? name)"
+            let name = MLXService.shared.activeModel?.name ?? "loading…"
+            let short = name.split(separator: "/").last.map(String.init) ?? name
+            return short
         case .ollama:
-            return "Ollama · \(OllamaService.shared.activeModel?.name ?? "?")"
+            return OllamaService.shared.activeModel?.name ?? "loading…"
         default:
             let model = modelOverrides[prov] ?? prov.defaultModel
-            return "\(prov.displayName) · \(model)"
+            return model
         }
+    }
+
+    private func activeProviderLabel(_ prov: LLMProvider) -> String {
+        if prov.isLocal { return "🖥 \(prov.displayName) (local)" }
+        return "☁️ \(prov.displayName) (cloud)"
     }
 
     // MARK: - Language Section
@@ -204,11 +213,11 @@ struct OnboardingView: View {
             HStack {
                 Image(systemName: "desktopcomputer")
                     .foregroundColor(SF.Colors.purple)
-                Text("Local LLM")
+                Text("Local Models")
                     .font(.headline)
                     .foregroundColor(SF.Colors.textPrimary)
                 Spacer()
-                Text("Zero network — runs on Apple Silicon")
+                Text("100% on-device · no internet needed")
                     .font(.caption2)
                     .foregroundColor(SF.Colors.textSecondary)
             }
@@ -233,9 +242,14 @@ struct OnboardingView: View {
     private var ollamaCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Ollama")
-                    .font(.subheadline.bold())
-                    .foregroundColor(SF.Colors.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ollama")
+                        .font(.subheadline.bold())
+                        .foregroundColor(SF.Colors.textPrimary)
+                    Text(LLMProvider.ollama.subtitle)
+                        .font(.caption2)
+                        .foregroundColor(SF.Colors.textMuted)
+                }
                 if ollama.isRunning {
                     Label("Running", systemImage: "circle.fill")
                         .font(.caption2)
@@ -320,9 +334,14 @@ struct OnboardingView: View {
     private var mlxCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("MLX")
-                    .font(.subheadline.bold())
-                    .foregroundColor(SF.Colors.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple MLX")
+                        .font(.subheadline.bold())
+                        .foregroundColor(SF.Colors.textPrimary)
+                    Text(LLMProvider.mlx.subtitle)
+                        .font(.caption2)
+                        .foregroundColor(SF.Colors.textMuted)
+                }
                 mlxStatusBadge
                 Spacer()
                 if mlx.isRunning {
@@ -576,9 +595,9 @@ struct CloudProviderCard: View {
                         .font(.headline)
                         .foregroundColor(SF.Colors.textPrimary)
 
-                    Text("· \(modelOverride.isEmpty ? provider.defaultModel : modelOverride)")
-                        .font(.caption)
-                        .foregroundColor(SF.Colors.textSecondary)
+                    Text(provider.subtitle)
+                        .font(.caption2)
+                        .foregroundColor(SF.Colors.textMuted)
 
                     Spacer()
 
