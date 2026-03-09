@@ -581,12 +581,24 @@ final class SFBridge: ObservableObject {
         let persona: String
     }
 
+    private var _agentCache: [String: SFAgent] = [:]
+
+    /// Quick lookup for agent metadata (cached after first listAgents call)
+    func agentInfo(_ agentId: String) -> SFAgent? {
+        if _agentCache.isEmpty {
+            for a in listAgents() { _agentCache[a.id] = a }
+        }
+        return _agentCache[agentId]
+    }
+
     func listAgents() -> [SFAgent] {
         guard let ptr = _sf_list_agents() else { return [] }
         let json = String(cString: ptr)
         _sf_free_string(ptr)
         guard let data = json.data(using: .utf8) else { return [] }
-        return (try? JSONDecoder().decode([SFAgent].self, from: data)) ?? []
+        let agents = (try? JSONDecoder().decode([SFAgent].self, from: data)) ?? []
+        for a in agents { _agentCache[a.id] = a }
+        return agents
     }
 
     func listWorkflows() -> [[String: Any]] {
@@ -707,7 +719,25 @@ final class SFBridge: ObservableObject {
                 if self.discussionRunning { self.discussionRunning = false }
                 self._persistProjectEvents()
             default:
-                let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
+                // Try to parse as rich JSON (agent name, role, recipients)
+                let event: AgentEvent
+                if eventType == "response" || eventType == "tool_call" || eventType == "tool_result" || eventType == "thinking" {
+                    let parsed = AgentEvent.fromDiscussJSON(agentId: agentId, eventType: eventType, json: data)
+                    if !parsed.agentName.isEmpty {
+                        event = parsed
+                    } else {
+                        // Plain text — enrich from catalog
+                        var e = AgentEvent(agentId: agentId, eventType: eventType, data: data)
+                        if let info = self.agentInfo(agentId) {
+                            e.agentName = info.name
+                            e.role = info.role
+                        }
+                        event = e
+                    }
+                } else {
+                    event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
+                }
+
                 if agentId == "engine" && data.hasPrefix("---") {
                     self.ideationEvents.append(event)
                 } else {
