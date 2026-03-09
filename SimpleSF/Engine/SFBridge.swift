@@ -127,6 +127,41 @@ final class SFBridge: ObservableObject {
                 projectEvents[projectId] = events
             }
         }
+        // Migrate orphaned events to current projects (UUID changed but name matches)
+        _migrateOrphanedEvents()
+    }
+
+    /// If event files exist for project IDs not in ProjectStore, migrate them
+    /// to the best matching current project (preferring active projects with fewer events).
+    private func _migrateOrphanedEvents() {
+        let knownIds = Set(ProjectStore.shared.projects.map(\.id))
+        let orphanedIds = projectEvents.keys.filter { !knownIds.contains($0) }
+        guard !orphanedIds.isEmpty else { return }
+
+        for orphanId in orphanedIds {
+            guard let orphanEvents = projectEvents[orphanId], !orphanEvents.isEmpty else { continue }
+
+            // Find best target: active project with fewest events (most likely the recreated one)
+            let activeProjects = ProjectStore.shared.projects.filter { $0.status == .active }
+            let target = activeProjects.min(by: { a, b in
+                (projectEvents[a.id]?.count ?? 0) < (projectEvents[b.id]?.count ?? 0)
+            })
+
+            if let target = target {
+                let existing = projectEvents[target.id] ?? []
+                if orphanEvents.count > existing.count {
+                    // Orphan has richer history — use it (prepend existing after orphan)
+                    projectEvents[target.id] = orphanEvents + existing
+                    print("[SFBridge] Migrated \(orphanEvents.count) orphaned events → \(target.name) (\(target.id.prefix(8)))")
+                }
+            }
+            // Remove orphan entry and delete orphan file
+            projectEvents.removeValue(forKey: orphanId)
+            let orphanFile = eventsDir.appendingPathComponent("\(orphanId).json")
+            try? FileManager.default.removeItem(at: orphanFile)
+        }
+        // Re-persist with corrected IDs
+        _persistProjectEvents()
     }
 
     /// Restore the most recent discussion from the Rust DB into discussionEvents
