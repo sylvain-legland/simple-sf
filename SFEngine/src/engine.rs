@@ -456,7 +456,8 @@ async fn run_network(
         None,
     ).await?;
     let leader_content = strip_emoji(&leader_result.content.unwrap_or_default());
-    on_event(&leader.id, AgentEvent::Response { content: leader_content.clone() });
+    let other_ids: Vec<&str> = debaters.iter().map(|a| a.id.as_str()).collect();
+    emit_rich(on_event, leader, &leader_content, &other_ids, 0);
     store_agent_msg(mission_id, phase_id, &leader.id, &leader.name, "assistant", &leader_content, None);
     all_outputs.push(format!("**{} ({})**: {}", leader.name, leader.role, leader_content));
 
@@ -500,7 +501,12 @@ async fn run_network(
                 Err(e) => return Err(format!("LLM error for {}: {}", agent.name, e)),
             };
 
-            on_event(&agent.id, AgentEvent::Response { content: content.clone() });
+            // Recipients: all other agents in the team
+            let to: Vec<&str> = agents_data.iter()
+                .filter(|a| a.id != agent.id)
+                .map(|a| a.id.as_str())
+                .collect();
+            emit_rich(on_event, agent, &content, &to, round + 1);
             store_agent_msg(mission_id, phase_id, &agent.id, &agent.name, "assistant", &content, None);
             all_outputs.push(format!("**{} ({})**: {}", agent.name, agent.role, content));
         }
@@ -535,7 +541,8 @@ async fn run_network(
         None,
     ).await?;
     let synthesis_content = strip_emoji(&synthesis.content.unwrap_or_default());
-    on_event(&leader.id, AgentEvent::Response { content: synthesis_content.clone() });
+    let all_ids: Vec<&str> = agents_data.iter().map(|a| a.id.as_str()).collect();
+    emit_rich(on_event, leader, &synthesis_content, &all_ids, MAX_NETWORK_ROUNDS + 1);
     store_agent_msg(mission_id, phase_id, &leader.id, &leader.name, "assistant", &synthesis_content, None);
     all_outputs.push(synthesis_content.clone());
 
@@ -725,6 +732,20 @@ fn build_phase_task(phase: &str, brief: &str, previous: &[String]) -> String {
 
 fn truncate_ctx(s: &str, max: usize) -> String {
     if s.len() <= max { s.to_string() } else { format!("{}…", &s[..max]) }
+}
+
+/// Emit a rich JSON event so Swift can display agent name, role, recipients, round.
+fn emit_rich(on_event: &EventCallback, agent: &Agent, content: &str, to_agents: &[&str], round: usize) {
+    let to_json: Vec<String> = to_agents.iter().map(|s| format!("\"{}\"", s)).collect();
+    let json = format!(
+        r#"{{"content":{},"agent_name":"{}","role":"{}","message_type":"response","to_agents":[{}],"round":{}}}"#,
+        serde_json::to_string(content).unwrap_or_else(|_| format!("\"{}\"", content.replace('"', "\\\""))),
+        agent.name.replace('"', "\\\""),
+        agent.role.replace('"', "\\\""),
+        to_json.join(","),
+        round,
+    );
+    on_event(&agent.id, AgentEvent::Response { content: json });
 }
 
 fn store_agent_msg(mission_id: &str, phase_id: &str, agent_id: &str, agent_name: &str, role: &str, content: &str, tool: Option<&str>) {
