@@ -1,10 +1,12 @@
-use crate::llm::{self, LLMMessage, ToolCall};
+use crate::llm::{self, LLMMessage};
 use crate::tools;
 use crate::db;
 use serde_json::Value;
 use rusqlite::params;
 
-const MAX_ROUNDS: usize = 10;
+/// No artificial round limit — agents run until they produce a text response (#2)
+/// Safety: if an agent truly loops, the LLM will eventually stop producing tool_calls.
+const MAX_ROUNDS: usize = 100;
 
 /// Event emitted during execution — sent to Swift via callback
 #[repr(C)]
@@ -19,7 +21,8 @@ pub enum AgentEvent {
 pub type EventCallback = Box<dyn Fn(&str, AgentEvent) + Send + Sync>;
 
 /// Run one agent through the tool-calling loop.
-/// Now accepts an optional protocol that's injected into the system prompt.
+/// Accepts optional protocol injected into system prompt.
+/// Uses agent's max_tokens from catalog if available (#15).
 pub async fn run_agent(
     agent_id: &str,
     agent_name: &str,
@@ -32,14 +35,19 @@ pub async fn run_agent(
     protocol: Option<&str>,
     on_event: &EventCallback,
 ) -> Result<String, String> {
-    // Get tool schemas: role-based + any extras from agent catalog
-    let extra: Vec<String> = crate::catalog::get_agent_info(agent_id)
-        .map(|a| a.tools)
+    // Get agent info for max_tokens and extra tools (#15)
+    let agent_info = crate::catalog::get_agent_info(agent_id);
+    let extra: Vec<String> = agent_info.as_ref()
+        .map(|a| a.tools.clone())
         .unwrap_or_default();
     let extra_refs: Vec<&str> = extra.iter().map(|s| s.as_str()).collect();
     let tool_schemas = tools::tool_schemas_for_role_with_extras(agent_role, &extra_refs);
 
-    // Build system prompt: persona + protocol + task context
+    // Use agent's max_tokens from catalog, fallback to unlimited (#15)
+    let max_tokens = agent_info.as_ref()
+        .and_then(|a| if a.max_tokens > 0 { Some(a.max_tokens as u32) } else { None })
+        .unwrap_or(128_000);
+
     let protocol_section = protocol.map(|p| format!("\n\n{}", p)).unwrap_or_default();
     let system = format!(
         "{}{}\n\nYour task:\n{}\n\nWorkspace: {}. Use tools to complete the task. Write real, production-quality code.",
@@ -52,16 +60,16 @@ pub async fn run_agent(
 
     let mut tool_calls_log: Vec<String> = Vec::new();
 
-    for round in 0..MAX_ROUNDS {
+    for _round in 0..MAX_ROUNDS {
         on_event(agent_id, AgentEvent::Thinking);
 
-        let resp = llm::chat_completion(
+        let resp = llm::chat_completion_with_tokens(
             &messages,
             Some(&system),
             if tool_schemas.is_empty() { None } else { Some(&tool_schemas) },
+            max_tokens,
         ).await?;
 
-        // If has tool calls, execute them
         if !resp.tool_calls.is_empty() {
             let tc_summary: Vec<String> = resp.tool_calls.iter()
                 .map(|tc| format!("{}({})", tc.name, truncate(&tc.arguments, 100)))
@@ -88,14 +96,15 @@ pub async fn run_agent(
 
                 tool_calls_log.push(tc.name.clone());
 
-                // Store tool message in DB
-                db::with_db(|conn| {
+                if let Err(e) = db::with_db(|conn| {
                     conn.execute(
                         "INSERT INTO agent_messages (mission_id, phase_id, agent_id, agent_name, role, content, tool_calls)
                          VALUES (?1, ?2, ?3, ?4, 'tool', ?5, ?6)",
                         params![mission_id, phase_id, agent_id, agent_name, &result, &tc.name],
-                    ).ok();
-                });
+                    )
+                }) {
+                    eprintln!("[db] Failed to store tool message: {}", e);
+                }
 
                 messages.push(LLMMessage {
                     role: "user".into(),
@@ -105,17 +114,18 @@ pub async fn run_agent(
             continue;
         }
 
-        // Text response — done
         if let Some(content) = resp.content {
             on_event(agent_id, AgentEvent::Response { content: content.clone() });
 
-            db::with_db(|conn| {
+            if let Err(e) = db::with_db(|conn| {
                 conn.execute(
                     "INSERT INTO agent_messages (mission_id, phase_id, agent_id, agent_name, role, content)
                      VALUES (?1, ?2, ?3, ?4, 'assistant', ?5)",
                     params![mission_id, phase_id, agent_id, agent_name, &content],
-                ).ok();
-            });
+                )
+            }) {
+                eprintln!("[db] Failed to store agent message: {}", e);
+            }
 
             return Ok(content);
         }
@@ -123,7 +133,7 @@ pub async fn run_agent(
         break;
     }
 
-    Err(format!("Agent {} exceeded max rounds", agent_name))
+    Err(format!("Agent {} exceeded max rounds ({})", agent_name, MAX_ROUNDS))
 }
 
 fn truncate(s: &str, max: usize) -> &str {

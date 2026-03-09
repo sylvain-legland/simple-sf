@@ -1,20 +1,23 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 
 static HTTP: OnceLock<Client> = OnceLock::new();
 
 fn client() -> &'static Client {
     HTTP.get_or_init(|| Client::builder()
-        .timeout(std::time::Duration::from_secs(180))
+        .timeout(std::time::Duration::from_secs(300))
         .build().unwrap())
 }
 
 /// Retry config
-const MAX_RETRIES: u32 = 3;
-const BASE_DELAY_MS: u64 = 2000;   // 2s initial backoff
-const MAX_DELAY_MS: u64 = 30_000;  // 30s max backoff
+const MAX_RETRIES: u32 = 5;
+const BASE_DELAY_MS: u64 = 2000;
+const MAX_DELAY_MS: u64 = 60_000;
+
+/// No artificial token limit — let the model use its full context window
+const DEFAULT_MAX_TOKENS: u32 = 128_000;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LLMMessage {
@@ -42,7 +45,12 @@ pub struct LLMConfig {
     pub model: String,
 }
 
-static LLM_CONFIG: OnceLock<std::sync::Mutex<Option<LLMConfig>>> = OnceLock::new();
+/// RwLock instead of OnceLock<Mutex> — allows runtime model/provider changes (#12)
+static LLM_CONFIG: OnceLock<RwLock<Option<LLMConfig>>> = OnceLock::new();
+
+fn config_lock() -> &'static RwLock<Option<LLMConfig>> {
+    LLM_CONFIG.get_or_init(|| RwLock::new(None))
+}
 
 pub fn configure_llm(provider: &str, api_key: &str, base_url: &str, model: &str) {
     let config = LLMConfig {
@@ -51,13 +59,30 @@ pub fn configure_llm(provider: &str, api_key: &str, base_url: &str, model: &str)
         base_url: base_url.to_string(),
         model: model.to_string(),
     };
-    let lock = LLM_CONFIG.get_or_init(|| std::sync::Mutex::new(None));
-    *lock.lock().unwrap() = Some(config);
+    let mut guard = config_lock().write().unwrap();
+    *guard = Some(config);
+}
+
+/// Update just the model at runtime (for dynamic routing)
+pub fn set_model(model: &str) {
+    let mut guard = config_lock().write().unwrap();
+    if let Some(ref mut c) = *guard {
+        c.model = model.to_string();
+    }
+}
+
+/// Update provider + base_url + api_key at runtime
+pub fn set_provider(provider: &str, api_key: &str, base_url: &str) {
+    let mut guard = config_lock().write().unwrap();
+    if let Some(ref mut c) = *guard {
+        c.provider = provider.to_string();
+        c.api_key = api_key.to_string();
+        c.base_url = base_url.to_string();
+    }
 }
 
 pub fn get_config() -> Option<LLMConfig> {
-    let lock = LLM_CONFIG.get()?;
-    let guard = lock.lock().ok()?;
+    let guard = config_lock().read().ok()?;
     guard.as_ref().map(|c| LLMConfig {
         provider: c.provider.clone(),
         api_key: c.api_key.clone(),
@@ -66,15 +91,17 @@ pub fn get_config() -> Option<LLMConfig> {
     })
 }
 
+/// Backward-compatible wrapper — uses DEFAULT_MAX_TOKENS (no artificial limit)
 pub async fn chat_completion(
     messages: &[LLMMessage],
     system: Option<&str>,
     tools: Option<&[Value]>,
 ) -> Result<LLMResponse, String> {
-    chat_completion_with_tokens(messages, system, tools, 4096).await
+    chat_completion_with_tokens(messages, system, tools, DEFAULT_MAX_TOKENS).await
 }
 
 /// Chat completion with configurable max_tokens + retry with exponential backoff.
+/// Streaming callback: if provided, chunks are sent as they arrive (#7).
 pub async fn chat_completion_with_tokens(
     messages: &[LLMMessage],
     system: Option<&str>,
@@ -96,11 +123,14 @@ pub async fn chat_completion_with_tokens(
         "messages": msgs,
         "max_tokens": max_tokens,
         "temperature": 0.7,
+        "stream": true,
     });
 
     if let Some(t) = tools {
         if !t.is_empty() {
             body["tools"] = Value::Array(t.to_vec());
+            // Can't stream with tool calls on most providers
+            body["stream"] = json!(false);
         }
     }
 
@@ -128,7 +158,7 @@ pub async fn chat_completion_with_tokens(
                 last_err = format!("HTTP error: {}", e);
                 if e.is_timeout() || e.is_connect() {
                     eprintln!("[llm] Network error (attempt {}): {}", attempt + 1, e);
-                    continue; // retry on network errors
+                    continue;
                 }
                 return Err(last_err);
             }
@@ -136,7 +166,6 @@ pub async fn chat_completion_with_tokens(
 
         let status = resp.status();
 
-        // Rate limited (429) — retry with Retry-After if provided
         if status.as_u16() == 429 {
             let retry_after = resp.headers()
                 .get("retry-after")
@@ -152,7 +181,6 @@ pub async fn chat_completion_with_tokens(
             continue;
         }
 
-        // Server errors (500-599) — retry
         if status.is_server_error() {
             let text = resp.text().await.unwrap_or_default();
             last_err = format!("Server error {} : {}", status, text);
@@ -160,13 +188,17 @@ pub async fn chat_completion_with_tokens(
             continue;
         }
 
-        // Client errors (400-499 except 429) — don't retry
         if status.is_client_error() {
             let text = resp.text().await.unwrap_or_default();
             return Err(format!("LLM API {} : {}", status, text));
         }
 
-        // Success — parse response
+        // Streaming response (#7)
+        let is_stream = body["stream"].as_bool().unwrap_or(false);
+        if is_stream {
+            return parse_stream(resp).await;
+        }
+
         let json: Value = resp.json().await.map_err(|e| format!("JSON parse: {}", e))?;
         return parse_response(&json);
     }
@@ -174,8 +206,52 @@ pub async fn chat_completion_with_tokens(
     Err(format!("LLM call failed after {} retries: {}", MAX_RETRIES + 1, last_err))
 }
 
-/// Exponential backoff: 2s, 4s, 8s... capped at MAX_DELAY_MS.
-/// Respects Retry-After header if provided (in seconds).
+/// Parse SSE stream into a complete LLMResponse
+async fn parse_stream(resp: reqwest::Response) -> Result<LLMResponse, String> {
+    use tokio::io::AsyncBufReadExt;
+    use tokio_util::io::StreamReader;
+    use futures_util::StreamExt;
+
+    let byte_stream = resp.bytes_stream().map(|r| r.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)));
+    let reader = StreamReader::new(byte_stream);
+    let mut lines = reader.lines();
+
+    let mut full_content = String::new();
+    let mut tool_calls: Vec<ToolCall> = Vec::new();
+
+    while let Ok(Some(line)) = lines.next_line().await {
+        let line = line.trim_start().to_string();
+        if !line.starts_with("data: ") { continue; }
+        let data = &line[6..];
+        if data == "[DONE]" { break; }
+
+        if let Ok(chunk) = serde_json::from_str::<Value>(data) {
+            if let Some(delta) = chunk["choices"].get(0).and_then(|c| c.get("delta")) {
+                if let Some(content) = delta["content"].as_str() {
+                    full_content.push_str(content);
+                }
+                // Accumulate tool call deltas
+                if let Some(tcs) = delta["tool_calls"].as_array() {
+                    for tc in tcs {
+                        let idx = tc["index"].as_u64().unwrap_or(0) as usize;
+                        while tool_calls.len() <= idx {
+                            tool_calls.push(ToolCall { id: String::new(), name: String::new(), arguments: String::new() });
+                        }
+                        if let Some(id) = tc["id"].as_str() { tool_calls[idx].id = id.to_string(); }
+                        if let Some(f) = tc.get("function") {
+                            if let Some(n) = f["name"].as_str() { tool_calls[idx].name.push_str(n); }
+                            if let Some(a) = f["arguments"].as_str() { tool_calls[idx].arguments.push_str(a); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let content = if full_content.is_empty() { None } else { Some(strip_thinking(&full_content)) };
+    Ok(LLMResponse { content, tool_calls })
+}
+
 fn compute_backoff(attempt: u32, retry_after_secs: Option<u64>) -> u64 {
     if let Some(ra) = retry_after_secs {
         return (ra * 1000).min(MAX_DELAY_MS);

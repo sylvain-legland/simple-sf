@@ -21,8 +21,8 @@ const SAFE_PHASES: &[(&str, &str, &[&str])] = &[
     ("review",  "network",     &["lead_dev", "product"]),
 ];
 
-const MAX_NETWORK_ROUNDS: usize = 3;
-const CONTEXT_BUDGET: usize = 6000;
+const MAX_NETWORK_ROUNDS: usize = 10;
+const CONTEXT_BUDGET: usize = 12000;
 
 /// Instruction appended to every system prompt — enforce no emoji
 const STYLE_RULES: &str = "RÈGLES DE FORMAT : ZÉRO emoji, ZÉRO émoticône, ZÉRO caractère Unicode décoratif. \
@@ -55,9 +55,9 @@ fn strip_emoji(text: &str) -> String {
 //
 // PO is the decision-maker, NOT Jarvis.
 
-/// Intake team — the agents who participate in the intake discussion.
+/// Intake team — configurable. Defaults to the standard SAFe direction team.
 /// IDs match the SF platform DB: rte, architecte, lead_dev, product
-const INTAKE_TEAM: &[&str] = &["rte", "architecte", "lead_dev", "product"];
+const DEFAULT_INTAKE_TEAM: &[&str] = &["rte", "architecte", "lead_dev", "product"];
 
 /// Run a SAFe intake discussion with the direction team.
 /// Flow: RTE frames → Experts discuss (2 rounds) → PO decides and proposes mission.
@@ -66,17 +66,30 @@ pub async fn run_intake(
     project_context: &str,
     on_event: &EventCallback,
 ) -> Result<String, String> {
+    run_intake_with_team(topic, project_context, DEFAULT_INTAKE_TEAM, 2, on_event).await
+}
+
+/// Configurable intake: custom team + round count (#8)
+pub async fn run_intake_with_team(
+    topic: &str,
+    project_context: &str,
+    team_ids: &[&str],
+    rounds: usize,
+    on_event: &EventCallback,
+) -> Result<String, String> {
     let session_id = Uuid::new_v4().to_string();
 
-    db::with_db(|conn| {
+    if let Err(e) = db::with_db(|conn| {
         conn.execute(
             "INSERT INTO discussion_sessions (id, topic, context) VALUES (?1, ?2, ?3)",
             params![&session_id, topic, project_context],
-        ).ok();
-    });
+        )
+    }) {
+        eprintln!("[db] Failed to insert discussion session: {}", e);
+    }
 
     let mut agents_data: Vec<Agent> = Vec::new();
-    for id in INTAKE_TEAM {
+    for id in team_ids {
         if let Some(a) = agents::get_agent(id) {
             agents_data.push(a);
         }
@@ -157,7 +170,7 @@ pub async fn run_intake(
     let experts = &agents_data[1..]; // archi, lead, po
     let mut prev_context = format!("**{} ({})** :\n{}", rte.name, rte.role, rte_content);
 
-    for round in 0..2 {
+    for round in 0..rounds {
         for agent in experts {
             on_event(&agent.id, AgentEvent::Thinking);
 
@@ -275,12 +288,14 @@ pub async fn run_intake(
     emit_discuss(po, &po_content, "synthesis", &["all"], 99);
     store_discussion_msg(&session_id, &po.id, &po.name, &po.role, 99, &po_content);
 
-    db::with_db(|conn| {
+    if let Err(e) = db::with_db(|conn| {
         conn.execute(
             "UPDATE discussion_sessions SET status = 'completed', completed_at = datetime('now') WHERE id = ?1",
             params![&session_id],
-        ).ok();
-    });
+        )
+    }) {
+        eprintln!("[db] Failed to update discussion session: {}", e);
+    }
 
     // Return the PO's synthesis — Swift will parse the action tags
     Ok(po_content)
@@ -299,7 +314,9 @@ pub async fn run_mission(
 ) -> Result<(), String> {
     // Look up workflow from mission DB record, fall back to "safe-standard"
     let workflow_id = db::with_db(|conn| {
-        conn.execute("UPDATE missions SET status = 'running' WHERE id = ?1", params![mission_id]).ok();
+        if let Err(e) = conn.execute("UPDATE missions SET status = 'running' WHERE id = ?1", params![mission_id]) {
+            eprintln!("[db] Failed to update mission status: {}", e);
+        }
         conn.query_row(
             "SELECT workflow FROM missions WHERE id = ?1", params![mission_id],
             |row| row.get::<_, String>(0),
@@ -345,26 +362,24 @@ pub async fn run_mission(
             content: format!("── Phase: {} ({}) ──", phase_name.to_uppercase(), pattern),
         });
 
-        db::with_db(|conn| {
+        if let Err(e) = db::with_db(|conn| {
             conn.execute(
                 "INSERT INTO mission_phases (id, mission_id, phase_name, pattern, status, agent_ids, started_at)
                  VALUES (?1, ?2, ?3, ?4, 'running', ?5, datetime('now'))",
                 params![&phase_id, mission_id, phase_name, pattern, &agent_list],
-            ).ok();
-        });
+            )
+        }) {
+            eprintln!("[db] Failed to insert mission phase: {}", e);
+        }
 
         let task = build_phase_task(phase_name, brief, &phase_outputs);
 
         let agent_ids_slice: Vec<&str> = agent_ids.iter().map(|s| s.as_str()).collect();
-        let result = match pattern.as_str() {
-            "network" => run_network(&agent_ids_slice, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
-            "parallel" => run_parallel(&agent_ids_slice, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
-            _ => run_sequential(&agent_ids_slice, &task, phase_name, workspace, mission_id, &phase_id, on_event).await,
-        };
+        // Run pattern with retry on failure (#14)
+        let result = run_phase_with_retry(&agent_ids_slice, &task, phase_name, pattern, workspace, mission_id, &phase_id, on_event).await;
 
         match result {
             Ok(output) => {
-                // Check for gates (veto/approve)
                 let raw_gate = check_gate_raw(&output);
                 let yolo = YOLO_MODE.load(Ordering::Relaxed);
                 let gate = if raw_gate == "vetoed" && yolo { "approved".to_string() } else { raw_gate.clone() };
@@ -377,12 +392,14 @@ pub async fn run_mission(
                 }
 
                 phase_outputs.push(format!("[{}] {}", phase_name, output));
-                db::with_db(|conn| {
+                if let Err(e) = db::with_db(|conn| {
                     conn.execute(
                         "UPDATE mission_phases SET status = ?1, output = ?2, gate_result = ?3, completed_at = datetime('now') WHERE id = ?4",
                         params![gate_status, &output, &gate, &phase_id],
-                    ).ok();
-                });
+                    )
+                }) {
+                    eprintln!("[db] Failed to update mission phase: {}", e);
+                }
 
                 if gate == "vetoed" {
                     vetoed = true;
@@ -392,12 +409,14 @@ pub async fn run_mission(
                 }
             }
             Err(e) => {
-                db::with_db(|conn| {
+                if let Err(db_err) = db::with_db(|conn| {
                     conn.execute(
                         "UPDATE mission_phases SET status = 'failed', output = ?1, completed_at = datetime('now') WHERE id = ?2",
                         params![&e, &phase_id],
-                    ).ok();
-                });
+                    )
+                }) {
+                    eprintln!("[db] Failed to update failed phase: {}", db_err);
+                }
                 phase_outputs.push(format!("[{} FAILED] {}", phase_name, e));
                 on_event("engine", AgentEvent::Error {
                     message: format!("Phase {} failed: {}", phase_name, e),
@@ -416,14 +435,66 @@ pub async fn run_mission(
             completed_count, total_count
         ),
     });
-    db::with_db(|conn| {
+    if let Err(e) = db::with_db(|conn| {
         conn.execute(
             "UPDATE missions SET status = ?1, updated_at = datetime('now') WHERE id = ?2",
             params![final_status, mission_id],
-        ).ok();
-    });
+        )
+    }) {
+        eprintln!("[db] Failed to update mission final status: {}", e);
+    }
 
     Ok(())
+}
+
+// ──────────────────────────────────────────
+// Phase retry (#14) — retry once on failure with error context
+// ──────────────────────────────────────────
+
+async fn run_phase_with_retry(
+    agent_ids: &[&str],
+    task: &str,
+    phase: &str,
+    pattern: &str,
+    workspace: &str,
+    mission_id: &str,
+    phase_id: &str,
+    on_event: &EventCallback,
+) -> Result<String, String> {
+    let first = run_pattern(agent_ids, task, phase, pattern, workspace, mission_id, phase_id, on_event).await;
+    match first {
+        Ok(output) => Ok(output),
+        Err(e) => {
+            eprintln!("[engine] Phase {} failed (attempt 1): {}", phase, e);
+            on_event("engine", AgentEvent::Response {
+                content: format!("Phase {} failed, retrying with error context...", phase),
+            });
+            // Retry with error feedback injected into task
+            let retry_task = format!(
+                "{}\n\n## PREVIOUS ATTEMPT FAILED:\n{}\n\nFix the issues and try again.",
+                task, e
+            );
+            run_pattern(agent_ids, &retry_task, phase, pattern, workspace, mission_id, phase_id, on_event).await
+        }
+    }
+}
+
+/// Dispatch to the correct pattern implementation
+async fn run_pattern(
+    agent_ids: &[&str],
+    task: &str,
+    phase: &str,
+    pattern: &str,
+    workspace: &str,
+    mission_id: &str,
+    phase_id: &str,
+    on_event: &EventCallback,
+) -> Result<String, String> {
+    match pattern {
+        "network" => run_network(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "parallel" => run_parallel(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        _ => run_sequential(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+    }
 }
 
 // ──────────────────────────────────────────
@@ -436,7 +507,7 @@ async fn run_network(
     agent_ids: &[&str],
     task: &str,
     phase: &str,
-    workspace: &str,
+    _workspace: &str,
     mission_id: &str,
     phase_id: &str,
     on_event: &EventCallback,
@@ -455,7 +526,6 @@ async fn run_network(
         .map(|a| format!("@{} ({})", a.name, a.role))
         .collect();
 
-    // Use first agent as the leader/judge
     let leader = &agents_data[0];
     let debaters: Vec<&Agent> = agents_data.iter().skip(1).collect();
 
@@ -692,13 +762,24 @@ fn auto_assign_agents(phase_name: &str) -> Vec<String> {
     ids.iter().map(|s| s.to_string()).collect()
 }
 
-/// Detect raw veto/approve signals in phase output (no YOLO override).
+/// Robust gate detection (#13) — case-insensitive, flexible patterns
 fn check_gate_raw(output: &str) -> String {
     let upper = output.to_uppercase();
+    let lower = output.to_lowercase();
+
     let is_veto = upper.contains("[VETO]") || upper.contains("[NOGO]")
-        || upper.contains("STATUT: NOGO") || upper.contains("DÉCISION: NOGO");
-    let is_approve = upper.contains("[APPROVE]") || upper.contains("STATUT: GO")
-        || upper.contains("[GO]");
+        || upper.contains("STATUT: NOGO") || upper.contains("DÉCISION: NOGO")
+        || upper.contains("DECISION: NOGO")
+        || lower.contains("[veto]") || lower.contains("[no-go]") || lower.contains("[no go]")
+        || upper.contains("VERDICT: NOGO") || upper.contains("VERDICT: VETO")
+        || upper.contains("STATUT : NOGO") || upper.contains("DÉCISION : NOGO");
+
+    let is_approve = upper.contains("[APPROVE]") || upper.contains("[APPROVED]")
+        || upper.contains("STATUT: GO") || upper.contains("DÉCISION: GO")
+        || upper.contains("DECISION: GO")
+        || upper.contains("[GO]") || upper.contains("[LGTM]")
+        || upper.contains("VERDICT: GO") || upper.contains("VERDICT: APPROVE")
+        || upper.contains("STATUT : GO") || upper.contains("DÉCISION : GO");
 
     if is_veto {
         "vetoed".into()
@@ -889,21 +970,25 @@ fn emit_rich(on_event: &EventCallback, agent: &Agent, content: &str, to_agents: 
 }
 
 fn store_agent_msg(mission_id: &str, phase_id: &str, agent_id: &str, agent_name: &str, role: &str, content: &str, tool: Option<&str>) {
-    db::with_db(|conn| {
+    if let Err(e) = db::with_db(|conn| {
         conn.execute(
             "INSERT INTO agent_messages (mission_id, phase_id, agent_id, agent_name, role, content, tool_calls)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![mission_id, phase_id, agent_id, agent_name, role, content, tool],
-        ).ok();
-    });
+        )
+    }) {
+        eprintln!("[db] Failed to store agent message: {}", e);
+    }
 }
 
 fn store_discussion_msg(session_id: &str, agent_id: &str, agent_name: &str, agent_role: &str, round: i32, content: &str) {
-    db::with_db(|conn| {
+    if let Err(e) = db::with_db(|conn| {
         conn.execute(
             "INSERT INTO discussion_messages (session_id, agent_id, agent_name, agent_role, round, content)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![session_id, agent_id, agent_name, agent_role, round, content],
-        ).ok();
-    });
+        )
+    }) {
+        eprintln!("[db] Failed to store discussion message: {}", e);
+    }
 }

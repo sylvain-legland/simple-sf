@@ -91,10 +91,12 @@ pub extern "C" fn sf_create_project(name: *const c_char, description: *const c_c
     let d = from_c(description);
     let t = from_c(tech);
     db::with_db(|conn| {
-        conn.execute(
+        if let Err(e) = conn.execute(
             "INSERT INTO projects (id, name, description, tech) VALUES (?1, ?2, ?3, ?4)",
             rusqlite::params![&id, &n, &d, &t],
-        ).ok();
+        ) {
+            eprintln!("[db] Failed to create project: {}", e);
+        }
     });
     c_str(&id).into_raw()
 }
@@ -124,7 +126,9 @@ pub extern "C" fn sf_list_projects() -> *mut c_char {
 pub extern "C" fn sf_delete_project(id: *const c_char) {
     let pid = from_c(id);
     db::with_db(|conn| {
-        conn.execute("DELETE FROM projects WHERE id = ?1", rusqlite::params![&pid]).ok();
+        if let Err(e) = conn.execute("DELETE FROM projects WHERE id = ?1", rusqlite::params![&pid]) {
+            eprintln!("[db] Failed to delete project: {}", e);
+        }
     });
 }
 
@@ -140,14 +144,18 @@ pub extern "C" fn sf_start_mission(project_id: *const c_char, brief: *const c_ch
     let mid = mission_id.clone();
 
     db::with_db(|conn| {
-        conn.execute(
+        if let Err(e) = conn.execute(
             "INSERT INTO missions (id, project_id, brief, status) VALUES (?1, ?2, ?3, 'pending')",
             rusqlite::params![&mission_id, &pid, &b],
-        ).ok();
-        conn.execute(
+        ) {
+            eprintln!("[db] Failed to create mission: {}", e);
+        }
+        if let Err(e) = conn.execute(
             "UPDATE projects SET status = 'active' WHERE id = ?1",
             rusqlite::params![&pid],
-        ).ok();
+        ) {
+            eprintln!("[db] Failed to update project status: {}", e);
+        }
     });
 
     // Create workspace dir
@@ -289,10 +297,12 @@ pub extern "C" fn sf_start_ideation(idea: *const c_char) -> *mut c_char {
     let sid = session_id.clone();
 
     db::with_db(|conn| {
-        conn.execute(
+        if let Err(e) = conn.execute(
             "INSERT INTO ideation_sessions (id, idea) VALUES (?1, ?2)",
             rusqlite::params![&session_id, &idea_text],
-        ).ok();
+        ) {
+            eprintln!("[db] Failed to create ideation session: {}", e);
+        }
     });
 
     let idea_clone = idea_text.clone();
@@ -311,19 +321,23 @@ pub extern "C" fn sf_start_ideation(idea: *const c_char) -> *mut c_char {
         match ideation::run_ideation(&sid_clone, &idea_clone, &callback).await {
             Ok(_) => {
                 db::with_db(|conn| {
-                    conn.execute(
+                    if let Err(e) = conn.execute(
                         "UPDATE ideation_sessions SET status = 'completed', completed_at = datetime('now') WHERE id = ?1",
                         rusqlite::params![&sid_clone],
-                    ).ok();
+                    ) {
+                        eprintln!("[db] Failed to update ideation status: {}", e);
+                    }
                 });
                 emit("engine", "ideation_complete", &sid_clone);
             }
             Err(e) => {
                 db::with_db(|conn| {
-                    conn.execute(
+                    if let Err(db_err) = conn.execute(
                         "UPDATE ideation_sessions SET status = 'failed', completed_at = datetime('now') WHERE id = ?1",
                         rusqlite::params![&sid_clone],
-                    ).ok();
+                    ) {
+                        eprintln!("[db] Failed to update ideation failure: {}", db_err);
+                    }
                 });
                 emit("engine", "error", &e);
             }

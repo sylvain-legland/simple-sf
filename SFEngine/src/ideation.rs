@@ -3,8 +3,8 @@ use crate::db;
 use crate::executor::{AgentEvent, EventCallback};
 use rusqlite::params;
 
-/// Ideation agents — network discussion pattern
-const IDEATION_AGENTS: &[(&str, &str, &str)] = &[
+/// Default ideation agents — configurable via run_ideation_with_team (#9)
+const DEFAULT_IDEATION_AGENTS: &[(&str, &str, &str)] = &[
     (
         "ideation-pm",
         "Product Manager",
@@ -28,25 +28,34 @@ const IDEATION_AGENTS: &[(&str, &str, &str)] = &[
     ),
 ];
 
-/// Run a network-pattern ideation session — 3 rounds of multi-agent discussion
-///
-/// Round 1: Each agent gives initial perspective on the idea
-/// Round 2: Each agent reacts to others, debates, challenges
-/// Round 3: Each agent gives final synthesis and recommendation
+/// Default: 3 agents, 3 rounds
 pub async fn run_ideation(
     session_id: &str,
     idea: &str,
     on_event: &EventCallback,
 ) -> Result<String, String> {
-    let round_labels = ["Initial Analysis", "Discussion & Debate", "Final Recommendations"];
-    let mut discussion: Vec<(String, String, String)> = Vec::new(); // (agent_id, agent_name, content)
+    run_ideation_rounds(session_id, idea, DEFAULT_IDEATION_AGENTS, 3, on_event).await
+}
 
-    for (round, label) in round_labels.iter().enumerate() {
+/// Configurable ideation: custom agents + round count (#9)
+pub async fn run_ideation_rounds(
+    session_id: &str,
+    idea: &str,
+    agents: &[(&str, &str, &str)],
+    rounds: usize,
+    on_event: &EventCallback,
+) -> Result<String, String> {
+    let round_labels = ["Initial Analysis", "Discussion & Debate", "Final Recommendations",
+                        "Deep Dive", "Convergence"];
+    let mut discussion: Vec<(String, String, String)> = Vec::new();
+
+    for round in 0..rounds {
+        let label = round_labels.get(round).unwrap_or(&"Additional Round");
         on_event("engine", AgentEvent::Response {
             content: format!("--- Round {}: {} ---", round + 1, label),
         });
 
-        for (agent_id, agent_name, persona) in IDEATION_AGENTS {
+        for (agent_id, agent_name, persona) in agents {
             on_event(agent_id, AgentEvent::Thinking);
 
             let context = if discussion.is_empty() {
@@ -64,20 +73,19 @@ pub async fn run_ideation(
                      **Idea:** {}",
                     idea
                 ),
-                1 => format!(
-                    "The team has shared initial perspectives on this idea. \
-                     React to their analysis. Challenge weak points, reinforce good ideas, \
-                     add what was missed. Be specific and constructive (200 words max).\n\n\
-                     **Idea:** {}{}", 
-                    idea, context
-                ),
-                2 => format!(
+                r if r == rounds - 1 => format!(
                     "Based on the full discussion, give your final synthesis and concrete \
                      recommendation. What should we build? Key risks? Go/No-go? (200 words max)\n\n\
                      **Idea:** {}{}",
                     idea, context
                 ),
-                _ => unreachable!(),
+                _ => format!(
+                    "The team has shared perspectives on this idea. \
+                     React to their analysis. Challenge weak points, reinforce good ideas, \
+                     add what was missed. Be specific and constructive (200 words max).\n\n\
+                     **Idea:** {}{}",
+                    idea, context
+                ),
             };
 
             let messages = vec![LLMMessage {
@@ -86,40 +94,39 @@ pub async fn run_ideation(
             }];
 
             let system = format!(
-                "{}\n\nYou are in a team ideation session (round {}/3: {}). \
+                "{}\n\nYou are in a team ideation session (round {}/{}). \
                  Respond concisely from your role's perspective. No tool calls needed.",
-                persona, round + 1, label
+                persona, round + 1, rounds
             );
 
-            let resp = llm::chat_completion_with_tokens(&messages, Some(&system), None, 8192).await;
+            let resp = llm::chat_completion(&messages, Some(&system), None).await;
 
             let content = match resp {
                 Ok(r) => r.content.unwrap_or_else(|| "(no response)".into()),
                 Err(e) => format!("(error: {})", e),
             };
 
-            // Emit event to Swift
             on_event(agent_id, AgentEvent::Response {
                 content: content.clone(),
             });
 
-            // Store in DB
-            db::with_db(|conn| {
+            if let Err(e) = db::with_db(|conn| {
                 conn.execute(
                     "INSERT INTO ideation_messages (session_id, agent_id, agent_name, round, content)
                      VALUES (?1, ?2, ?3, ?4, ?5)",
                     params![session_id, agent_id, agent_name, round as i32, &content],
-                ).ok();
-            });
+                )
+            }) {
+                eprintln!("[db] Failed to store ideation message: {}", e);
+            }
 
             discussion.push((agent_id.to_string(), agent_name.to_string(), content));
         }
     }
 
-    // Final synthesis: last 3 messages (round 3)
     let synthesis: Vec<String> = discussion.iter()
         .rev()
-        .take(IDEATION_AGENTS.len())
+        .take(agents.len())
         .rev()
         .map(|(_, name, content)| format!("**{}**: {}", name, content))
         .collect();
