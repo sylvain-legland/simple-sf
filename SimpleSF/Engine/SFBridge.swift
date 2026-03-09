@@ -330,9 +330,15 @@ final class SFBridge: ObservableObject {
             _restoreConversationFromDB(projectId: project.id)
         }
 
-        // Set the first active project as current (but do NOT auto-start a new mission)
-        if let project = activeProjects.first {
+        // Auto-resume: restart the first active project (preserving existing conversation)
+        if !isRunning, let project = activeProjects.first {
+            print("[SFBridge] Auto-resuming project: \(project.name)")
             currentProjectId = project.id
+            Task {
+                await KeychainService.shared.scanIfNeeded()
+                await syncLLMConfigAsync()
+                resumeMissionAsync(projectId: project.id, brief: project.description)
+            }
         }
     }
 
@@ -572,11 +578,26 @@ final class SFBridge: ObservableObject {
 
     /// Non-blocking mission start — runs FFI call on background thread.
     func startMissionAsync(projectId: String, brief: String) {
-        // Store events for project before clearing
         events.removeAll()
         isRunning = true
         currentProjectId = projectId
         projectEvents[projectId] = []   // fresh events for this project
+        _launchMission(projectId: projectId, brief: brief)
+    }
+
+    /// Resume a mission without clearing existing conversation events.
+    func resumeMissionAsync(projectId: String, brief: String) {
+        events.removeAll()
+        isRunning = true
+        currentProjectId = projectId
+        // Add a separator event so user knows where the resume starts
+        let sep = AgentEvent(agentId: "engine", eventType: "response", data: "── Reprise de la mission ──")
+        projectEvents[projectId, default: []].append(sep)
+        _launchMission(projectId: projectId, brief: brief)
+    }
+
+    /// Shared mission launch logic.
+    private func _launchMission(projectId: String, brief: String) {
         let pid = projectId
         let b = brief
         Task.detached {
