@@ -130,6 +130,14 @@ final class MLXService: ObservableObject {
             return
         }
 
+        // Stop Ollama if running — only one local LLM at a time
+        if OllamaService.shared.isRunning {
+            OllamaService.shared.stop()
+        }
+
+        // Kill any existing mlx_lm server processes to prevent duplicates
+        Self.killExistingMLXServers()
+
         activeModel = chosen
         state = .starting
         logLines = []
@@ -207,6 +215,15 @@ final class MLXService: ObservableObject {
         }
         process = nil
         state = .stopped
+    }
+
+    /// Kill any stale mlx_lm server processes to prevent duplicates
+    private static func killExistingMLXServers() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        task.arguments = ["-f", "mlx_lm.*server"]
+        try? task.run()
+        task.waitUntilExit()
     }
 
     // MARK: - Health check

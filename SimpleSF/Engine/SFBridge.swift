@@ -351,6 +351,28 @@ final class SFBridge: ObservableObject {
         return result
     }
 
+    /// Non-blocking mission start — runs FFI call on background thread.
+    func startMissionAsync(projectId: String, brief: String) {
+        events.removeAll()
+        isRunning = true
+        let pid = projectId
+        let b = brief
+        Task.detached {
+            var missionId: String?
+            pid.withCString { p in
+                b.withCString { bb in
+                    if let ptr = _sf_start_mission(p, bb) {
+                        missionId = String(cString: ptr)
+                        _sf_free_string(ptr)
+                    }
+                }
+            }
+            await MainActor.run {
+                SFBridge.shared.currentMissionId = missionId
+            }
+        }
+    }
+
     struct MissionStatus: Codable {
         let mission: MissionInfo?
         let phases: [PhaseInfo]
@@ -461,6 +483,22 @@ final class SFBridge: ObservableObject {
             }
         }
         return result
+    }
+
+    /// Non-blocking variant: runs the FFI call on a background thread.
+    func startDiscussionAsync(message: String, projectContext: String) {
+        discussionEvents.removeAll()
+        discussionRunning = true
+        discussionSynthesis = nil
+        let msg = message
+        let ctx = projectContext
+        Task.detached {
+            msg.withCString { m in
+                ctx.withCString { c in
+                    let _ = _sf_jarvis_discuss(m, c)
+                }
+            }
+        }
     }
 
     // Called from the global C callback
