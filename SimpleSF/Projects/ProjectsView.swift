@@ -297,6 +297,11 @@ struct ProjectAccordion: View {
     @State private var selectedPhaseIndex: Int?
     @State private var pollTimer: Timer?
 
+    /// Events scoped to this project (not the global feed)
+    private var projectEvents: [SFBridge.AgentEvent] {
+        bridge.eventsForProject(project.id)
+    }
+
     private var activePhase: Int {
         simulatedActivePhase(for: project.status, progress: project.progress)
     }
@@ -610,7 +615,7 @@ struct ProjectAccordion: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
-                    if bridge.events.isEmpty && !isActive {
+                    if projectEvents.isEmpty && !isActive {
                         HStack {
                             Spacer()
                             VStack(spacing: 8) {
@@ -625,15 +630,15 @@ struct ProjectAccordion: View {
                             Spacer()
                         }
                     } else {
-                        ForEach(bridge.events) { event in
+                        ForEach(projectEvents) { event in
                             eventRow(event).id(event.id)
                         }
                     }
                 }
                 .padding(16)
             }
-            .onChange(of: bridge.events.count) { _, _ in
-                if let last = bridge.events.last {
+            .onChange(of: projectEvents.count) { _, _ in
+                if let last = projectEvents.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
@@ -906,7 +911,7 @@ struct ProjectAccordion: View {
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
             Task { @MainActor in
-                self.missionStatus = bridge.missionStatus()
+                self.missionStatus = bridge.missionStatusForProject(project.id)
             }
         }
     }
