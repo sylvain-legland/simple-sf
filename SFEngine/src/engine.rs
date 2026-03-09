@@ -315,20 +315,28 @@ pub async fn run_mission(
 
     for (phase_name, pattern, raw_agent_ids) in &owned_phases {
         // Auto-assign agents when the workflow phase has none
-        let agent_ids: &Vec<String> = if raw_agent_ids.is_empty() {
-            &auto_assign_agents(phase_name)
+        let agent_ids: Vec<String> = if raw_agent_ids.is_empty() {
+            auto_assign_agents(phase_name)
         } else {
-            raw_agent_ids
+            raw_agent_ids.clone()
         };
         if vetoed {
             on_event("engine", AgentEvent::Response {
-                content: format!("⚠️ Phase {} skipped — previous phase vetoed", phase_name),
+                content: format!("Phase {} skipped -- previous phase vetoed", phase_name),
+            });
+            continue;
+        }
+
+        // Skip phases with no agents (shouldn't happen after auto-assign, but safety)
+        if agent_ids.is_empty() {
+            on_event("engine", AgentEvent::Response {
+                content: format!("Phase {} skipped -- no agents assigned", phase_name),
             });
             continue;
         }
 
         let phase_id = Uuid::new_v4().to_string();
-        let agent_list = serde_json::to_string(agent_ids).unwrap_or_default();
+        let agent_list = serde_json::to_string(&agent_ids).unwrap_or_default();
 
         on_event("engine", AgentEvent::Response {
             content: format!("── Phase: {} ({}) ──", phase_name.to_uppercase(), pattern),
@@ -700,75 +708,155 @@ fn check_gate_raw(output: &str) -> String {
 // ──────────────────────────────────────────
 
 fn build_phase_task(phase: &str, brief: &str, previous: &[String]) -> String {
+    // Limit context to last 3 phases, 600 chars each — avoid LLM context overflow
     let context = if previous.is_empty() {
         String::new()
     } else {
-        let ctx: String = previous.iter()
-            .map(|p| truncate_ctx(p, 800))
+        let recent: Vec<_> = previous.iter().rev().take(3).rev().collect();
+        let ctx: String = recent.iter()
+            .map(|p| truncate_ctx(p, 600))
             .collect::<Vec<_>>()
             .join("\n\n");
-        format!("\n\n## Previous phases:\n{}", ctx)
+        format!("\n\n## Contexte des phases precedentes:\n{}", ctx)
     };
 
-    match phase {
-        "vision" => format!(
+    let lower = phase.to_lowercase();
+
+    // Match known phase names (exact or keyword-based)
+    if lower.contains("vision") || lower.contains("idéation") || lower.contains("ideation") {
+        format!(
             "BRIEF: {}\n\n\
-             Define the product vision for this project:\n\
+             Define the product vision:\n\
              1. User stories with GIVEN/WHEN/THEN acceptance criteria\n\
-             2. MVP scope — what's in v1, what's deferred\n\
+             2. MVP scope -- what's in v1, what's deferred\n\
              3. Key risks and mitigations\n\
              4. Success metrics\n\
-             \n\
-             Be specific and actionable. This vision drives all downstream phases.{}",
+             Be specific and actionable.{}",
             brief, context
-        ),
-        "design" => format!(
+        )
+    } else if lower.contains("stratégi") || lower.contains("strategi") || lower.contains("comité") {
+        format!(
             "BRIEF: {}\n\n\
-             Design the technical architecture based on the vision phase:\n\
+             Strategic committee review:\n\
+             1. Evaluate project alignment with business goals\n\
+             2. Assess resource requirements and timeline\n\
+             3. Risk/reward analysis\n\
+             4. Issue [APPROVE] or [VETO] with justification\n\
+             This is a GO/NOGO gate.{}",
+            brief, context
+        )
+    } else if lower.contains("constitution") || lower.contains("setup") {
+        format!(
+            "BRIEF: {}\n\n\
+             Project constitution:\n\
+             1. Define team composition and roles\n\
+             2. Establish coding standards and conventions\n\
+             3. Set up repository structure\n\
+             4. Define sprint cadence and ceremonies{}",
+            brief, context
+        )
+    } else if lower.contains("architect") {
+        format!(
+            "BRIEF: {}\n\n\
+             Design the technical architecture:\n\
              1. Choose tech stack (language, framework, libraries)\n\
              2. Define file structure and key modules\n\
-             3. Decompose into [SUBTASK N] lines for developers\n\
+             3. Decompose into subtasks for developers\n\
              4. Identify dependencies and build steps\n\
-             \n\
              Output concrete file paths and task assignments.{}",
             brief, context
-        ),
-        "dev" => format!(
+        )
+    } else if lower.contains("design sys") || lower.contains("token") {
+        format!(
             "BRIEF: {}\n\n\
-             IMPLEMENT the project based on design phase:\n\
+             Design system and UI tokens:\n\
+             1. Define color palette, typography, spacing\n\
+             2. Component inventory (buttons, cards, forms)\n\
+             3. Responsive breakpoints\n\
+             4. Accessibility requirements{}",
+            brief, context
+        )
+    } else if lower.contains("sprint") || lower.contains("dev") || lower.contains("développement") {
+        format!(
+            "BRIEF: {}\n\n\
+             IMPLEMENT the project:\n\
              1. Read the architecture/subtasks from previous phases\n\
-             2. Use code_write to create EVERY file (30+ lines each, real code)\n\
-             3. Create dependency manifests (package.json, requirements.txt, etc.)\n\
+             2. Use code_write to create EVERY file (real code, no stubs)\n\
+             3. Create dependency manifests\n\
              4. Run build to verify compilation\n\
-             5. git_commit when done\n\
-             \n\
-             NO placeholders, NO TODOs, NO stubs. Real production code only.{}",
+             NO placeholders, NO TODOs. Real production code only.{}",
             brief, context
-        ),
-        "qa" => format!(
+        )
+    } else if lower.contains("build") || lower.contains("verify") {
+        format!(
             "BRIEF: {}\n\n\
-             Review and test ALL code written in dev phase:\n\
-             1. code_read every file created\n\
-             2. Run build/test commands to verify the code compiles\n\
-             3. Check for bugs, missing error handling, security issues\n\
-             4. Validate against acceptance criteria from vision phase\n\
-             5. Issue [APPROVE] or [VETO] with evidence\n\
-             \n\
-             You MUST run build/test tools. Reading code alone is NOT testing.{}",
+             Build and verify:\n\
+             1. Run build commands to compile the project\n\
+             2. Fix any compilation errors\n\
+             3. Verify all dependencies are resolved\n\
+             4. Confirm the executable/artifact is produced{}",
             brief, context
-        ),
-        "review" => format!(
+        )
+    } else if lower.contains("pipeline") || lower.contains("ci") {
+        format!(
             "BRIEF: {}\n\n\
-             Final review of the entire delivery:\n\
+             CI/CD pipeline setup:\n\
+             1. Define build pipeline (compile, test, lint)\n\
+             2. Set up automated testing\n\
+             3. Configure deployment targets\n\
+             4. Document the pipeline steps{}",
+            brief, context
+        )
+    } else if lower.contains("revue") || lower.contains("review") || lower.contains("conformité") {
+        format!(
+            "BRIEF: {}\n\n\
+             Final review:\n\
              1. Does the implementation match the vision and acceptance criteria?\n\
              2. Is the code quality acceptable?\n\
              3. Are there critical bugs or missing features?\n\
-             4. Issue final verdict: [APPROVE] to ship, or [VETO] with reasons\n\
-             \n\
+             4. Issue [APPROVE] or [VETO] with reasons\n\
              This is a GO/NOGO gate.{}",
             brief, context
-        ),
-        _ => format!("{}\n{}", brief, context),
+        )
+    } else if lower.contains("test") || lower.contains("qa") || lower.contains("campagne") {
+        format!(
+            "BRIEF: {}\n\n\
+             Testing and QA:\n\
+             1. Review all code written in previous phases\n\
+             2. Run build/test commands\n\
+             3. Check for bugs, missing error handling, security issues\n\
+             4. Validate against acceptance criteria\n\
+             5. Issue [APPROVE] or [VETO] with evidence{}",
+            brief, context
+        )
+    } else if lower.contains("deploy") || lower.contains("production") || lower.contains("release") {
+        format!(
+            "BRIEF: {}\n\n\
+             Deployment to production:\n\
+             1. Prepare release artifacts\n\
+             2. Define deployment steps\n\
+             3. Document rollback procedure\n\
+             4. Verify deployment checklist{}",
+            brief, context
+        )
+    } else if lower.contains("incident") || lower.contains("tma") || lower.contains("maintenance") || lower.contains("correctif") {
+        format!(
+            "BRIEF: {}\n\n\
+             Maintenance and incident handling:\n\
+             1. Review known issues from previous phases\n\
+             2. Prioritize fixes\n\
+             3. Apply corrections\n\
+             4. Validate fixes{}",
+            brief, context
+        )
+    } else {
+        format!(
+            "BRIEF: {}\n\n\
+             Phase: {}\n\
+             Execute this phase of the project lifecycle.\n\
+             Review previous phases output and produce actionable results.{}",
+            brief, phase, context
+        )
     }
 }
 
