@@ -676,19 +676,13 @@ final class SFBridge: ObservableObject {
     nonisolated func handleEvent(agentId: String, eventType: String, data: String) {
         Task { @MainActor in
             switch eventType {
-            // Discussion events (Jarvis intake) — data is JSON for discuss_response
+            // Discussion events (Jarvis intake) — Jarvis-only, never leak to project
             case "discuss_thinking":
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.discussionEvents.append(event)
-                if let pid = self.currentProjectId {
-                    self.projectEvents[pid, default: []].append(event)
-                }
             case "discuss_response":
                 let event = AgentEvent.fromDiscussJSON(agentId: agentId, eventType: eventType, json: data)
                 self.discussionEvents.append(event)
-                if let pid = self.currentProjectId {
-                    self.projectEvents[pid, default: []].append(event)
-                }
             case "discuss_complete":
                 self.discussionSynthesis = data
                 self.discussionRunning = false
