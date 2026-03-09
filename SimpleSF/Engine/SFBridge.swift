@@ -177,30 +177,35 @@ final class SFBridge: ObservableObject {
         bootstrapActiveProject()
     }
 
-    /// Discover mission ID for active projects that lack a stored mapping.
+    /// Discover mission ID for active projects and auto-resume them.
     private func bootstrapActiveProject() {
-        for project in ProjectStore.shared.projects where project.status == .active {
-            // Set currentProjectId so events get routed correctly
+        let activeProjects = ProjectStore.shared.projects.filter { $0.status == .active }
+        guard !activeProjects.isEmpty else { return }
+
+        for project in activeProjects {
             if currentProjectId == nil {
                 currentProjectId = project.id
             }
-            // If we already have a mission ID, skip
-            if project.missionId != nil { continue }
-            if projectMissionIds[project.id] != nil { continue }
-
-            // Try to find mission via Rust engine: create project there, then
-            // check if the engine knows about a mission for it
-            // Brute approach: try listing Rust projects and matching by name
-            let rustProjects = listProjects()
-            if let rustProject = rustProjects.first(where: { $0.name == project.name }) {
-                // Try to get mission status using the Rust project ID as mission hint
-                // The Rust engine may use project_id as mission reference
-                if let status = missionStatusById(rustProject.id) {
+            // Try to recover existing mission ID
+            if project.missionId == nil && projectMissionIds[project.id] == nil {
+                let rustProjects = listProjects()
+                if let rustProject = rustProjects.first(where: { $0.name == project.name }),
+                   let _ = missionStatusById(rustProject.id) {
                     projectMissionIds[project.id] = rustProject.id
                     ProjectStore.shared.setMissionId(project.id, missionId: rustProject.id)
                     print("[SFBridge] Bootstrapped mission \(rustProject.id) for project \(project.name)")
-                    continue
                 }
+            }
+        }
+
+        // Auto-resume: restart the first active project if nothing is running
+        if !isRunning, let project = activeProjects.first {
+            print("[SFBridge] Auto-resuming project: \(project.name)")
+            currentProjectId = project.id
+            projectEvents[project.id] = []
+            Task {
+                await syncLLMConfigAsync()
+                startMissionAsync(projectId: project.id, brief: project.description)
             }
         }
     }

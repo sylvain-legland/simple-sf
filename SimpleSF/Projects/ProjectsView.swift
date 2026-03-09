@@ -1045,7 +1045,7 @@ struct ProjectAccordion: View {
                         .frame(width: 28, height: 28).background(SF.Colors.error.opacity(0.12)).cornerRadius(6)
                 }.buttonStyle(.plain)
             } else if isPaused {
-                Button(action: { ProjectStore.shared.setStatus(project.id, status: .active) }) {
+                Button(action: { resumeProject() }) {
                     Image(systemName: "play.fill").font(.system(size: 12)).foregroundColor(SF.Colors.success)
                         .frame(width: 28, height: 28).background(SF.Colors.success.opacity(0.12)).cornerRadius(6)
                 }.buttonStyle(.plain)
@@ -1063,6 +1063,14 @@ struct ProjectAccordion: View {
     }
 
     private func launchProject() {
+        ProjectStore.shared.setStatus(project.id, status: .active)
+        Task {
+            await bridge.syncLLMConfigAsync()
+            bridge.startMissionAsync(projectId: project.id, brief: project.description)
+        }
+    }
+
+    private func resumeProject() {
         ProjectStore.shared.setStatus(project.id, status: .active)
         Task {
             await bridge.syncLLMConfigAsync()
