@@ -59,14 +59,30 @@ final class SFBridge: ObservableObject {
     @Published var events: [AgentEvent] = []
     @Published var isRunning = false
     @Published var currentMissionId: String?
-    @Published var currentProjectId: String?
+    @Published var currentProjectId: String? {
+        didSet { UserDefaults.standard.set(currentProjectId, forKey: "sf_current_project_id") }
+    }
     @Published var engineReady = false
     @Published var ideationEvents: [AgentEvent] = []
     @Published var ideationRunning = false
 
     // Per-project event history and mission mapping
     @Published var projectEvents: [String: [AgentEvent]] = [:]
-    var projectMissionIds: [String: String] = [:]
+    var projectMissionIds: [String: String] {
+        didSet { _persistMissionIds() }
+    }
+
+    private static let missionIdsKey = "sf_project_mission_ids"
+
+    private init() {
+        // Restore persisted state
+        projectMissionIds = UserDefaults.standard.dictionary(forKey: Self.missionIdsKey) as? [String: String] ?? [:]
+        currentProjectId = UserDefaults.standard.string(forKey: "sf_current_project_id")
+    }
+
+    private func _persistMissionIds() {
+        UserDefaults.standard.set(projectMissionIds, forKey: Self.missionIdsKey)
+    }
 
     struct AgentEvent: Identifiable {
         let id = UUID()
@@ -107,8 +123,6 @@ final class SFBridge: ObservableObject {
             return e
         }
     }
-
-    private init() {}
 
     func initialize() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -153,6 +167,37 @@ final class SFBridge: ObservableObject {
         _sf_set_callback(sfEventHandler)
 
         engineReady = true
+
+        // Bootstrap: if a project is active but has no mission mapping, discover it
+        bootstrapActiveProject()
+    }
+
+    /// Discover mission ID for active projects that lack a stored mapping.
+    private func bootstrapActiveProject() {
+        for project in ProjectStore.shared.projects where project.status == .active {
+            // Set currentProjectId so events get routed correctly
+            if currentProjectId == nil {
+                currentProjectId = project.id
+            }
+            // If we already have a mission ID, skip
+            if project.missionId != nil { continue }
+            if projectMissionIds[project.id] != nil { continue }
+
+            // Try to find mission via Rust engine: create project there, then
+            // check if the engine knows about a mission for it
+            // Brute approach: try listing Rust projects and matching by name
+            let rustProjects = listProjects()
+            if let rustProject = rustProjects.first(where: { $0.name == project.name }) {
+                // Try to get mission status using the Rust project ID as mission hint
+                // The Rust engine may use project_id as mission reference
+                if let status = missionStatusById(rustProject.id) {
+                    projectMissionIds[project.id] = rustProject.id
+                    ProjectStore.shared.setMissionId(project.id, missionId: rustProject.id)
+                    print("[SFBridge] Bootstrapped mission \(rustProject.id) for project \(project.name)")
+                    continue
+                }
+            }
+        }
     }
 
     /// Synchronous config sync — used after user-initiated provider changes.
@@ -343,6 +388,8 @@ final class SFBridge: ObservableObject {
     func startMission(projectId: String, brief: String) -> String? {
         events.removeAll()
         isRunning = true
+        currentProjectId = projectId
+        projectEvents[projectId] = []
         var result: String?
         projectId.withCString { p in
             brief.withCString { b in
@@ -353,6 +400,10 @@ final class SFBridge: ObservableObject {
             }
         }
         currentMissionId = result
+        if let mid = result {
+            projectMissionIds[projectId] = mid
+            ProjectStore.shared.setMissionId(projectId, missionId: mid)
+        }
         return result
     }
 
@@ -379,6 +430,7 @@ final class SFBridge: ObservableObject {
                 SFBridge.shared.currentMissionId = missionId
                 if let mid = missionId {
                     SFBridge.shared.projectMissionIds[pid] = mid
+                    ProjectStore.shared.setMissionId(pid, missionId: mid)
                 }
             }
         }
@@ -422,13 +474,29 @@ final class SFBridge: ObservableObject {
 
     /// Get mission status for a specific project (uses stored mission ID mapping)
     func missionStatusForProject(_ projectId: String) -> MissionStatus? {
-        guard let mid = projectMissionIds[projectId] else { return nil }
-        return missionStatusById(mid)
+        // 1. In-memory mapping (set during startMissionAsync in this session)
+        if let mid = projectMissionIds[projectId] {
+            return missionStatusById(mid)
+        }
+        // 2. Persisted in Project model (survives app restarts)
+        if let mid = ProjectStore.shared.projects.first(where: { $0.id == projectId })?.missionId {
+            projectMissionIds[projectId] = mid   // cache for next call
+            return missionStatusById(mid)
+        }
+        // 3. Fallback: if this is the current project, use global mission ID
+        if projectId == currentProjectId, let mid = currentMissionId {
+            return missionStatusById(mid)
+        }
+        return nil
     }
 
     /// Get events for a specific project
     func eventsForProject(_ projectId: String) -> [AgentEvent] {
-        return projectEvents[projectId] ?? []
+        let perProject = projectEvents[projectId] ?? []
+        if !perProject.isEmpty { return perProject }
+        // Fallback: if this is the current project, use global events
+        if projectId == currentProjectId { return events }
+        return []
     }
 
     private func missionStatusById(_ mid: String) -> MissionStatus? {

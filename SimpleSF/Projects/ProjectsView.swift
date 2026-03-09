@@ -315,7 +315,7 @@ struct ProjectAccordion: View {
             // ── Card header (always visible, clickable to toggle)
             cardHeader
                 .contentShape(Rectangle())
-                .onTapGesture { toggle() }
+                .simultaneousGesture(TapGesture().onEnded { toggle() })
 
             // ── Expanded: inline discussion panel
             if isExpanded {
@@ -336,7 +336,13 @@ struct ProjectAccordion: View {
                 )
         )
         .onChange(of: isExpanded) { _, expanded in
-            if expanded { startPolling() } else { stopPolling() }
+            if expanded {
+                // Immediate fetch before polling starts
+                self.missionStatus = bridge.missionStatusForProject(project.id)
+                startPolling()
+            } else {
+                stopPolling()
+            }
         }
     }
 
@@ -438,6 +444,9 @@ struct ProjectAccordion: View {
         let phases = missionStatus?.phases ?? simulatedPhases()
         if let idx = selectedPhaseIndex, idx < phases.count {
             phaseDetailPanel(phases[idx], index: idx)
+        } else if projectEvents.isEmpty, let msgs = missionStatus?.messages, !msgs.isEmpty {
+            // No live events but mission has persisted messages — show conversation
+            missionMessagesFeed(msgs)
         } else {
             liveEventsFeed
         }
@@ -609,22 +618,72 @@ struct ProjectAccordion: View {
         )
     }
 
+    // ── Mission messages feed (persisted conversation from completed/running phases) ──
+
+    private func missionMessagesFeed(_ messages: [SFBridge.MessageInfo]) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(messages.enumerated()), id: \.offset) { _, msg in
+                    missionMessageRow(msg)
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func missionMessageRow(_ msg: SFBridge.MessageInfo) -> some View {
+        let color = catalog.agentColor(msg.agent_name)
+        return HStack(alignment: .top, spacing: 8) {
+            AgentAvatarView(agentId: msg.agent_name, size: 28)
+                .overlay(Circle().stroke(color.opacity(0.4), lineWidth: 1))
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text(catalog.agentName(msg.agent_name))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(color)
+                    RoleBadge(role: msg.role, color: color)
+                    Spacer()
+                    Text(String(msg.created_at.suffix(8)))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(SF.Colors.textMuted)
+                }
+                Text(String(msg.content.prefix(500)))
+                    .font(.system(size: 12))
+                    .foregroundColor(SF.Colors.textPrimary)
+                    .lineLimit(6)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(10)
+        .background(SF.Colors.bgSecondary.opacity(0.5))
+        .cornerRadius(8)
+    }
+
     // ── Live events feed ──
 
     private var liveEventsFeed: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
-                    if projectEvents.isEmpty && !isActive {
+                    if projectEvents.isEmpty {
                         HStack {
                             Spacer()
                             VStack(spacing: 8) {
-                                Image(systemName: "play.circle")
-                                    .font(.system(size: 32))
-                                    .foregroundColor(SF.Colors.textMuted.opacity(0.5))
-                                Text("Lancez le workflow pour voir la discussion des agents")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(SF.Colors.textMuted)
+                                if isActive {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .tint(SF.Colors.purple)
+                                    Text("Agents en cours de travail…")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(SF.Colors.textMuted)
+                                } else {
+                                    Image(systemName: "play.circle")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(SF.Colors.textMuted.opacity(0.5))
+                                    Text("Lancez le workflow pour voir la discussion des agents")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(SF.Colors.textMuted)
+                                }
                             }
                             .padding(.top, 30)
                             Spacer()
