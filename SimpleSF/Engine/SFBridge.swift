@@ -730,6 +730,16 @@ final class SFBridge: ObservableObject {
         guard let sessionId = discussionSessionForProject(projectName) else { return [] }
         return discussionMessages(sessionId: sessionId)
     }
+
+    /// Get messages from the most recent discussion session that has messages
+    func mostRecentDiscussionMessages() -> [DiscussionMessage] {
+        let sessions = listDiscussionSessions()
+        for session in sessions {
+            let msgs = discussionMessages(sessionId: session.id)
+            if !msgs.isEmpty { return msgs }
+        }
+        return []
+    }
 }
 
 // Global C callback function — routes to SFBridge singleton
