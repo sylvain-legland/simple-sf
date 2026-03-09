@@ -158,11 +158,10 @@ pub async fn run_intake_with_team(
         rte.persona, protocols::RESEARCH_PROTOCOL, STYLE_RULES
     );
 
-    let rte_result = llm::chat_completion_with_tokens(
+    let rte_result = llm::chat_completion(
         &[LLMMessage { role: "user".into(), content: rte_prompt }],
         Some(&rte_system),
         None,
-        8192,
     ).await?;
     let rte_content = strip_emoji(&rte_result.content.unwrap_or_default());
 
@@ -220,11 +219,10 @@ pub async fn run_intake_with_team(
                 agent.persona, STYLE_RULES
             );
 
-            let result = llm::chat_completion_with_tokens(
+            let result = llm::chat_completion(
                 &[LLMMessage { role: "user".into(), content: prompt }],
                 Some(&system),
                 None,
-        8192,
             ).await;
 
             let content = match result {
@@ -289,11 +287,10 @@ pub async fn run_intake_with_team(
         po.persona, STYLE_RULES
     );
 
-    let synthesis = llm::chat_completion_with_tokens(
+    let synthesis = llm::chat_completion(
         &[LLMMessage { role: "user".into(), content: po_synthesis_prompt }],
         Some(&po_system),
         None,
-        8192,
     ).await?;
 
     let po_content = strip_emoji(&synthesis.content.unwrap_or_default());
@@ -558,11 +555,10 @@ async fn run_network(
         leader.persona, protocols::protocol_for_role(&leader.role, phase), STYLE_RULES
     );
 
-    let leader_result = llm::chat_completion_with_tokens(
+    let leader_result = llm::chat_completion(
         &[LLMMessage { role: "user".into(), content: leader_prompt }],
         Some(&leader_system),
         None,
-        8192,
     ).await?;
     let leader_content = strip_emoji(&leader_result.content.unwrap_or_default());
     let other_ids: Vec<&str> = debaters.iter().map(|a| a.id.as_str()).collect();
@@ -599,11 +595,10 @@ async fn run_network(
                 agent.persona, protocols::protocol_for_role(&agent.role, phase), STYLE_RULES
             );
 
-            let result = llm::chat_completion_with_tokens(
+            let result = llm::chat_completion(
                 &[LLMMessage { role: "user".into(), content: prompt }],
                 Some(&system),
                 None,
-        8192,
             ).await;
 
             let content = match result {
@@ -645,11 +640,10 @@ async fn run_network(
         phase, prev_round
     );
 
-    let synthesis = llm::chat_completion_with_tokens(
+    let synthesis = llm::chat_completion(
         &[LLMMessage { role: "user".into(), content: synthesis_prompt }],
         Some(&format!("{}\n\n{}\n\n{}", leader.persona, protocols::protocol_for_role(&leader.role, phase), STYLE_RULES)),
         None,
-        8192,
     ).await?;
     let synthesis_content = strip_emoji(&synthesis.content.unwrap_or_default());
     let all_ids: Vec<&str> = agents_data.iter().map(|a| a.id.as_str()).collect();

@@ -3,6 +3,8 @@ use crate::tools;
 use crate::db;
 use serde_json::Value;
 use rusqlite::params;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// No artificial round limit — agents run until they produce a text response (#2)
 /// Safety: if an agent truly loops, the LLM will eventually stop producing tool_calls.
@@ -15,10 +17,11 @@ pub enum AgentEvent {
     ToolCall { tool: String, args: String },
     ToolResult { tool: String, result: String },
     Response { content: String },
+    ResponseChunk { content: String },
     Error { message: String },
 }
 
-pub type EventCallback = Box<dyn Fn(&str, AgentEvent) + Send + Sync>;
+pub type EventCallback = Arc<dyn Fn(&str, AgentEvent) + Send + Sync>;
 
 /// Run one agent through the tool-calling loop.
 /// Accepts optional protocol injected into system prompt.
@@ -63,11 +66,21 @@ pub async fn run_agent(
     for _round in 0..MAX_ROUNDS {
         on_event(agent_id, AgentEvent::Thinking);
 
-        let resp = llm::chat_completion_with_tokens(
+        // Build a streaming chunk callback that emits ResponseChunk events
+        let agent_id_owned = agent_id.to_string();
+        let on_event_clone = on_event.clone();
+        let chunked = Arc::new(AtomicBool::new(false));
+        let chunked_clone = chunked.clone();
+        let chunk_cb: llm::OnChunkFn = Box::new(move |chunk: &str| {
+            chunked_clone.store(true, Ordering::Relaxed);
+            on_event_clone(&agent_id_owned, AgentEvent::ResponseChunk { content: chunk.to_string() });
+        });
+
+        let resp = llm::chat_completion_streaming(
             &messages,
             Some(&system),
             if tool_schemas.is_empty() { None } else { Some(&tool_schemas) },
-            max_tokens,
+            chunk_cb,
         ).await?;
 
         if !resp.tool_calls.is_empty() {
@@ -115,7 +128,10 @@ pub async fn run_agent(
         }
 
         if let Some(content) = resp.content {
-            on_event(agent_id, AgentEvent::Response { content: content.clone() });
+            // Only emit Response if streaming didn't already deliver the content
+            if !chunked.load(Ordering::Relaxed) {
+                on_event(agent_id, AgentEvent::Response { content: content.clone() });
+            }
 
             if let Err(e) = db::with_db(|conn| {
                 conn.execute(
