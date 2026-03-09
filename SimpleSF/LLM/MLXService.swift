@@ -200,7 +200,7 @@ final class MLXService: ObservableObject {
         do {
             try proc.run()
             process = proc
-            // Poll for server readiness
+            // Poll for server readiness, then auto-configure LLM
             Task {
                 var ready = false
                 for _ in 0..<30 {
@@ -216,7 +216,10 @@ final class MLXService: ObservableObject {
                     state = .running(pid: proc.processIdentifier)
                 } else {
                     state = .error("Server failed to start")
+                    return
                 }
+                // Re-sync LLM config now that MLX is confirmed running
+                SFBridge.shared.syncLLMConfig()
             }
         } catch {
             state = .error(error.localizedDescription)

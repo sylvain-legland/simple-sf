@@ -319,11 +319,11 @@ final class SFBridge: ObservableObject {
             let model = state.selectedModel.isEmpty ? provider.defaultModel : state.selectedModel
             switch provider {
             case .mlx:
-                if MLXService.shared.isRunning {
-                    configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
-                                 model: MLXService.shared.activeModel?.name ?? model)
-                    return
-                }
+                // Trust user selection — configure MLX even if not confirmed running yet.
+                // If server is down, Rust fails fast with connection-refused.
+                configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
+                             model: MLXService.shared.activeModel?.name ?? model)
+                return
             case .ollama:
                 if OllamaService.shared.isRunning, let m = OllamaService.shared.activeModel {
                     configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: OllamaService.shared.openaiBaseURL,
@@ -366,11 +366,9 @@ final class SFBridge: ObservableObject {
             switch provider {
             case .mlx:
                 let svc = MLXService.shared
-                if svc.isRunning {
-                    configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: svc.baseURL,
-                                 model: svc.activeModel?.name ?? model)
-                    return
-                }
+                configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: svc.baseURL,
+                             model: svc.activeModel?.name ?? model)
+                return
             case .ollama:
                 let svc = OllamaService.shared
                 if svc.isRunning, let m = svc.activeModel {
