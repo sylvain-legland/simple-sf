@@ -309,6 +309,10 @@ struct ProjectAccordion: View {
     private var isPaused: Bool { project.status == .paused }
     private var isQueued: Bool { project.status == .planning }
     private var isDone: Bool { project.status == .done }
+    /// True when a workflow/mission has been started (or project has progressed beyond idea)
+    private var hasWorkflow: Bool {
+        project.missionId != nil || project.status != .idea
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -385,46 +389,58 @@ struct ProjectAccordion: View {
                     .padding(.leading, 24)
             }
 
-            // Progress bar
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: "flowchart.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(SF.Colors.purple.opacity(0.7))
-                    Text("Cycle de Vie Produit Complet")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(SF.Colors.textSecondary)
-                    Spacer()
-                    Text("\(activePhase)/14 phases")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(SF.Colors.textSecondary)
-                }
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(SF.Colors.bgTertiary)
-                            .frame(height: 6)
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(isDone ? SF.Colors.success : SF.Colors.purple)
-                            .frame(width: geo.size.width * CGFloat(activePhase) / 14.0, height: 6)
+            // Progress bar + Phase timeline — only when a workflow has been started
+            if hasWorkflow {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "flowchart.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(SF.Colors.purple.opacity(0.7))
+                        Text("Cycle de Vie Produit Complet")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(SF.Colors.textSecondary)
+                        Spacer()
+                        Text("\(activePhase)/14 phases")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(SF.Colors.textSecondary)
                     }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(SF.Colors.bgTertiary)
+                                .frame(height: 6)
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(isDone ? SF.Colors.success : SF.Colors.purple)
+                                .frame(width: geo.size.width * CGFloat(activePhase) / 14.0, height: 6)
+                        }
+                    }
+                    .frame(height: 6)
                 }
-                .frame(height: 6)
-            }
-            .padding(.leading, 24)
-
-            // Phase timeline (always visible — clickable when expanded)
-            if isExpanded {
-                ClickablePhaseTimeline(
-                    activePhase: activePhase,
-                    projectDone: isDone,
-                    selectedIndex: $selectedPhaseIndex,
-                    phases: missionStatus?.phases ?? simulatedPhases()
-                )
                 .padding(.leading, 24)
-            } else {
-                MiniPhaseTimeline(activePhase: activePhase, projectDone: isDone)
+
+                // Phase timeline (always visible — clickable when expanded)
+                if isExpanded {
+                    ClickablePhaseTimeline(
+                        activePhase: activePhase,
+                        projectDone: isDone,
+                        selectedIndex: $selectedPhaseIndex,
+                        phases: missionStatus?.phases ?? simulatedPhases()
+                    )
                     .padding(.leading, 24)
+                } else {
+                    MiniPhaseTimeline(activePhase: activePhase, projectDone: isDone)
+                        .padding(.leading, 24)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 11))
+                        .foregroundColor(SF.Colors.textMuted.opacity(0.5))
+                    Text("Workflow non défini — lancez le projet pour que le PM décide du cycle de vie")
+                        .font(.system(size: 11))
+                        .foregroundColor(SF.Colors.textMuted)
+                }
+                .padding(.leading, 24)
             }
         }
         .padding(16)
@@ -454,6 +470,9 @@ struct ProjectAccordion: View {
     private var conversationFeed: some View {
         if !projectEvents.isEmpty {
             liveEventsFeed
+        } else if !bridge.events.isEmpty && bridge.currentProjectId == project.id {
+            // Fallback: global events belong to this project (e.g. after restart)
+            globalEventsFeed
         } else if let msgs = missionStatus?.messages, !msgs.isEmpty {
             missionMessagesFeed(msgs)
         } else {
@@ -687,17 +706,25 @@ struct ProjectAccordion: View {
     }
 
     private var liveEventsFeed: some View {
+        eventScrollFeed(events: projectEvents)
+    }
+
+    private var globalEventsFeed: some View {
+        eventScrollFeed(events: bridge.events)
+    }
+
+    private func eventScrollFeed(events feedEvents: [SFBridge.AgentEvent]) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
-                    ForEach(projectEvents) { event in
+                    ForEach(feedEvents) { event in
                         eventRow(event).id(event.id)
                     }
                 }
                 .padding(16)
             }
-            .onChange(of: projectEvents.count) { _, _ in
-                if let last = projectEvents.last {
+            .onChange(of: feedEvents.count) { _, _ in
+                if let last = feedEvents.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
