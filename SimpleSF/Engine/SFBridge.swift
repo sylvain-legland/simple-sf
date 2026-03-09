@@ -728,6 +728,8 @@ final class SFBridge: ObservableObject {
             case "discuss_reasoning":
                 self.isReasoning = (data == "start")
             case "discuss_response":
+                self.discussionEvents.removeAll { $0.agentId == agentId && $0.eventType == "discuss_thinking" }
+                self.isReasoning = false
                 let event = AgentEvent.fromDiscussJSON(agentId: agentId, eventType: eventType, json: data)
                 self.discussionEvents.append(event)
             case "discuss_chunk":
@@ -794,6 +796,15 @@ final class SFBridge: ObservableObject {
                     event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 }
 
+                // Clear thinking spinners when a substantive event arrives for this agent
+                if eventType == "response" || eventType == "tool_call" {
+                    self.events.removeAll { $0.agentId == agentId && $0.eventType == "thinking" }
+                    if let pid = self.currentProjectId {
+                        self.projectEvents[pid, default: []].removeAll { $0.agentId == agentId && $0.eventType == "thinking" }
+                    }
+                    self.isReasoning = false
+                }
+
                 if agentId == "engine" && data.hasPrefix("---") {
                     self.ideationEvents.append(event)
                 } else {
@@ -806,12 +817,17 @@ final class SFBridge: ObservableObject {
         }
     }
 
-    /// Append a streaming chunk to the last event from this agent, or create a new one
+    /// Append a streaming chunk to the last event from this agent, or create a new one.
+    /// On first chunk, removes any thinking/reasoning indicators for this agent.
     @MainActor
     private func _appendChunk(agentId: String, chunk: String, to events: inout [AgentEvent], eventType: String) {
         if let idx = events.lastIndex(where: { $0.agentId == agentId && $0.eventType == eventType }) {
             events[idx].data += chunk
         } else {
+            // First chunk for this agent — remove stale thinking spinners
+            events.removeAll { $0.agentId == agentId && ($0.eventType == "thinking" || $0.eventType == "discuss_thinking") }
+            self.isReasoning = false
+
             var event = AgentEvent(agentId: agentId, eventType: eventType, data: chunk)
             if let info = self.agentInfo(agentId) {
                 event.agentName = info.name
