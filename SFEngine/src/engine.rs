@@ -313,7 +313,13 @@ pub async fn run_mission(
     let mut phase_outputs: Vec<String> = Vec::new();
     let mut vetoed = false;
 
-    for (phase_name, pattern, agent_ids) in &owned_phases {
+    for (phase_name, pattern, raw_agent_ids) in &owned_phases {
+        // Auto-assign agents when the workflow phase has none
+        let agent_ids: &Vec<String> = if raw_agent_ids.is_empty() {
+            &auto_assign_agents(phase_name)
+        } else {
+            raw_agent_ids
+        };
         if vetoed {
             on_event("engine", AgentEvent::Response {
                 content: format!("⚠️ Phase {} skipped — previous phase vetoed", phase_name),
@@ -390,6 +396,15 @@ pub async fn run_mission(
     }
 
     let final_status = if vetoed { "vetoed" } else { "completed" };
+    let completed_count = phase_outputs.len();
+    let total_count = owned_phases.len();
+    on_event("engine", AgentEvent::Response {
+        content: format!(
+            "── Mission {} ── {}/{} phases completees ──",
+            if vetoed { "VETOED" } else { "TERMINEE" },
+            completed_count, total_count
+        ),
+    });
     db::with_db(|conn| {
         conn.execute(
             "UPDATE missions SET status = ?1, updated_at = datetime('now') WHERE id = ?2",
@@ -631,6 +646,37 @@ async fn run_parallel(
 // ──────────────────────────────────────────
 // Phase Gates (Go/No-Go)
 // ──────────────────────────────────────────
+
+/// Auto-assign agents based on phase name when workflow provides none.
+fn auto_assign_agents(phase_name: &str) -> Vec<String> {
+    let lower = phase_name.to_lowercase();
+    let ids: &[&str] = if lower.contains("idéation") || lower.contains("ideation") || lower.contains("vision") {
+        &["rte", "product"]
+    } else if lower.contains("stratégi") || lower.contains("strategi") || lower.contains("comité") || lower.contains("committee") {
+        &["rte", "product"]
+    } else if lower.contains("constitution") || lower.contains("setup") {
+        &["rte", "product"]
+    } else if lower.contains("architect") || lower.contains("design") && !lower.contains("system") {
+        &["system-architect-art", "rte"]
+    } else if lower.contains("design sys") || lower.contains("token") || lower.contains("ui") {
+        &["system-architect-art", "product"]
+    } else if lower.contains("sprint") || lower.contains("dev") || lower.contains("développement") {
+        &["worker", "code-critic"]
+    } else if lower.contains("build") || lower.contains("verify") || lower.contains("ci") || lower.contains("pipeline") {
+        &["devops", "worker"]
+    } else if lower.contains("revue") || lower.contains("review") || lower.contains("conformité") {
+        &["code-critic", "product"]
+    } else if lower.contains("test") || lower.contains("qa") || lower.contains("campagne") {
+        &["tester", "code-critic"]
+    } else if lower.contains("deploy") || lower.contains("production") || lower.contains("release") {
+        &["devops", "rte"]
+    } else if lower.contains("incident") || lower.contains("tma") || lower.contains("maintenance") || lower.contains("correctif") {
+        &["devops", "tester"]
+    } else {
+        &["rte", "product"]
+    };
+    ids.iter().map(|s| s.to_string()).collect()
+}
 
 /// Detect raw veto/approve signals in phase output (no YOLO override).
 fn check_gate_raw(output: &str) -> String {
