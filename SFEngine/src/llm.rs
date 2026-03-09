@@ -146,7 +146,7 @@ async fn chat_completion_inner(
         "model": config.model,
         "messages": msgs,
         "temperature": 0.7,
-        "max_tokens": 16384,
+        "max_tokens": 32768,
         "stream": true,
     });
 
