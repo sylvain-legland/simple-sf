@@ -795,24 +795,54 @@ struct ProjectAccordion: View {
         eventScrollFeed(events: bridge.events)
     }
 
+    /// Pre-process events: collapse tool_call/tool_result into compact groups,
+    /// filter out thinking events (shown inline), count only substantive messages.
+    private struct DisplayItem: Identifiable {
+        let id: String
+        enum Kind {
+            case message(SFBridge.AgentEvent)
+            case toolGroup([SFBridge.AgentEvent])
+        }
+        let kind: Kind
+    }
+
+    private func buildDisplayItems(_ raw: [SFBridge.AgentEvent]) -> [DisplayItem] {
+        var items: [DisplayItem] = []
+        var pendingTools: [SFBridge.AgentEvent] = []
+
+        func flushTools() {
+            guard !pendingTools.isEmpty else { return }
+            let id = pendingTools.first!.id.uuidString
+            items.append(DisplayItem(id: "tg-\(id)", kind: .toolGroup(pendingTools)))
+            pendingTools = []
+        }
+
+        for event in raw {
+            if event.eventType == "tool_call" || event.eventType == "tool_result" {
+                pendingTools.append(event)
+            } else {
+                flushTools()
+                items.append(DisplayItem(id: event.id.uuidString, kind: .message(event)))
+            }
+        }
+        flushTools()
+        return items
+    }
+
     private func eventScrollFeed(events feedEvents: [SFBridge.AgentEvent]) -> some View {
-        // Determine current pattern from active phase
-        let currentPattern: String? = {
-            let phases = displayPhases
-            if let running = phases.first(where: { $0.status == "running" }) { return running.pattern }
-            return phases.first?.pattern
-        }()
+        let displayItems = buildDisplayItems(feedEvents)
+        let messageCount = feedEvents.filter { $0.eventType == "response" || $0.eventType == "discuss_response" }.count
 
         return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
                     // Pattern header
-                    if let pattern = currentPattern, !pattern.isEmpty {
+                    if let pat = currentPhasePattern, !pat.isEmpty {
                         HStack(spacing: 6) {
-                            PatternBadge(pattern: pattern)
+                            PatternBadge(pattern: pat)
                             Text("·")
                                 .foregroundColor(SF.Colors.textMuted)
-                            Text("\(feedEvents.count) messages")
+                            Text("\(messageCount) messages")
                                 .font(.system(size: 10))
                                 .foregroundColor(SF.Colors.textMuted)
                             Spacer()
@@ -820,12 +850,18 @@ struct ProjectAccordion: View {
                         .padding(.bottom, 4)
                     }
 
-                    ForEach(feedEvents) { event in
-                        eventRow(event, isLast: event.id == feedEvents.last?.id)
-                            .id(event.id)
+                    ForEach(displayItems) { item in
+                        switch item.kind {
+                        case .message(let event):
+                            eventRow(event, isLast: item.id == displayItems.last?.id && !(isActive && bridge.isRunning))
+                                .id(item.id)
+                        case .toolGroup(let tools):
+                            toolBadgeRow(tools)
+                                .id(item.id)
+                        }
                     }
 
-                    // Streaming indicator at the bottom
+                    // Streaming indicator — only when truly active
                     if isActive && bridge.isRunning {
                         streamingIndicator.id("streaming-tail")
                     }
@@ -836,7 +872,7 @@ struct ProjectAccordion: View {
                 withAnimation {
                     if isActive && bridge.isRunning {
                         proxy.scrollTo("streaming-tail", anchor: .bottom)
-                    } else if let last = feedEvents.last {
+                    } else if let last = displayItems.last {
                         proxy.scrollTo(last.id, anchor: .bottom)
                     }
                 }
@@ -857,6 +893,66 @@ struct ProjectAccordion: View {
         .padding(10)
         .background(SF.Colors.purple.opacity(0.06))
         .cornerRadius(6)
+    }
+
+    /// Compact inline badges for tool_call / tool_result groups
+    private func toolBadgeRow(_ tools: [SFBridge.AgentEvent]) -> some View {
+        let badges: [(icon: String, label: String)] = tools.compactMap { event in
+            let raw = event.data
+            // tool_call format: "tool_name|args"  tool_result format: "tool_name|result"
+            let toolName = raw.components(separatedBy: "|").first?.trimmingCharacters(in: .whitespaces) ?? raw
+            let shortName = toolName
+                .replacingOccurrences(of: "code_", with: "")
+                .replacingOccurrences(of: "file_", with: "")
+                .replacingOccurrences(of: "memory_", with: "mem:")
+                .replacingOccurrences(of: "git_", with: "git:")
+                .replacingOccurrences(of: "deep_", with: "")
+                .replacingOccurrences(of: "list_", with: "ls:")
+
+            let icon: String
+            if event.eventType == "tool_call" {
+                switch true {
+                case toolName.contains("read"):   icon = "doc.text"
+                case toolName.contains("write"):  icon = "square.and.pencil"
+                case toolName.contains("edit"):   icon = "pencil"
+                case toolName.contains("search"): icon = "magnifyingglass"
+                case toolName.contains("list"):   icon = "list.bullet"
+                case toolName.contains("git"):    icon = "arrow.triangle.branch"
+                case toolName.contains("memory"): icon = "brain"
+                case toolName.contains("build"):  icon = "hammer"
+                case toolName.contains("test"):   icon = "checkmark.shield"
+                default:                           icon = "wrench"
+                }
+                return (icon, shortName)
+            }
+            return nil // skip tool_result (already shown via tool_call badge)
+        }
+
+        guard !badges.isEmpty else { return AnyView(EmptyView()) }
+
+        return AnyView(
+            HStack(spacing: 4) {
+                Image(systemName: "gearshape.2")
+                    .font(.system(size: 9))
+                    .foregroundColor(SF.Colors.textMuted)
+                ForEach(Array(badges.enumerated()), id: \.offset) { _, badge in
+                    HStack(spacing: 3) {
+                        Image(systemName: badge.icon)
+                            .font(.system(size: 9))
+                        Text(badge.label)
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    }
+                    .foregroundColor(SF.Colors.textSecondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(SF.Colors.bgTertiary)
+                    .cornerRadius(4)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+        )
     }
 
     private func eventRow(_ event: SFBridge.AgentEvent, isLast: Bool = false) -> some View {
