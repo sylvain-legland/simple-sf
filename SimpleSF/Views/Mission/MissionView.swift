@@ -345,7 +345,7 @@ struct MissionView: View {
                         }
                     } else {
                         ForEach(phaseMessages) { msg in
-                            phaseMessageCard(msg)
+                            phaseMessageCard(msg, pattern: phase.pattern, phaseAgentIds: phase.agent_ids)
                         }
                     }
 
@@ -373,9 +373,16 @@ struct MissionView: View {
         }
     }
 
-    private func phaseMessageCard(_ msg: SFBridge.MessageInfo) -> some View {
+    private func phaseMessageCard(_ msg: SFBridge.MessageInfo, pattern: String, phaseAgentIds: String) -> some View {
         let aid = msg.role
         let color = catalog.agentColor(aid)
+        let agentRole = catalog.agentRole(aid)
+        // Parse phase agent IDs to show recipients (other agents in the phase)
+        let recipients: [String] = {
+            guard let data = phaseAgentIds.data(using: .utf8),
+                  let arr = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+            return arr.filter { $0 != aid }
+        }()
 
         return HStack(alignment: .top, spacing: 0) {
             RoundedRectangle(cornerRadius: 2)
@@ -383,22 +390,53 @@ struct MissionView: View {
                 .frame(width: 3)
 
             HStack(alignment: .top, spacing: 12) {
-                AgentAvatarView(agentId: aid, size: 36)
+                AgentAvatarView(agentId: aid, size: 40)
                     .overlay(Circle().stroke(color.opacity(0.5), lineWidth: 2))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
+                    // Name + Role + Pattern
+                    HStack(spacing: 6) {
                         Text(msg.agent_name)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(color)
-                        Text(catalog.agentRole(aid))
-                            .font(.system(size: 11).italic())
-                            .foregroundColor(SF.Colors.textSecondary)
+                        if !agentRole.isEmpty {
+                            Text(agentRole)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(SF.Colors.textSecondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(color.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                        PatternBadge(pattern: pattern)
                         Spacer()
                         Text(msg.created_at.suffix(8))
                             .font(.system(size: 10))
                             .foregroundColor(SF.Colors.textMuted)
                     }
+
+                    // Recipients
+                    if !recipients.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 9))
+                                .foregroundColor(SF.Colors.textMuted)
+                            ForEach(recipients.prefix(4), id: \.self) { rid in
+                                HStack(spacing: 3) {
+                                    AgentAvatarView(agentId: rid, size: 16)
+                                    Text(catalog.agentName(rid))
+                                        .font(.system(size: 10))
+                                        .foregroundColor(SF.Colors.textSecondary)
+                                }
+                            }
+                            if recipients.count > 4 {
+                                Text("+\(recipients.count - 4)")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(SF.Colors.textMuted)
+                            }
+                        }
+                    }
+
                     MarkdownView(msg.content, fontSize: 13)
                         .textSelection(.enabled)
                 }
@@ -436,20 +474,56 @@ struct MissionView: View {
 
     private func eventRow(_ event: SFBridge.AgentEvent) -> some View {
         let color = catalog.agentColor(event.agentId)
+        let agentRole = catalog.agentRole(event.agentId)
         return HStack(alignment: .top, spacing: 10) {
-            AgentAvatarView(agentId: event.agentId, size: 28)
-            VStack(alignment: .leading, spacing: 3) {
+            AgentAvatarView(agentId: event.agentId, size: 32)
+                .overlay(Circle().stroke(color.opacity(0.4), lineWidth: 1.5))
+            VStack(alignment: .leading, spacing: 4) {
+                // Name + role + event type
                 HStack(spacing: 6) {
                     Text(catalog.agentName(event.agentId))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(color)
-                    Text(eventLabel(event.eventType))
-                        .font(.system(size: 11))
-                        .foregroundColor(SF.Colors.textMuted)
+                    if !agentRole.isEmpty {
+                        Text(agentRole)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(SF.Colors.textSecondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(color.opacity(0.1))
+                            .cornerRadius(3)
+                    }
+                    if !event.messageType.isEmpty && event.messageType != "response" {
+                        Text(event.messageType)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(messageTypeColor(event.messageType))
+                            .cornerRadius(3)
+                    }
                     Spacer()
                     Text(event.timestamp, style: .time)
                         .font(.system(size: 10))
                         .foregroundColor(SF.Colors.textMuted)
+                }
+                // Recipients
+                if !event.toAgents.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 8))
+                            .foregroundColor(SF.Colors.textMuted)
+                        ForEach(event.toAgents.prefix(3), id: \.self) { rid in
+                            Text(catalog.agentName(rid))
+                                .font(.system(size: 10))
+                                .foregroundColor(SF.Colors.textSecondary)
+                        }
+                        if event.toAgents.count > 3 {
+                            Text("+\(event.toAgents.count - 3)")
+                                .font(.system(size: 9))
+                                .foregroundColor(SF.Colors.textMuted)
+                        }
+                    }
                 }
                 if !event.data.isEmpty && event.eventType != "thinking" {
                     MarkdownView(String(event.data.prefix(600)), fontSize: 12)
@@ -459,6 +533,16 @@ struct MissionView: View {
         .padding(10)
         .background(SF.Colors.bgCard)
         .cornerRadius(8)
+    }
+
+    private func messageTypeColor(_ type: String) -> Color {
+        switch type {
+        case "instruction", "delegation": return SF.Colors.yellowDeep
+        case "approval":                  return SF.Colors.success
+        case "veto":                      return SF.Colors.error
+        case "synthesis":                 return SF.Colors.po
+        default:                          return SF.Colors.textMuted
+        }
     }
 
     // MARK: - Helpers

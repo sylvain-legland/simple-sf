@@ -1,5 +1,34 @@
 import SwiftUI
 
+// MARK: - Pilot Projects (AC validation — matches SF legacy)
+
+private let pilotProjects: [(name: String, tech: String, description: String)] = [
+    ("Design System WCAG AA",
+     "React, TypeScript, CSS",
+     "30+ composants React TypeScript accessibles, design tokens CSS, documentation Storybook"),
+    ("SDK Mobile Universel",
+     "React Native, Expo, TypeScript",
+     "Composants UI cross-platform, auth biometric, navigation, state management"),
+    ("Plateforme ML Distribuée",
+     "Python, PyTorch, FastAPI",
+     "Training multi-worker, hyperparameter tuning, model registry, serving API REST"),
+    ("Orchestrateur Workflows Data",
+     "Python, Airflow, React",
+     "DAG visual, scheduling CRON, retry logic, monitoring temps réel, connecteurs"),
+    ("Marketplace SaaS Multi-Tenant",
+     "Node.js, Next.js, PostgreSQL",
+     "Multi-tenancy, billing Stripe, RBAC, API REST + GraphQL, dashboard analytics"),
+    ("Migration Angular → React",
+     "TypeScript, Angular, React",
+     "Migration progressive 50+ composants Angular 14 vers React 18 avec feature parity"),
+    ("Jeu Pac-Man macOS Natif",
+     "Swift, SwiftUI, SpriteKit",
+     "Pac-Man native macOS avec SpriteKit, niveaux, IA fantômes, scores persistants"),
+    ("API Gateway Rust",
+     "Rust, Tokio, gRPC",
+     "Reverse proxy haute performance, rate limiting, auth JWT, observabilité OpenTelemetry"),
+]
+
 // MARK: - 14-phase SAFe product lifecycle (matches SF legacy Value Stream)
 
 private let safePhases: [(name: String, short: String, pattern: String)] = [
@@ -85,23 +114,144 @@ struct ProjectsView: View {
 
             Divider().background(SF.Colors.border).padding(.top, 10)
 
-            if store.projects.isEmpty {
-                emptyState
-            } else {
-                projectList
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    if !store.projects.isEmpty {
+                        ForEach(filtered) { project in
+                            ProjectCard(project: project)
+                        }
+                    } else {
+                        emptyState
+                    }
+                }
+                .padding(24)
+
+                // Pilot projects section
+                pilotSection
             }
         }
         .background(SF.Colors.bgPrimary)
     }
 
-    private var projectList: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(filtered) { project in
-                    ProjectCard(project: project)
+    // MARK: - Pilot Projects Section
+
+    private var pilotSection: some View {
+        VStack(spacing: 0) {
+            Divider().background(SF.Colors.border)
+
+            HStack(spacing: 10) {
+                Image(systemName: "flag.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(SF.Colors.accent)
+                Text("Projets Pilotes")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(SF.Colors.textPrimary)
+                Text("AC validation")
+                    .font(.system(size: 11))
+                    .foregroundColor(SF.Colors.textMuted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(SF.Colors.accent.opacity(0.15))
+                    .cornerRadius(4)
+                Spacer()
+                Button {
+                    loadPilotProjects()
+                } label: {
+                    Label("Charger", systemImage: "plus.circle.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(SF.Colors.purple)
                 }
+                .buttonStyle(.plain)
+
+                Button {
+                    resetPilotProjects()
+                } label: {
+                    Label("Réinitialiser", systemImage: "arrow.counterclockwise")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(SF.Colors.error)
+                }
+                .buttonStyle(.plain)
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+
+            let pilots = store.projects.filter { p in
+                pilotProjects.contains { $0.name == p.name }
+            }
+            if !pilots.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(pilots) { project in
+                            pilotCard(project)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(SF.Colors.textMuted)
+                    Text("Cliquez \"Charger\" pour importer les 8 projets pilotes")
+                        .font(.system(size: 12))
+                        .foregroundColor(SF.Colors.textMuted)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+            }
+        }
+    }
+
+    private func pilotCard(_ project: Project) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(project.name)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(SF.Colors.textPrimary)
+                .lineLimit(1)
+            Text(project.tech)
+                .font(.system(size: 10))
+                .foregroundColor(SF.Colors.purple)
+                .lineLimit(1)
+            Text(project.description)
+                .font(.system(size: 10))
+                .foregroundColor(SF.Colors.textSecondary)
+                .lineLimit(2)
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color(hex: UInt(project.status.color.dropFirst(), radix: 16) ?? 0x6366f1))
+                    .frame(width: 6, height: 6)
+                Text(project.status.displayName)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(SF.Colors.textMuted)
+            }
+        }
+        .frame(width: 180)
+        .padding(12)
+        .background(SF.Colors.bgCard)
+        .cornerRadius(SF.Radius.md)
+        .overlay(RoundedRectangle(cornerRadius: SF.Radius.md).stroke(SF.Colors.border, lineWidth: 0.5))
+    }
+
+    private func loadPilotProjects() {
+        for pilot in pilotProjects {
+            let exists = store.projects.contains { $0.name == pilot.name }
+            if !exists {
+                let project = Project(
+                    name: pilot.name,
+                    description: pilot.description,
+                    tech: pilot.tech,
+                    status: .idea
+                )
+                store.add(project)
+            }
+        }
+    }
+
+    private func resetPilotProjects() {
+        let pilotNames = Set(pilotProjects.map(\.name))
+        let toDelete = store.projects.filter { pilotNames.contains($0.name) }
+        for p in toDelete {
+            store.delete(p.id)
         }
     }
 
