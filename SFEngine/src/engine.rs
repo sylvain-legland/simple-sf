@@ -5,6 +5,7 @@ use crate::catalog;
 use crate::db;
 use crate::llm::{self, LLMMessage};
 use crate::protocols;
+use crate::tools;
 use rusqlite::params;
 use uuid::Uuid;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -339,6 +340,15 @@ pub async fn run_mission(
         SAFE_PHASES.iter().map(|(n, p, a)| (n.to_string(), p.to_string(), a.iter().map(|s| s.to_string()).collect())).collect()
     };
 
+    // ── Memory system: load project files at mission start ──
+    let project_id = std::path::Path::new(workspace)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("");
+    if !project_id.is_empty() {
+        tools::load_project_files(workspace, project_id);
+    }
+
     let mut phase_outputs: Vec<String> = Vec::new();
     let mut vetoed = false;
 
@@ -401,6 +411,19 @@ pub async fn run_mission(
                 }
 
                 phase_outputs.push(format!("[{}] {}", phase_name, output));
+
+                // ── Memory: auto-store phase output ──
+                if !project_id.is_empty() {
+                    let mem_key = format!("phase-output-{}", phase_name);
+                    let mem_val = if output.len() > 2000 { &output[..2000] } else { &output };
+                    let _ = crate::db::with_db(|conn| {
+                        conn.execute(
+                            "INSERT OR REPLACE INTO memory (key, value, category, project_id, created_at) \
+                             VALUES (?1, ?2, 'phase_output', ?3, datetime('now'))",
+                            params![&mem_key, mem_val, project_id],
+                        )
+                    });
+                }
                 if let Err(e) = db::with_db(|conn| {
                     conn.execute(
                         "UPDATE mission_phases SET status = ?1, output = ?2, gate_result = ?3, completed_at = datetime('now') WHERE id = ?4",
@@ -451,6 +474,11 @@ pub async fn run_mission(
         )
     }) {
         eprintln!("[db] Failed to update mission final status: {}", e);
+    }
+
+    // ── Memory: compact on mission complete ──
+    if !project_id.is_empty() {
+        tools::compact_memory(project_id);
     }
 
     Ok(())

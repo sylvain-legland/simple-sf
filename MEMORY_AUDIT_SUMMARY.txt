@@ -1,0 +1,419 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                       MEMORY SYSTEM AUDIT SUMMARY                             ║
+║                            simple-sf PROJECT                                   ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+AUDIT DATE: March 2024
+FULL REPORT: MEMORY_AUDIT_REPORT.md (436 lines)
+PROJECT: /Users/sylvain/_MACARON-SOFTWARE/simple-sf
+PLATFORM: /Users/sylvain/_MACARON-SOFTWARE/_SOFTWARE_FACTORY/platform
+
+════════════════════════════════════════════════════════════════════════════════════
+
+EXECUTIVE SUMMARY
+
+Current Implementation:    BASIC 2-LAYER MEMORY
+Platform Target:          4-LAYER MEMORY SYSTEM
+Feature Gap:              ~60% missing or broken
+Risk Level:               MEDIUM (scoping is broken)
+Effort to Fix Critical:   2-3 days
+
+════════════════════════════════════════════════════════════════════════════════════
+
+MEMORY MODULES FOUND
+
+✅ SFEngine/src/db.rs          — Memory table schema (lines 116-123)
+✅ SFEngine/src/tools.rs       — memory_search, memory_store (lines 607-659)
+✅ SFEngine/src/executor.rs    — Agent system prompt (lines 56-59)
+✅ SFEngine/src/engine.rs      — Conversation history (lines 1004-1044)
+
+❌ No dedicated memory.rs module
+❌ No vector/embedding layer
+❌ No FTS5 indexing
+❌ No semantic search
+
+════════════════════════════════════════════════════════════════════════════════════
+
+WHAT'S WORKING ✅
+
+1. Basic persistence (memory table exists)
+2. Two memory tools (search, store)
+3. LIKE-based search on key, value, category
+4. Conversation history between phases
+5. Phase output context passed forward
+6. Memory categorization (decision/finding/note/context)
+7. Role-based tool access control
+
+════════════════════════════════════════════════════════════════════════════════════
+
+WHAT'S BROKEN 🔴 (CRITICAL - MUST FIX)
+
+ISSUE #1: project_id column EXISTS but UNUSED
+   Location: tools.rs:615-617 (SELECT query ignores project_id)
+   Problem:  Agent memory not actually scoped to projects
+   Risk:     Cross-project data leaks possible
+   Fix:      Change to agent_id, enforce filtering in queries
+   Severity: CRITICAL
+
+ISSUE #2: scope parameter IGNORED in memory_search
+   Location: tools.rs:609 (_scope variable declared but unused)
+   Problem:  Users can request scope but it's ignored
+   Example:  {"query": "...", "scope": "project"} → ignored
+   Fix:      Implement WHERE clause filtering by scope
+   Severity: CRITICAL
+
+ISSUE #3: No FTS5 indexing = slow performance at scale
+   Location: tools.rs:615 (uses LIKE %query%)
+   Problem:  LIKE search is O(n) complexity
+   Impact:   1000+ memory entries → noticeable slowdown
+   Fix:      CREATE VIRTUAL TABLE memory_fts USING fts5
+   Severity: HIGH
+
+ISSUE #4: No memory pruning tool
+   Location: N/A (not implemented)
+   Problem:  Memory table grows unbounded
+   Impact:   DB bloat over time
+   Fix:      Implement memory_prune tool with DELETE logic
+   Severity: HIGH
+
+════════════════════════════════════════════════════════════════════════════════════
+
+WHAT'S MISSING 🟡 (HIGH PRIORITY - SHOULD ADD)
+
+FEATURE #1: memory_retrieve tool (exact key lookup)
+   Platform: ✅ Has exact key retrieval
+   simple-sf: ❌ Can only search, not retrieve exact keys
+   Impact:   Agents can't efficiently fetch known keys
+   Fix:      Add memory_retrieve tool with exact match query
+   Days:     0.5
+
+FEATURE #2: Importance weighting
+   Platform: ✅ Stores importance (0.0-1.0), ranks by it
+   simple-sf: ❌ All entries treated equally
+   Impact:   Important memories not prioritized
+   Fix:      Add importance column, weight search results
+   Days:     0.5
+
+FEATURE #3: Full-text search ranking
+   Platform: ✅ FTS5 rank() function for relevance
+   simple-sf: ❌ Only LIKE (all results unranked)
+   Impact:   Good results buried in list
+   Fix:      Use FTS5 ranking when implemented
+   Days:     1 (after FTS5 added)
+
+FEATURE #4: Auto-memory injection into system prompt
+   Platform: ✅ Injects relevant memory into prompt
+   simple-sf: ❌ Agents must manually call memory_search
+   Impact:   Memory is less discoverable
+   Fix:      Auto-call memory_search in executor
+   Days:     1
+
+FEATURE #5: Memory-to-phase linking
+   Platform: ✅ Track which memory relevant to which phase
+   simple-sf: ❌ No connection between memory and mission_phases
+   Impact:   Can't trace memory lifecycle
+   Fix:      Create mission_phase_memory junction table
+   Days:     1
+
+════════════════════════════════════════════════════════════════════════════════════
+
+DATABASE SCHEMA ANALYSIS
+
+Current (SFEngine/src/db.rs:116-123):
+   CREATE TABLE memory (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       key TEXT NOT NULL,
+       value TEXT NOT NULL,
+       category TEXT DEFAULT 'note',
+       project_id TEXT,              ⚠️ UNUSED!
+       created_at TEXT DEFAULT (now)
+   );
+
+Problems:
+   ❌ No agent_id isolation
+   ❌ No importance weighting
+   ❌ No FTS5 indexing
+   ❌ No separate short-term vs long-term
+   ❌ project_id not enforced/filtered
+
+Platform reference (agents/memory.py):
+   ✅ agent_id isolation per entry
+   ✅ importance float (0.0-1.0)
+   ✅ FTS5 full-text search
+   ✅ Short-term in-memory buffer (separate)
+   ✅ Long-term persistent store (separate)
+
+════════════════════════════════════════════════════════════════════════════════════
+
+MEMORY TOOLS COMPARISON
+
+simple-sf Tools (2/4 = 50% coverage):
+
+   ✅ memory_search
+      File:       tools.rs:607-636
+      Method:     LIKE pattern matching (O(n))
+      Returns:    Last 20 matches (unsorted)
+      Issue:      scope parameter ignored
+      Issue:      No ranking
+
+   ✅ memory_store
+      File:       tools.rs:638-659
+      Parameters: key, value, category
+      Issue:      No importance weighting
+
+   ❌ memory_retrieve (missing)
+      Platform:   Exact key lookup (O(1))
+
+   ❌ memory_prune (missing)
+      Platform:   Delete obsolete entries
+
+Platform Tools (4/4 = 100%):
+
+   ✅ memory_search    (FTS5 ranked)
+   ✅ memory_store     (with importance)
+   ✅ memory_retrieve  (exact key)
+   ✅ memory_prune     (maintenance)
+
+════════════════════════════════════════════════════════════════════════════════════
+
+4-LAYER MEMORY ANALYSIS
+
+Layer 1: SHORT-TERM (STM)
+   Platform:  In-memory sliding window (50 items default)
+   simple-sf: discussion_sessions table (on-disk)
+   Status:    ⚠️  PARTIAL — Works but stored on disk, not in-memory
+
+Layer 2: LONG-TERM (LTM)
+   Platform:  SQLite FTS5 + PostgreSQL tsvector
+   simple-sf: Single memory table with LIKE search
+   Status:    ⚠️  PARTIAL — Works but no full-text indexing
+
+Layer 3: PROJECT MEMORY
+   Platform:  agent_id scoped + FTS5
+   simple-sf: project_id column exists but UNUSED in queries
+   Status:    ❌ BROKEN — Scoping doesn't work
+
+Layer 4: GLOBAL MEMORY
+   Platform:  Appears to share same table, global queries
+   simple-sf: Not found
+   Status:    ❌ MISSING
+
+Bonus: VECTOR EMBEDDINGS
+   Platform:  Not found in audit
+   simple-sf: Not found
+   Status:    ❌ MISSING (both systems)
+
+════════════════════════════════════════════════════════════════════════════════════
+
+AGENT EXECUTION FLOW
+
+Current simple-sf (SFEngine/src/executor.rs:56-59):
+
+   System Prompt Template:
+   "{persona}{protocol}\n\nYour task:\n{task}\n\nWorkspace: {workspace}"
+
+   What's injected:
+   ✅ agent_persona  (from catalog)
+   ✅ protocol        (phase-specific rules)
+   ✅ task            (phase task + prior outputs)
+   ✅ workspace       (working directory)
+
+   What's NOT injected:
+   ❌ Memory search results
+   ❌ Project context
+   ❌ Relevant findings/decisions
+
+   Result: Agents must manually call memory_search tool
+
+Platform approach (inferred):
+   ✅ Auto-injects relevant memory
+   ✅ Context summary injected
+   ✅ Memory proactively available
+
+════════════════════════════════════════════════════════════════════════════════════
+
+WORKFLOW MEMORY PERSISTENCE
+
+Conversation History Between Phases:
+
+   Location:  SFEngine/src/engine.rs:1004-1044
+   Function:  load_conversation_history(max_sessions, max_chars)
+
+   What works:
+   ✅ Loads last 3 discussion sessions (most recent first)
+   ✅ Injects into intake phase (lines 132-137)
+   ✅ Budget: 4000 chars max
+   ✅ Per-message limit: 400 chars
+
+   What's missing:
+   ❌ memory_search NOT called between phases
+   ❌ project_id in memory table NOT queried
+   ❌ No memory snapshots at phase boundaries
+   ❌ No agent-specific memory queries
+
+Phase Context:
+
+   Location:  SFEngine/src/engine.rs:803-815
+   Function:  build_phase_task()
+
+   What works:
+   ✅ Last 3 phase outputs included
+   ✅ 600 chars per phase limit
+   ✅ Context passed forward
+
+   What's missing:
+   ❌ Project memory (KV store) NOT consulted
+   ❌ No call to memory_search between phases
+   ❌ No accumulation of findings into memory
+
+════════════════════════════════════════════════════════════════════════════════════
+
+RECOMMENDATIONS (Priority Order)
+
+TIER 1: CRITICAL (Fix Broken) — 2-3 days
+
+   [ ] 1. Fix agent_id scoping
+       Location: db.rs, tools.rs
+       What:     Change project_id → agent_id
+       Why:      Currently broken, potential data leaks
+       Lines:    ~50 changes across 3 files
+
+   [ ] 2. Implement scope parameter filtering
+       Location: tools.rs:607-636
+       What:     Honor scope parameter (project/global/all)
+       Why:      Currently accepted but ignored
+       Lines:    ~30 additions
+
+   [ ] 3. Add FTS5 indexing
+       Location: db.rs + tools.rs
+       What:     Create virtual table, update queries
+       Why:      LIKE searches slow at scale
+       Lines:    ~100 additions
+
+   [ ] 4. Add memory_prune tool
+       Location: tools.rs
+       What:     Implement delete with time/pattern filters
+       Why:      Memory grows unbounded
+       Lines:    ~50 additions
+
+TIER 2: HIGH PRIORITY (Add Missing) — 1 day
+
+   [ ] 5. Add memory_retrieve tool
+       Location: tools.rs
+       What:     Exact key lookup
+       Lines:    ~30 additions
+
+   [ ] 6. Add importance weighting
+       Location: db.rs + tools.rs
+       What:     Store importance, weight results
+       Lines:    ~80 additions
+
+   [ ] 7. Auto-inject memory into prompts
+       Location: executor.rs
+       What:     Call memory_search before agent execution
+       Lines:    ~50 additions
+
+TIER 3: MEDIUM PRIORITY (Enhance) — 1 day
+
+   [ ] 8. Link memory to mission_phases
+       Location: db.rs + engine.rs
+       What:     Create junction table, snapshot memory
+       Lines:    ~100 additions
+
+TIER 4: LOW PRIORITY (Advanced) — 3-5 days + external service
+
+   [ ] 9. Vector embeddings
+       Location: New module
+       What:     Integrate with embedding service
+       Requires: External API
+
+   [ ] 10. Semantic search
+       Location: tools.rs + embedding layer
+       What:     Similarity-based queries
+
+   [ ] 11. Memory TTL/expiration
+       Location: db.rs + memory_prune
+       What:     Auto-delete old entries
+
+════════════════════════════════════════════════════════════════════════════════════
+
+KEY CODE LOCATIONS
+
+Database:
+   SFEngine/src/db.rs:116-123        — memory table schema
+
+Tools Implementation:
+   SFEngine/src/tools.rs:34-36       — tool dispatch
+   SFEngine/src/tools.rs:263-293     — tool schema definitions
+   SFEngine/src/tools.rs:607-636     — memory_search implementation
+   SFEngine/src/tools.rs:638-659     — memory_store implementation
+   SFEngine/src/tools.rs:299-316     — role-tool mapping
+
+Execution:
+   SFEngine/src/executor.rs:56-59    — system prompt template
+   SFEngine/src/executor.rs:87-93    — LLM call (no memory injection)
+
+Workflow:
+   SFEngine/src/engine.rs:132-137    — inject history into intake
+   SFEngine/src/engine.rs:1004-1044  — load_conversation_history()
+   SFEngine/src/engine.rs:384        — build_phase_task() call
+   SFEngine/src/engine.rs:803-815    — build_phase_task() definition
+
+════════════════════════════════════════════════════════════════════════════════════
+
+IMPACT ASSESSMENT
+
+Current State:
+   ✅ Basic memory works for small projects
+   ⚠️  Performance OK for <1000 memory entries
+   ❌ Scoping broken (project_id unused) — SECURITY RISK
+   ❌ Agents can't easily discover memory
+
+After Critical Fixes:
+   ✅ Fast FTS5-indexed search
+   ✅ Agent-isolated memory (agent_id)
+   ✅ Scoping works (project/global enforcement)
+   ✅ Memory pruning available
+   ✅ 80% platform feature parity
+
+After All Recommendations:
+   ✅ 90%+ platform feature parity (excluding vector search)
+   ✅ Auto-injected memory in prompts
+   ✅ Memory-phase linking
+   ✅ Production-ready system
+
+Estimated Effort:
+   Critical fixes:      ~500 lines code, 2-3 days
+   High priority:       ~200 lines code, 1 day
+   Medium priority:     ~300 lines code, 1 day
+   Low priority:        ~500 lines code, 3-5 days + external service
+
+════════════════════════════════════════════════════════════════════════════════════
+
+NEXT STEPS
+
+1. Read full report: MEMORY_AUDIT_REPORT.md (436 lines of detail)
+2. Review critical scoping issue (project_id vs agent_id)
+3. Plan implementation: Prioritize by tier above
+4. Implement in order: Tier 1 fixes are MUST-HAVE
+5. Test: Verify no cross-project memory leaks after scoping fix
+
+════════════════════════════════════════════════════════════════════════════════════
+
+CONCLUSION
+
+simple-sf has implemented a BASIC memory system that works for small projects.
+However, it's missing ~60% of platform capabilities and has critical scoping bugs.
+
+KEY FINDINGS:
+   ❌ Scoping broken (project_id unused) — potential data leaks
+   ❌ 50% of tools missing (retrieve, prune)
+   ❌ No full-text indexing (performance issue at scale)
+   ❌ No auto-memory injection (agents can't discover context)
+   ✅ Basic persistence works
+   ✅ Conversation history preserved
+
+PRIORITY: Fix scoping and FTS5 indexing FIRST (2-3 days).
+Then add missing tools and auto-injection (1 day).
+
+════════════════════════════════════════════════════════════════════════════════════

@@ -11,6 +11,13 @@ use std::time::Duration;
 
 /// Execute a tool call. Returns the result as a string.
 pub fn execute_tool(name: &str, args: &Value, workspace: &str) -> String {
+    // Extract project_id from workspace path (last segment)
+    let project_id = std::path::Path::new(workspace)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("")
+        .to_string();
+
     match name {
         // Code tools
         "code_write"  => tool_code_write(args, workspace),
@@ -31,9 +38,9 @@ pub fn execute_tool(name: &str, args: &Value, workspace: &str) -> String {
         "git_diff"          => tool_git_diff(args, workspace),
         "git_push"          => tool_git_push(args, workspace),
         "git_create_branch" => tool_git_create_branch(args, workspace),
-        // Memory tools
-        "memory_search" => tool_memory_search(args),
-        "memory_store"  => tool_memory_store(args),
+        // Memory tools (project-scoped)
+        "memory_search" => tool_memory_search(args, &project_id),
+        "memory_store"  => tool_memory_store(args, &project_id),
         _ => format!("Unknown tool: {}", name),
     }
 }
@@ -279,13 +286,14 @@ fn all_tool_schemas() -> HashMap<&'static str, Value> {
         "type": "function",
         "function": {
             "name": "memory_store",
-            "description": "Store a key-value pair in project memory for later retrieval.",
+            "description": "Store a key-value pair in memory. Use for decisions, findings, conventions. Upserts: same key updates existing entry.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "key": {"type": "string", "description": "Memory key (e.g. 'architecture-decision', 'api-design')"},
+                    "key": {"type": "string", "description": "Memory key (e.g. 'architecture-decision', 'tech-stack', 'api-design')"},
                     "value": {"type": "string", "description": "Content to store"},
-                    "category": {"type": "string", "description": "Category: 'decision', 'finding', 'note', 'context' (default: 'note')"}
+                    "category": {"type": "string", "description": "Category: 'decision', 'finding', 'convention', 'context' (default: 'note')"},
+                    "scope": {"type": "string", "description": "Scope: 'project' (default) or 'global'"}
                 },
                 "required": ["key", "value"]
             }
@@ -604,26 +612,36 @@ fn tool_git_create_branch(args: &Value, workspace: &str) -> String {
 
 // ── Memory Tools — persisted to SQLite (#4) ───────────────
 
-fn tool_memory_search(args: &Value) -> String {
+fn tool_memory_search(args: &Value, project_id: &str) -> String {
     let query = args["query"].as_str().unwrap_or("").to_lowercase();
-    let _scope = args["scope"].as_str().unwrap_or("all");
+    let scope = args["scope"].as_str().unwrap_or("project");
 
     crate::db::with_db(|conn| {
-        // Use LIKE for flexible matching across key, value, and category
         let pattern = format!("%{}%", query);
-        let mut stmt = conn.prepare(
-            "SELECT key, value, category FROM memory WHERE \
-             LOWER(key) LIKE ?1 OR LOWER(value) LIKE ?1 OR LOWER(category) LIKE ?1 \
-             ORDER BY created_at DESC LIMIT 20"
-        ).unwrap();
+        let sql = match scope {
+            "global" => "SELECT key, value, category, project_id FROM memory WHERE \
+                         (project_id IS NULL OR project_id = '') AND \
+                         (LOWER(key) LIKE ?1 OR LOWER(value) LIKE ?1 OR LOWER(category) LIKE ?1) \
+                         ORDER BY created_at DESC LIMIT 20".to_string(),
+            "all" => "SELECT key, value, category, project_id FROM memory WHERE \
+                      (LOWER(key) LIKE ?1 OR LOWER(value) LIKE ?1 OR LOWER(category) LIKE ?1) \
+                      ORDER BY created_at DESC LIMIT 20".to_string(),
+            _ => format!("SELECT key, value, category, project_id FROM memory WHERE \
+                          (project_id = '{}' OR project_id IS NULL) AND \
+                          (LOWER(key) LIKE ?1 OR LOWER(value) LIKE ?1 OR LOWER(category) LIKE ?1) \
+                          ORDER BY created_at DESC LIMIT 20", project_id),
+        };
 
+        let mut stmt = conn.prepare(&sql).unwrap();
         let results: Vec<String> = stmt.query_map(
             rusqlite::params![pattern],
             |row| {
                 let key: String = row.get(0)?;
                 let value: String = row.get(1)?;
                 let category: String = row.get(2)?;
-                Ok(format!("[{}] {}: {}", category, key, value))
+                let pid: Option<String> = row.get(3)?;
+                let scope_tag = if pid.as_ref().map(|s| s.is_empty()).unwrap_or(true) { "global" } else { "project" };
+                Ok(format!("[{}/{}] {}: {}", scope_tag, category, key, value))
             },
         ).unwrap().filter_map(|r| r.ok()).collect();
 
@@ -635,27 +653,167 @@ fn tool_memory_search(args: &Value) -> String {
     })
 }
 
-fn tool_memory_store(args: &Value) -> String {
+fn tool_memory_store(args: &Value, project_id: &str) -> String {
     let key = args["key"].as_str().unwrap_or("").to_string();
     let value = args["value"].as_str().unwrap_or("").to_string();
     let category = args["category"].as_str().unwrap_or("note").to_string();
+    let scope = args["scope"].as_str().unwrap_or("project");
 
     if key.is_empty() || value.is_empty() {
         return "Error: key and value are required".to_string();
     }
 
+    let pid = if scope == "global" { None } else { Some(project_id.to_string()) };
+
     crate::db::with_db(|conn| {
-        match conn.execute(
-            "INSERT INTO memory (key, value, category) VALUES (?1, ?2, ?3)",
-            rusqlite::params![&key, &value, &category],
-        ) {
-            Ok(_) => format!("Stored memory '{}' in category '{}'", key, category),
+        // Upsert: if same key+project_id exists, update value
+        let existing: Option<i64> = conn.query_row(
+            "SELECT id FROM memory WHERE key = ?1 AND (project_id = ?2 OR (?2 IS NULL AND project_id IS NULL)) LIMIT 1",
+            rusqlite::params![&key, &pid],
+            |row| row.get(0),
+        ).ok();
+
+        let result = if let Some(id) = existing {
+            conn.execute(
+                "UPDATE memory SET value = ?1, category = ?2, created_at = datetime('now') WHERE id = ?3",
+                rusqlite::params![&value, &category, id],
+            )
+        } else {
+            conn.execute(
+                "INSERT INTO memory (key, value, category, project_id) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![&key, &value, &category, &pid],
+            )
+        };
+
+        match result {
+            Ok(_) => format!("Stored memory '{}' [{}] in category '{}'",
+                key, if scope == "global" { "global" } else { "project" }, category),
             Err(e) => {
                 eprintln!("[db] Failed to store memory: {}", e);
                 format!("Error storing memory: {}", e)
             }
         }
     })
+}
+
+// ══════════════════════════════════════════════════════════════
+// MEMORY SYSTEM — project-scoped, auto-injected, compacted
+// ══════════════════════════════════════════════════════════════
+
+/// Load project memory for injection into system prompt (max 4K chars).
+/// Returns formatted memory context or empty string if none.
+pub fn load_project_memory(project_id: &str) -> String {
+    if project_id.is_empty() { return String::new(); }
+
+    crate::db::with_db(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT key, value, category FROM memory \
+             WHERE (project_id = ?1 OR project_id IS NULL) \
+             ORDER BY CASE WHEN project_id = ?1 THEN 0 ELSE 1 END, created_at DESC \
+             LIMIT 30"
+        ).unwrap();
+
+        let entries: Vec<String> = stmt.query_map(
+            rusqlite::params![project_id],
+            |row| {
+                let key: String = row.get(0)?;
+                let value: String = row.get(1)?;
+                let cat: String = row.get(2)?;
+                Ok(format!("- [{}] {}: {}", cat, key, if value.len() > 300 { &value[..300] } else { &value }))
+            },
+        ).unwrap().filter_map(|r| r.ok()).collect();
+
+        if entries.is_empty() { return String::new(); }
+
+        let mut result = String::from("\n\n## Project Memory\n");
+        let mut chars = 0;
+        for entry in &entries {
+            if chars + entry.len() > 4000 { break; }
+            result.push_str(entry);
+            result.push('\n');
+            chars += entry.len();
+        }
+        result
+    })
+}
+
+/// Scan workspace for instruction files and store them in memory.
+/// Files checked (in priority order): CLAUDE.md, SPECS.md, README.md, CONVENTIONS.md
+pub fn load_project_files(workspace: &str, project_id: &str) {
+    const INSTRUCTION_FILES: &[&str] = &[
+        "CLAUDE.md", ".github/copilot-instructions.md", "SPECS.md",
+        "VISION.md", "README.md", ".cursorrules", "CONVENTIONS.md",
+    ];
+    const MAX_FILE_CHARS: usize = 3000;
+    const MAX_TOTAL_CHARS: usize = 8000;
+
+    let mut total = 0;
+    for filename in INSTRUCTION_FILES {
+        if total >= MAX_TOTAL_CHARS { break; }
+        let path = std::path::Path::new(workspace).join(filename);
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let trimmed = if content.len() > MAX_FILE_CHARS {
+                &content[..MAX_FILE_CHARS]
+            } else {
+                &content
+            };
+            crate::db::with_db(|conn| {
+                // Upsert project file
+                let existing: Option<i64> = conn.query_row(
+                    "SELECT id FROM memory WHERE key = ?1 AND project_id = ?2 LIMIT 1",
+                    rusqlite::params![filename, project_id],
+                    |row| row.get(0),
+                ).ok();
+                if let Some(id) = existing {
+                    let _ = conn.execute(
+                        "UPDATE memory SET value = ?1, created_at = datetime('now') WHERE id = ?2",
+                        rusqlite::params![trimmed, id],
+                    );
+                } else {
+                    let _ = conn.execute(
+                        "INSERT INTO memory (key, value, category, project_id) VALUES (?1, ?2, 'project_file', ?3)",
+                        rusqlite::params![filename, trimmed, project_id],
+                    );
+                }
+            });
+            total += trimmed.len();
+            eprintln!("[memory] Loaded {} ({} chars) for project {}", filename, trimmed.len(), &project_id[..8.min(project_id.len())]);
+        }
+    }
+}
+
+/// Compact memory: dedup by key, prune old entries, enforce per-project cap.
+pub fn compact_memory(project_id: &str) {
+    crate::db::with_db(|conn| {
+        // 1. Deduplicate: keep only the latest entry per key+project_id
+        let deduped = conn.execute(
+            "DELETE FROM memory WHERE id NOT IN (
+                SELECT MAX(id) FROM memory GROUP BY key, COALESCE(project_id, '')
+            )", [],
+        ).unwrap_or(0);
+
+        // 2. Prune entries older than 30 days (except project_file and decision categories)
+        let pruned = conn.execute(
+            "DELETE FROM memory WHERE created_at < datetime('now', '-30 days') \
+             AND category NOT IN ('project_file', 'decision', 'convention')",
+            [],
+        ).unwrap_or(0);
+
+        // 3. Cap per-project at 200 entries (keep most recent)
+        if !project_id.is_empty() {
+            let _ = conn.execute(
+                "DELETE FROM memory WHERE project_id = ?1 AND id NOT IN (
+                    SELECT id FROM memory WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 200
+                )",
+                rusqlite::params![project_id],
+            );
+        }
+
+        if deduped > 0 || pruned > 0 {
+            eprintln!("[memory] Compacted: {} deduped, {} pruned for project {}",
+                deduped, pruned, &project_id[..8.min(project_id.len())]);
+        }
+    });
 }
 
 // ══════════════════════════════════════════════════════════════

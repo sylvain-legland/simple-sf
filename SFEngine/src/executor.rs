@@ -53,9 +53,17 @@ pub async fn run_agent(
         .unwrap_or(128_000);
 
     let protocol_section = protocol.map(|p| format!("\n\n{}", p)).unwrap_or_default();
+
+    // Load project memory context for injection
+    let project_id = std::path::Path::new(workspace)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("");
+    let memory_context = tools::load_project_memory(project_id);
+
     let system = format!(
-        "{}{}\n\nYour task:\n{}\n\nWorkspace: {}. Use tools to complete the task. Write real, production-quality code.",
-        agent_persona, protocol_section, task, workspace
+        "{}{}{}\n\nYour task:\n{}\n\nWorkspace: {}. Use tools to complete the task. Write real, production-quality code.\n\nIMPORTANT: Use memory_store to save key decisions, architecture choices, and conventions for other agents.",
+        agent_persona, protocol_section, memory_context, task, workspace
     );
 
     let mut messages: Vec<LLMMessage> = vec![
@@ -65,6 +73,15 @@ pub async fn run_agent(
     let mut tool_calls_log: Vec<String> = Vec::new();
 
     for _round in 0..MAX_ROUNDS {
+        // ── Sliding window: keep messages manageable ──
+        if messages.len() > 30 {
+            let first = messages[0].clone();  // initial user task
+            let keep_last = 20;
+            let drain_end = messages.len() - keep_last;
+            messages.drain(1..drain_end);
+            messages.insert(0, first);
+        }
+
         on_event(agent_id, AgentEvent::Thinking);
 
         // Build a streaming chunk callback that emits ResponseChunk events
