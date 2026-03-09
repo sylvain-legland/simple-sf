@@ -3,25 +3,42 @@ import SwiftUI
 // MARK: - SF Design Tokens (matching SF legacy platform theme)
 
 enum SF {
-    // MARK: Colors — Refined dark mode (GitHub Dark-inspired + purple accents)
+    // MARK: Colors — SF Legacy dark theme (purple-tinted backgrounds)
     enum Colors {
-        static let bgPrimary    = Color(hex: 0x0d1117)   // main background
-        static let bgSecondary  = Color(hex: 0x161b22)   // cards, sidebar
-        static let bgTertiary   = Color(hex: 0x21262d)   // inputs, hovers
-        static let bgCard       = Color(hex: 0x1c2128)   // elevated cards
-        static let bgHover      = Color(hex: 0x292e36)   // hover states
+        // Backgrounds — purple-tinted (SF legacy palette)
+        static let bgPrimary    = Color(hex: 0x0f0a1a)   // deep purple-black
+        static let bgSecondary  = Color(hex: 0x1a1225)   // very dark purple
+        static let bgTertiary   = Color(hex: 0x251d33)   // dark purple
+        static let bgCard       = Color(hex: 0x1e1530)   // elevated cards
+        static let bgHover      = Color(hex: 0x302540)   // hover states
 
-        static let purple       = Color(hex: 0xa855f7)   // primary accent
+        // Brand purple
+        static let purple       = Color(hex: 0xbc8cff)   // lavender (SF legacy)
         static let purpleLight  = Color(hex: 0xc084fc)
         static let purpleDeep   = Color(hex: 0x7c3aed)
-        static let accent       = Color(hex: 0xf78166)   // secondary accent
+        static let accent       = Color(hex: 0xf78166)   // coral/orange
         static let accentHover  = Color(hex: 0xffa28b)
 
-        static let textPrimary  = Color(hex: 0xe6edf3)   // main text — high contrast
-        static let textSecondary = Color(hex: 0x8b949e)  // labels, captions
-        static let textMuted    = Color(hex: 0x6e7681)   // hints, timestamps
-        static let border       = Color(hex: 0x30363d)   // standard border
-        static let borderLight  = Color(hex: 0x3d444d)   // subtle border
+        // Extended palette (SF legacy)
+        static let blue         = Color(hex: 0x7c8aff)   // periwinkle
+        static let blueBright   = Color(hex: 0x3b82f6)
+        static let blueLight    = Color(hex: 0x60a5fa)
+        static let pink         = Color(hex: 0xf472b6)
+        static let cyan         = Color(hex: 0x06b6d4)
+        static let teal         = Color(hex: 0x14b8a6)
+        static let greenLight   = Color(hex: 0x34d399)   // emerald
+        static let greenDeep    = Color(hex: 0x16a34a)
+        static let yellowLight  = Color(hex: 0xfbbf24)
+        static let yellowDeep   = Color(hex: 0xf59e0b)
+        static let redLight     = Color(hex: 0xf87171)
+        static let redDeep      = Color(hex: 0xdc2626)
+
+        // Text
+        static let textPrimary  = Color(hex: 0xe6edf3)
+        static let textSecondary = Color(hex: 0x9e95b0)  // mauve (SF legacy)
+        static let textMuted    = Color(hex: 0x6e7681)
+        static let border       = Color(hex: 0x352d45)   // muted purple border
+        static let borderLight  = Color(hex: 0x3d444d)
 
         // Status
         static let success      = Color(hex: 0x22c55e)
