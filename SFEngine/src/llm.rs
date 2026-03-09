@@ -253,9 +253,13 @@ async fn parse_stream(
     let mut lines = reader.lines();
 
     let mut full_content = String::new();
+    let mut reasoning_chars: usize = 0;
     let mut tool_calls: Vec<ToolCall> = Vec::new();
     let mut is_reasoning = false;
     let mut had_reasoning = false;
+    let mut finish_reason = String::new();
+    let mut usage_completion: Option<u64> = None;
+    let mut usage_reasoning: Option<u64> = None;
 
     while let Ok(Some(line)) = lines.next_line().await {
         let line = line.trim_start().to_string();
@@ -264,46 +268,61 @@ async fn parse_stream(
         if data == "[DONE]" { break; }
 
         if let Ok(chunk) = serde_json::from_str::<Value>(data) {
-            if let Some(delta) = chunk["choices"].get(0).and_then(|c| c.get("delta")) {
-                // Handle reasoning tokens (Qwen3.5, DeepSeek, etc.)
-                // These arrive in delta.reasoning while delta.content is empty
-                if let Some(reasoning) = delta["reasoning"].as_str() {
-                    if !reasoning.is_empty() && !is_reasoning {
-                        is_reasoning = true;
-                        had_reasoning = true;
-                        if let Some(cb) = on_reasoning {
-                            cb(true);
-                        }
-                    }
+            // Capture usage from final chunk (MLX sends it on the last SSE event)
+            if let Some(usage) = chunk.get("usage") {
+                usage_completion = usage["completion_tokens"].as_u64();
+                usage_reasoning = usage.get("reasoning_tokens")
+                    .or_else(|| usage.get("completion_tokens_details").and_then(|d| d.get("reasoning_tokens")))
+                    .and_then(|v| v.as_u64());
+            }
+
+            if let Some(choice) = chunk["choices"].get(0) {
+                if let Some(fr) = choice["finish_reason"].as_str() {
+                    finish_reason = fr.to_string();
                 }
 
-                if let Some(content) = delta["content"].as_str() {
-                    if !content.is_empty() {
-                        // Reasoning phase ended, content phase started
-                        if is_reasoning {
-                            is_reasoning = false;
-                            if let Some(cb) = on_reasoning {
-                                cb(false);
+                if let Some(delta) = choice.get("delta") {
+                    // Handle reasoning tokens (Qwen3.5, DeepSeek, etc.)
+                    if let Some(reasoning) = delta["reasoning"].as_str() {
+                        if !reasoning.is_empty() {
+                            reasoning_chars += reasoning.len();
+                            if !is_reasoning {
+                                is_reasoning = true;
+                                had_reasoning = true;
+                                if let Some(cb) = on_reasoning {
+                                    cb(true);
+                                }
                             }
                         }
-                        full_content.push_str(content);
-                        if let Some(cb) = on_chunk {
-                            cb(content);
+                    }
+
+                    if let Some(content) = delta["content"].as_str() {
+                        if !content.is_empty() {
+                            if is_reasoning {
+                                is_reasoning = false;
+                                if let Some(cb) = on_reasoning {
+                                    cb(false);
+                                }
+                            }
+                            full_content.push_str(content);
+                            if let Some(cb) = on_chunk {
+                                cb(content);
+                            }
                         }
                     }
-                }
 
-                // Accumulate tool call deltas
-                if let Some(tcs) = delta["tool_calls"].as_array() {
-                    for tc in tcs {
-                        let idx = tc["index"].as_u64().unwrap_or(0) as usize;
-                        while tool_calls.len() <= idx {
-                            tool_calls.push(ToolCall { id: String::new(), name: String::new(), arguments: String::new() });
-                        }
-                        if let Some(id) = tc["id"].as_str() { tool_calls[idx].id = id.to_string(); }
-                        if let Some(f) = tc.get("function") {
-                            if let Some(n) = f["name"].as_str() { tool_calls[idx].name.push_str(n); }
-                            if let Some(a) = f["arguments"].as_str() { tool_calls[idx].arguments.push_str(a); }
+                    // Accumulate tool call deltas
+                    if let Some(tcs) = delta["tool_calls"].as_array() {
+                        for tc in tcs {
+                            let idx = tc["index"].as_u64().unwrap_or(0) as usize;
+                            while tool_calls.len() <= idx {
+                                tool_calls.push(ToolCall { id: String::new(), name: String::new(), arguments: String::new() });
+                            }
+                            if let Some(id) = tc["id"].as_str() { tool_calls[idx].id = id.to_string(); }
+                            if let Some(f) = tc.get("function") {
+                                if let Some(n) = f["name"].as_str() { tool_calls[idx].name.push_str(n); }
+                                if let Some(a) = f["arguments"].as_str() { tool_calls[idx].arguments.push_str(a); }
+                            }
                         }
                     }
                 }
@@ -313,16 +332,31 @@ async fn parse_stream(
 
     // If model spent all tokens on reasoning with no visible content
     if full_content.is_empty() && had_reasoning {
-        eprintln!("[llm] Warning: model exhausted token budget on reasoning — no visible content");
-        full_content = "(Model spent its entire token budget on reasoning without producing visible output. This typically happens with reasoning models like Qwen3.5 on complex prompts. Try a simpler prompt or a different model.)".to_string();
+        let usage_info = match (usage_completion, usage_reasoning) {
+            (Some(comp), Some(reas)) => format!(" [{}t completion, {}t reasoning, finish={}]", comp, reas, finish_reason),
+            (Some(comp), None) => format!(" [{}t completion, ~{}c reasoning chars, finish={}]", comp, reasoning_chars, finish_reason),
+            _ => format!(" [~{}c reasoning chars, finish={}]", reasoning_chars, finish_reason),
+        };
+        eprintln!("[llm] Warning: model exhausted token budget on reasoning — no visible content{}", usage_info);
+        full_content = format!(
+            "(Reasoning model exhausted its token budget without producing visible output.{})",
+            usage_info,
+        );
         if is_reasoning {
             if let Some(cb) = on_reasoning {
-                cb(false); // end reasoning indicator
+                cb(false);
             }
         }
         if let Some(cb) = on_chunk {
             cb(&full_content);
         }
+    } else if had_reasoning {
+        let usage_info = match (usage_completion, usage_reasoning) {
+            (Some(comp), Some(reas)) => format!("{}t total, {}t reasoning", comp, reas),
+            (Some(comp), None) => format!("{}t total, ~{}c reasoning", comp, reasoning_chars),
+            _ => format!("~{}c reasoning", reasoning_chars),
+        };
+        eprintln!("[llm] Reasoning model OK: {} + {}c content, finish={}", usage_info, full_content.len(), finish_reason);
     }
 
     let content = if full_content.is_empty() { None } else { Some(strip_thinking(&full_content)) };
@@ -349,8 +383,17 @@ fn parse_response(json: &Value) -> Result<LLMResponse, String> {
     if content.as_ref().map_or(true, |c| c.is_empty()) {
         if let Some(reasoning) = message["reasoning"].as_str() {
             if !reasoning.is_empty() {
-                eprintln!("[llm] Warning: non-streaming response has reasoning but no content");
-                content = Some("(Model spent its token budget on reasoning. Try a simpler prompt or different model.)".to_string());
+                let usage = json.get("usage");
+                let comp = usage.and_then(|u| u["completion_tokens"].as_u64());
+                let reas = usage.and_then(|u| u.get("reasoning_tokens").or_else(|| u.get("completion_tokens_details").and_then(|d| d.get("reasoning_tokens")))).and_then(|v| v.as_u64());
+                let fr = choice["finish_reason"].as_str().unwrap_or("unknown");
+                let usage_info = match (comp, reas) {
+                    (Some(c), Some(r)) => format!(" [{}t completion, {}t reasoning, finish={}]", c, r, fr),
+                    (Some(c), None) => format!(" [{}t completion, ~{}c reasoning chars, finish={}]", c, reasoning.len(), fr),
+                    _ => format!(" [~{}c reasoning chars, finish={}]", reasoning.len(), fr),
+                };
+                eprintln!("[llm] Warning: non-streaming response has reasoning but no content{}", usage_info);
+                content = Some(format!("(Reasoning model exhausted its token budget without producing visible output.{})", usage_info));
             }
         }
     }
