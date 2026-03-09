@@ -295,16 +295,9 @@ final class SFBridge: ObservableObject {
             _restoreConversationFromDB(projectId: project.id)
         }
 
-        // Auto-resume: restart the first active project if nothing is running
-        if !isRunning, let project = activeProjects.first {
-            print("[SFBridge] Auto-resuming project: \(project.name)")
+        // Set the first active project as current (but do NOT auto-start a new mission)
+        if let project = activeProjects.first {
             currentProjectId = project.id
-            Task {
-                // Ensure keychain is scanned before LLM config
-                await KeychainService.shared.scanIfNeeded()
-                await syncLLMConfigAsync()
-                startMissionAsync(projectId: project.id, brief: project.description)
-            }
         }
     }
 
