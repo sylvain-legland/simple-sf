@@ -809,6 +809,10 @@ struct ProjectAccordion: View {
     private func buildDisplayItems(_ raw: [SFBridge.AgentEvent]) -> [DisplayItem] {
         var items: [DisplayItem] = []
         var pendingTools: [SFBridge.AgentEvent] = []
+        // Track agents that have produced a response — their thinking events are stale
+        let agentsWithResponse = Set(raw.filter {
+            $0.eventType == "response" || $0.eventType == "discuss_response" || $0.eventType == "response_chunk"
+        }.map { $0.agentId })
 
         func flushTools() {
             guard !pendingTools.isEmpty else { return }
@@ -818,6 +822,11 @@ struct ProjectAccordion: View {
         }
 
         for event in raw {
+            // Skip thinking events if this agent already has a response
+            if (event.eventType == "thinking" || event.eventType == "discuss_thinking"),
+               agentsWithResponse.contains(event.agentId) {
+                continue
+            }
             if event.eventType == "tool_call" || event.eventType == "tool_result" {
                 pendingTools.append(event)
             } else {
