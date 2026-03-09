@@ -695,3 +695,49 @@ fn chaos_45_load_project_memory_truncation() {
     let memory = tools::load_project_memory(pid);
     assert!(memory.len() <= 4500, "Memory injection should be bounded: {} chars", memory.len());
 }
+
+// ── Gate detection (expanded patterns) ──
+
+#[test]
+fn chaos_46_gate_verdict_nogo_spaced_colon() {
+    // The real-world pattern that was missed: "VERDICT : NOGO (CONDITIONNEL)"
+    let output = "Analyse complète.\nVERDICT : NOGO (CONDITIONNEL)\nConditions pour GO: ...";
+    assert_eq!(engine::check_gate_raw(output), "vetoed");
+}
+
+#[test]
+fn chaos_47_gate_conclusion_nogo() {
+    let output = "Le produit n'est pas jouable.\nCONCLUSION: NOGO — Conditions à respecter.";
+    assert_eq!(engine::check_gate_raw(output), "vetoed");
+}
+
+#[test]
+fn chaos_48_gate_verdict_go_spaced() {
+    let output = "Tout est conforme.\nVERDICT : GO\nLe projet peut continuer.";
+    assert_eq!(engine::check_gate_raw(output), "approved");
+}
+
+#[test]
+fn chaos_49_gate_conclusion_approve() {
+    let output = "Tests passés.\nCONCLUSION: APPROVE — Prêt pour déploiement.";
+    assert_eq!(engine::check_gate_raw(output), "approved");
+}
+
+#[test]
+fn chaos_50_gate_no_keyword_passes() {
+    // Output without any gate keywords → should default to "completed"
+    let output = "Voici l'architecture du projet.\n1. Module A\n2. Module B\nFin.";
+    assert_eq!(engine::check_gate_raw(output), "completed");
+}
+
+#[test]
+fn chaos_51_gate_nogo_dash_variant() {
+    let output = "Résultat: STATUT: NOGO\nRaison: problème critique.";
+    assert_eq!(engine::check_gate_raw(output), "vetoed");
+}
+
+#[test]
+fn chaos_52_gate_veto_in_brackets() {
+    let output = "Mon analyse:\n[VETO] Le code contient des failles de sécurité.";
+    assert_eq!(engine::check_gate_raw(output), "vetoed");
+}
