@@ -906,15 +906,25 @@ struct ProjectAccordion: View {
 
     /// Compact inline badges for tool_call / tool_result groups
     private func toolBadgeRow(_ tools: [SFBridge.AgentEvent]) -> some View {
-        // Determine which agent made these tool calls
         let agentId = tools.first?.agentId ?? "unknown"
         let agentName = tools.first.flatMap { !$0.agentName.isEmpty ? $0.agentName : nil }
             ?? catalog.agentName(agentId)
         let agentColor = catalog.agentColor(agentId)
 
         let badges: [(icon: String, label: String)] = tools.compactMap { event in
+            guard event.eventType == "tool_call" else { return nil }
             let raw = event.data
-            let toolName = raw.components(separatedBy: "|").first?.trimmingCharacters(in: .whitespaces) ?? raw
+            // Format: "tool_name|args_json" — extract only the tool name (before first |)
+            let toolName: String
+            if let pipeIdx = raw.firstIndex(of: "|") {
+                toolName = String(raw[raw.startIndex..<pipeIdx]).trimmingCharacters(in: .whitespaces)
+            } else if let parenIdx = raw.firstIndex(of: "(") {
+                toolName = String(raw[raw.startIndex..<parenIdx]).trimmingCharacters(in: .whitespaces)
+            } else {
+                toolName = raw.trimmingCharacters(in: .whitespaces)
+            }
+            guard !toolName.isEmpty else { return nil }
+
             let shortName = toolName
                 .replacingOccurrences(of: "code_", with: "")
                 .replacingOccurrences(of: "file_", with: "")
@@ -924,25 +934,32 @@ struct ProjectAccordion: View {
                 .replacingOccurrences(of: "list_", with: "ls:")
 
             let icon: String
-            if event.eventType == "tool_call" {
-                switch true {
-                case toolName.contains("read"):   icon = "doc.text"
-                case toolName.contains("write"):  icon = "square.and.pencil"
-                case toolName.contains("edit"):   icon = "pencil"
-                case toolName.contains("search"): icon = "magnifyingglass"
-                case toolName.contains("list"):   icon = "list.bullet"
-                case toolName.contains("git"):    icon = "arrow.triangle.branch"
-                case toolName.contains("memory"): icon = "brain"
-                case toolName.contains("build"):  icon = "hammer"
-                case toolName.contains("test"):   icon = "checkmark.shield"
-                default:                           icon = "wrench"
-                }
-                return (icon, shortName)
+            switch true {
+            case toolName.contains("read"):   icon = "doc.text"
+            case toolName.contains("write"):  icon = "square.and.pencil"
+            case toolName.contains("edit"):   icon = "pencil"
+            case toolName.contains("search"): icon = "magnifyingglass"
+            case toolName.contains("list"):   icon = "list.bullet"
+            case toolName.contains("git"):    icon = "arrow.triangle.branch"
+            case toolName.contains("memory"): icon = "brain"
+            case toolName.contains("build"):  icon = "hammer"
+            case toolName.contains("test"):   icon = "checkmark.shield"
+            default:                           icon = "wrench"
             }
-            return nil
+            return (icon, shortName)
         }
 
-        guard !badges.isEmpty else { return AnyView(EmptyView()) }
+        // Deduplicate consecutive identical badges (e.g. list_files called 3x → "ls:files ×3")
+        var deduped: [(icon: String, label: String, count: Int)] = []
+        for badge in badges {
+            if let last = deduped.last, last.icon == badge.icon && last.label == badge.label {
+                deduped[deduped.count - 1].count += 1
+            } else {
+                deduped.append((badge.icon, badge.label, 1))
+            }
+        }
+
+        guard !deduped.isEmpty else { return AnyView(EmptyView()) }
 
         return AnyView(
             HStack(spacing: 6) {
@@ -954,11 +971,11 @@ struct ProjectAccordion: View {
                 Image(systemName: "gearshape.2")
                     .font(.system(size: 9))
                     .foregroundColor(SF.Colors.textMuted)
-                ForEach(Array(badges.enumerated()), id: \.offset) { _, badge in
+                ForEach(Array(deduped.enumerated()), id: \.offset) { _, badge in
                     HStack(spacing: 3) {
                         Image(systemName: badge.icon)
                             .font(.system(size: 9))
-                        Text(badge.label)
+                        Text(badge.count > 1 ? "\(badge.label) ×\(badge.count)" : badge.label)
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
                     }
                     .foregroundColor(SF.Colors.textSecondary)
@@ -1157,20 +1174,37 @@ struct ProjectAccordion: View {
             guard trimmed.hasPrefix("[Calling tools:"), trimmed.hasSuffix("]") else { continue }
             let inner = String(trimmed.dropFirst("[Calling tools:".count).dropLast())
                 .trimmingCharacters(in: .whitespaces)
-            // Parse "name(args), name2(args)"
-            for part in inner.components(separatedBy: ",") {
-                let name = part.trimmingCharacters(in: .whitespaces)
-                    .components(separatedBy: "(").first?
-                    .trimmingCharacters(in: .whitespaces) ?? ""
-                if !name.isEmpty {
-                    let short = name
-                        .replacingOccurrences(of: "code_", with: "")
-                        .replacingOccurrences(of: "file_", with: "")
-                        .replacingOccurrences(of: "memory_", with: "mem:")
-                        .replacingOccurrences(of: "git_", with: "git:")
-                        .replacingOccurrences(of: "list_", with: "ls:")
-                        .replacingOccurrences(of: "deep_", with: "")
-                    tools.append(short)
+            // Parse tool names by finding word( patterns — avoids comma-in-JSON issues
+            var i = inner.startIndex
+            while i < inner.endIndex {
+                // Find next tool name: letters/underscores followed by (
+                if let parenRange = inner.range(of: "(", range: i..<inner.endIndex) {
+                    let beforeParen = inner[i..<parenRange.lowerBound]
+                        .trimmingCharacters(in: .whitespaces)
+                    // Walk back to find tool name (skip commas/spaces from previous)
+                    let name = beforeParen.components(separatedBy: ",").last?
+                        .trimmingCharacters(in: .whitespaces) ?? ""
+                    if !name.isEmpty && name.allSatisfy({ $0.isLetter || $0 == "_" }) {
+                        let short = name
+                            .replacingOccurrences(of: "code_", with: "")
+                            .replacingOccurrences(of: "file_", with: "")
+                            .replacingOccurrences(of: "memory_", with: "mem:")
+                            .replacingOccurrences(of: "git_", with: "git:")
+                            .replacingOccurrences(of: "list_", with: "ls:")
+                            .replacingOccurrences(of: "deep_", with: "")
+                        tools.append(short)
+                    }
+                    // Skip past matching closing paren (handle nested braces)
+                    var depth = 1
+                    var j = parenRange.upperBound
+                    while j < inner.endIndex && depth > 0 {
+                        if inner[j] == "(" { depth += 1 }
+                        if inner[j] == ")" { depth -= 1 }
+                        j = inner.index(after: j)
+                    }
+                    i = j
+                } else {
+                    break
                 }
             }
         }
