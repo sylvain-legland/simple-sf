@@ -9,6 +9,7 @@ pub mod protocols;
 pub mod guard;
 pub mod catalog;
 pub mod bench;
+pub mod sandbox;
 mod ffi;
 
 pub use ffi::*;
