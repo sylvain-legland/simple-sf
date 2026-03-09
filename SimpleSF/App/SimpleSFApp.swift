@@ -14,7 +14,6 @@ struct SimpleSFApp: App {
             ContentView()
                 .environmentObject(KeychainService.shared)
                 .frame(minWidth: 1000, minHeight: 650)
-                .preferredColorScheme(.dark)
                 .background(SF.Colors.bgPrimary)
                 .task {
                     await KeychainService.shared.scanIfNeeded()

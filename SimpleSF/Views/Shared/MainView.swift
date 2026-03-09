@@ -12,7 +12,6 @@ struct MainView: View {
                 .background(SF.Colors.bgPrimary)
         }
         .navigationSplitViewStyle(.balanced)
-        .preferredColorScheme(.dark)
     }
 
     @ViewBuilder
