@@ -309,6 +309,12 @@ struct ProjectAccordion: View {
     private var isPaused: Bool { project.status == .paused }
     private var isQueued: Bool { project.status == .planning }
     private var isDone: Bool { project.status == .done }
+    /// Phases to display: real from mission status, or simulated fallback
+    private var displayPhases: [SFBridge.PhaseInfo] {
+        if let real = missionStatus?.phases, !real.isEmpty { return real }
+        return simulatedPhases()
+    }
+
     /// True when a workflow/mission has been started (or project has progressed beyond idea)
     private var hasWorkflow: Bool {
         project.missionId != nil || project.status != .idea
@@ -424,7 +430,7 @@ struct ProjectAccordion: View {
                         activePhase: activePhase,
                         projectDone: isDone,
                         selectedIndex: $selectedPhaseIndex,
-                        phases: missionStatus?.phases ?? simulatedPhases()
+                        phases: displayPhases
                     )
                     .padding(.leading, 24)
                 } else {
@@ -457,7 +463,7 @@ struct ProjectAccordion: View {
 
     @ViewBuilder
     private var phaseDetailOrFeed: some View {
-        let phases = missionStatus?.phases ?? simulatedPhases()
+        let phases = displayPhases
         if let idx = selectedPhaseIndex, idx < phases.count {
             phaseDetailPanel(phases[idx], index: idx)
         } else {

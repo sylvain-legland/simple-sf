@@ -204,6 +204,8 @@ final class SFBridge: ObservableObject {
             currentProjectId = project.id
             projectEvents[project.id] = []
             Task {
+                // Ensure keychain is scanned before LLM config
+                await KeychainService.shared.scanIfNeeded()
                 await syncLLMConfigAsync()
                 startMissionAsync(projectId: project.id, brief: project.description)
             }
