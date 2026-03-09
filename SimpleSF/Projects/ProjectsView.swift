@@ -98,11 +98,7 @@ struct ProjectsView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ForEach(filtered) { project in
-                    ProjectCard(
-                        project: project,
-                        isRunning: bridge.currentMissionId != nil &&
-                                   bridge.isRunning
-                    )
+                    ProjectCard(project: project)
                 }
             }
             .padding(24)
@@ -126,92 +122,234 @@ struct ProjectsView: View {
     }
 }
 
-// MARK: - Project Card with Phase Timeline
+// MARK: - Project Card with Phase Timeline + Controls
 
 struct ProjectCard: View {
     let project: Project
-    var isRunning: Bool = false
+    @ObservedObject private var bridge = SFBridge.shared
 
     private var activePhase: Int {
         simulatedActivePhase(for: project.status, progress: project.progress)
     }
 
+    private var isActive: Bool { project.status == .active }
+    private var isPaused: Bool { project.status == .paused }
+    private var isQueued: Bool { project.status == .planning }
+    private var isDone: Bool { project.status == .done }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // ── Header row: status dot + name + tech + status badge
+        VStack(alignment: .leading, spacing: 12) {
+            // ── Row 1: Name + tech + status + controls
             HStack(spacing: 10) {
-                Circle()
-                    .fill(Color(hex: project.status.color))
-                    .frame(width: 10, height: 10)
                 Text(project.name)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundColor(SF.Colors.textPrimary)
 
                 if !project.tech.isEmpty {
                     Text(project.tech)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(SF.Colors.textMuted)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
                         .background(SF.Colors.bgTertiary)
-                        .cornerRadius(4)
+                        .cornerRadius(5)
                 }
 
                 Spacer()
 
-                Text(project.status.displayName)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(Color(hex: project.status.color))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color(hex: project.status.color).opacity(0.12))
-                    .cornerRadius(6)
+                // Live status indicator
+                statusIndicator
+
+                // Play / Pause / Stop buttons
+                controlButtons
             }
 
             // ── Description
             if !project.description.isEmpty {
                 Text(project.description)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(SF.Colors.textSecondary)
                     .lineLimit(2)
             }
 
-            // ── Workflow label
-            HStack(spacing: 6) {
-                Image(systemName: "flowchart.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(SF.Colors.purple.opacity(0.7))
-                Text("Cycle de Vie Produit Complet")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(SF.Colors.textMuted)
-                Spacer()
-                Text("\(activePhase)/14 phases")
-                    .font(.system(size: 10))
-                    .foregroundColor(SF.Colors.textMuted)
+            // ── Global progress bar (full width)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "flowchart.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(SF.Colors.purple.opacity(0.7))
+                    Text("Cycle de Vie Produit Complet")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(SF.Colors.textSecondary)
+                    Spacer()
+                    Text("\(activePhase)/14 phases")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(SF.Colors.textSecondary)
+                }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(SF.Colors.bgTertiary)
+                            .frame(height: 6)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(isDone ? SF.Colors.success : SF.Colors.purple)
+                            .frame(width: geo.size.width * CGFloat(activePhase) / 14.0, height: 6)
+                    }
+                }
+                .frame(height: 6)
             }
 
-            // ── Mini phase timeline
-            MiniPhaseTimeline(activePhase: activePhase, projectDone: project.status == .done)
+            // ── Phase timeline (bigger dots)
+            MiniPhaseTimeline(activePhase: activePhase, projectDone: isDone)
         }
-        .padding(14)
+        .padding(16)
         .background(SF.Colors.bgCard)
         .cornerRadius(SF.Radius.lg)
         .overlay(
             RoundedRectangle(cornerRadius: SF.Radius.lg)
-                .stroke(SF.Colors.border, lineWidth: 1)
+                .stroke(isActive ? SF.Colors.purple.opacity(0.5) : SF.Colors.border, lineWidth: isActive ? 1.5 : 1)
         )
+    }
+
+    // ── Status indicator: spinner / queued / done
+    @ViewBuilder
+    private var statusIndicator: some View {
+        if isActive {
+            HStack(spacing: 5) {
+                ProgressView().scaleEffect(0.55)
+                Text("Agents en cours…")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(SF.Colors.purple)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(SF.Colors.purple.opacity(0.1))
+            .cornerRadius(6)
+        } else if isQueued {
+            HStack(spacing: 5) {
+                Image(systemName: "clock.fill")
+                    .font(.system(size: 10))
+                Text("Queued")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundColor(SF.Colors.warning)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(SF.Colors.warning.opacity(0.1))
+            .cornerRadius(6)
+        } else if isPaused {
+            HStack(spacing: 5) {
+                Image(systemName: "pause.circle.fill")
+                    .font(.system(size: 10))
+                Text("Paused")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundColor(SF.Colors.warning)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(SF.Colors.warning.opacity(0.1))
+            .cornerRadius(6)
+        } else if isDone {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 10))
+                Text("Terminé")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundColor(SF.Colors.success)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(SF.Colors.success.opacity(0.1))
+            .cornerRadius(6)
+        } else {
+            Text(project.status.displayName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Color(hex: project.status.color))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color(hex: project.status.color).opacity(0.12))
+                .cornerRadius(6)
+        }
+    }
+
+    // ── Play / Pause / Stop (video-style)
+    private var controlButtons: some View {
+        HStack(spacing: 4) {
+            if isActive {
+                // Pause
+                Button(action: { ProjectStore.shared.setStatus(project.id, status: .paused) }) {
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(SF.Colors.warning)
+                        .frame(width: 28, height: 28)
+                        .background(SF.Colors.warning.opacity(0.12))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                // Stop
+                Button(action: { ProjectStore.shared.setStatus(project.id, status: .idea) }) {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(SF.Colors.error)
+                        .frame(width: 28, height: 28)
+                        .background(SF.Colors.error.opacity(0.12))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            } else if isPaused {
+                // Resume
+                Button(action: { ProjectStore.shared.setStatus(project.id, status: .active) }) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(SF.Colors.success)
+                        .frame(width: 28, height: 28)
+                        .background(SF.Colors.success.opacity(0.12))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                // Stop
+                Button(action: { ProjectStore.shared.setStatus(project.id, status: .idea) }) {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(SF.Colors.error)
+                        .frame(width: 28, height: 28)
+                        .background(SF.Colors.error.opacity(0.12))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            } else if !isDone {
+                // Play
+                Button(action: { launchProject() }) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(SF.Colors.success)
+                        .frame(width: 28, height: 28)
+                        .background(SF.Colors.success.opacity(0.12))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func launchProject() {
+        ProjectStore.shared.setStatus(project.id, status: .active)
+        Task {
+            await bridge.syncLLMConfigAsync()
+            bridge.startMissionAsync(projectId: project.id, brief: project.description)
+        }
     }
 }
 
-// MARK: - Mini Phase Timeline (14 dots, horizontally scrollable)
+// MARK: - Mini Phase Timeline (14 dots, horizontally scrollable, bigger)
 
 struct MiniPhaseTimeline: View {
-    let activePhase: Int    // 0-based index of current phase (14 = all done)
+    let activePhase: Int
     let projectDone: Bool
 
-    private let dotSize: CGFloat = 16
-    private let labelWidth: CGFloat = 48
-    private let connectorWidth: CGFloat = 12
+    private let dotSize: CGFloat = 22
+    private let labelWidth: CGFloat = 54
+    private let connectorWidth: CGFloat = 10
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -228,7 +366,7 @@ struct MiniPhaseTimeline: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 4)
         }
-        .frame(height: 40)
+        .frame(height: 50)
     }
 
     private func phaseDot(index: Int) -> some View {
@@ -236,7 +374,7 @@ struct MiniPhaseTimeline: View {
         let isActive = index == activePhase && !projectDone
         let isDone = projectDone
 
-        return VStack(spacing: 2) {
+        return VStack(spacing: 3) {
             ZStack {
                 Circle()
                     .fill(dotFill(completed: isCompleted || isDone, active: isActive))
@@ -244,24 +382,24 @@ struct MiniPhaseTimeline: View {
 
                 if isCompleted || isDone {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.white)
                 } else if isActive {
                     Circle()
-                        .stroke(SF.Colors.purple.opacity(0.6), lineWidth: 1.5)
-                        .frame(width: dotSize + 4, height: dotSize + 4)
+                        .stroke(SF.Colors.purple.opacity(0.6), lineWidth: 2)
+                        .frame(width: dotSize + 5, height: dotSize + 5)
                     Text("\(index + 1)")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.white)
                 } else {
                     Text("\(index + 1)")
-                        .font(.system(size: 7, weight: .semibold))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(SF.Colors.textMuted)
                 }
             }
 
             Text(safePhases[index].short)
-                .font(.system(size: 6, weight: .medium))
+                .font(.system(size: 8, weight: .medium))
                 .foregroundColor(
                     (isCompleted || isDone) ? SF.Colors.textSecondary :
                     isActive ? SF.Colors.purple :
@@ -276,8 +414,8 @@ struct MiniPhaseTimeline: View {
         let isCompleted = index < activePhase || projectDone
         return Rectangle()
             .fill(isCompleted ? SF.Colors.success.opacity(0.5) : SF.Colors.border.opacity(0.4))
-            .frame(width: connectorWidth, height: 1.5)
-            .padding(.bottom, 12)
+            .frame(width: connectorWidth, height: 2)
+            .padding(.bottom, 16)
     }
 
     private func dotFill(completed: Bool, active: Bool) -> Color {

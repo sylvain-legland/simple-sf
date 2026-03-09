@@ -11,6 +11,8 @@ struct MainView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(SF.Colors.bgPrimary)
         }
+        .navigationSplitViewStyle(.balanced)
+        .preferredColorScheme(.dark)
     }
 
     @ViewBuilder
@@ -58,38 +60,33 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $selection) {
-            Section {
-                ForEach([SidebarItem.jarvis, .projects, .ideation, .teams], id: \.self) { item in
-                    HStack(spacing: 8) {
-                        Label(item.label, systemImage: item.icon)
-                            .font(.system(size: 13))
-                            .tag(item)
-                        if item == .teams && bridge.isRunning {
-                            Spacer()
-                            ProgressView().scaleEffect(0.5)
-                        }
+            ForEach([SidebarItem.jarvis, .projects, .ideation, .teams, .settings], id: \.self) { item in
+                HStack(spacing: 8) {
+                    Label(item.label, systemImage: item.icon)
+                        .font(.system(size: 13))
+                        .tag(item)
+                    if item == .teams && bridge.isRunning {
+                        Spacer()
+                        ProgressView().scaleEffect(0.5)
                     }
                 }
-            } header: {
-                HStack(spacing: 6) {
-                    Image(systemName: "hammer.fill")
-                        .foregroundColor(SF.Colors.purple)
-                        .font(.system(size: 11))
-                    Text("Software Factory")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(SF.Colors.textSecondary)
-                    Spacer()
-                    StatusDot(active: bridge.engineReady, size: 7)
-                }
-            }
-
-            Section {
-                Label(SidebarItem.settings.label, systemImage: SidebarItem.settings.icon)
-                    .font(.system(size: 13))
-                    .tag(SidebarItem.settings)
             }
         }
         .navigationSplitViewColumnWidth(min: 160, ideal: 190)
+        .safeAreaInset(edge: .top) {
+            HStack(spacing: 6) {
+                Image(systemName: "hammer.fill")
+                    .foregroundColor(SF.Colors.purple)
+                    .font(.system(size: 11))
+                Text("Software Factory")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(SF.Colors.textSecondary)
+                Spacer()
+                StatusDot(active: bridge.engineReady, size: 7)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
         .safeAreaInset(edge: .bottom) {
             providerBadge
         }

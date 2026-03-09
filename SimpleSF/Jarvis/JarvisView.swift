@@ -574,11 +574,11 @@ struct JarvisView: View {
                 "\($0.name) (\($0.status.displayName), tech: \($0.tech))"
               }.joined(separator: ", ")
 
-        // Trigger Rust network discussion (RTE + PO + Jarvis discuss)
-        bridge.syncLLMConfig()
-        let _ = bridge.startDiscussion(message: userText, projectContext: projectContext)
+        // Sync LLM config asynchronously (avoids keychain deadlock on main thread)
+        await bridge.syncLLMConfigAsync()
 
-        // The result is handled in .onChange(of: bridge.discussionRunning)
+        // Trigger Rust network discussion on a background thread to avoid blocking the UI
+        bridge.startDiscussionAsync(message: userText, projectContext: projectContext)
     }
 
     /// Called when the Rust discussion completes — process synthesis and execute actions.

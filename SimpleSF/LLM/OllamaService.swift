@@ -91,4 +91,16 @@ final class OllamaService: ObservableObject {
         _ = try? await URLSession.shared.data(for: req)
         await refresh()
     }
+
+    // MARK: - Stop Ollama
+
+    func stop() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        task.arguments = ["-f", "ollama serve"]
+        try? task.run()
+        task.waitUntilExit()
+        isRunning = false
+        availableModels = []
+    }
 }
