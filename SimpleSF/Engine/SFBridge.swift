@@ -78,22 +78,56 @@ final class SFBridge: ObservableObject {
 
     private static let missionIdsKey = "sf_project_mission_ids"
 
+    private var eventsDir: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("SimpleSF", isDirectory: true)
+            .appendingPathComponent("events", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     private init() {
         // Restore persisted state
         projectMissionIds = UserDefaults.standard.dictionary(forKey: Self.missionIdsKey) as? [String: String] ?? [:]
         currentProjectId = UserDefaults.standard.string(forKey: "sf_current_project_id")
+        _loadProjectEvents()
     }
 
     private func _persistMissionIds() {
         UserDefaults.standard.set(projectMissionIds, forKey: Self.missionIdsKey)
     }
 
-    struct AgentEvent: Identifiable {
-        let id = UUID()
+    private func _persistProjectEvents() {
+        let dir = eventsDir
+        let enc = JSONEncoder()
+        for (projectId, events) in projectEvents where !events.isEmpty {
+            let url = dir.appendingPathComponent("\(projectId).json")
+            if let data = try? enc.encode(events) {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
+    }
+
+    private func _loadProjectEvents() {
+        let dir = eventsDir
+        let dec = JSONDecoder()
+        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+        else { return }
+        for file in files where file.pathExtension == "json" {
+            let projectId = file.deletingPathExtension().lastPathComponent
+            if let data = try? Data(contentsOf: file),
+               let events = try? dec.decode([AgentEvent].self, from: data), !events.isEmpty {
+                projectEvents[projectId] = events
+            }
+        }
+    }
+
+    struct AgentEvent: Identifiable, Codable {
+        let id: UUID
         let agentId: String
         let eventType: String
         let data: String
-        let timestamp = Date()
+        let timestamp: Date
 
         // Rich metadata (parsed from JSON for discuss_response events)
         var agentName: String = ""
@@ -101,6 +135,14 @@ final class SFBridge: ObservableObject {
         var messageType: String = "response"
         var toAgents: [String] = []
         var round: Int = 0
+
+        init(agentId: String, eventType: String, data: String) {
+            self.id = UUID()
+            self.agentId = agentId
+            self.eventType = eventType
+            self.data = data
+            self.timestamp = Date()
+        }
 
         /// Parse JSON data from Rust engine's rich discussion events
         static func fromDiscussJSON(agentId: String, eventType: String, json: String) -> AgentEvent {
@@ -615,12 +657,19 @@ final class SFBridge: ObservableObject {
             case "discuss_thinking":
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.discussionEvents.append(event)
+                if let pid = self.currentProjectId {
+                    self.projectEvents[pid, default: []].append(event)
+                }
             case "discuss_response":
                 let event = AgentEvent.fromDiscussJSON(agentId: agentId, eventType: eventType, json: data)
                 self.discussionEvents.append(event)
+                if let pid = self.currentProjectId {
+                    self.projectEvents[pid, default: []].append(event)
+                }
             case "discuss_complete":
                 self.discussionSynthesis = data
                 self.discussionRunning = false
+                self._persistProjectEvents()
 
             // Ideation events
             case "ideation_response":
@@ -637,6 +686,7 @@ final class SFBridge: ObservableObject {
                     self.projectEvents[pid, default: []].append(event)
                 }
                 self.isRunning = false
+                self._persistProjectEvents()
             case "error":
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.events.append(event)
@@ -644,6 +694,7 @@ final class SFBridge: ObservableObject {
                     self.projectEvents[pid, default: []].append(event)
                 }
                 if self.discussionRunning { self.discussionRunning = false }
+                self._persistProjectEvents()
             default:
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 if agentId == "engine" && data.hasPrefix("---") {
