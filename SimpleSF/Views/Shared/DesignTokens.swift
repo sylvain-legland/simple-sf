@@ -1,61 +1,76 @@
 import SwiftUI
+import AppKit
 
-// MARK: - SF Design Tokens (matching SF legacy platform theme)
+// MARK: - SF Design Tokens (adaptive light/dark theme)
 
 enum SF {
-    // MARK: Colors — SF Legacy dark theme (purple-tinted backgrounds)
+    // MARK: Colors — Adaptive (auto light/dark based on system appearance)
     enum Colors {
-        // Backgrounds — purple-tinted (SF legacy palette)
-        static let bgPrimary    = Color(hex: 0x0f0a1a)   // deep purple-black
-        static let bgSecondary  = Color(hex: 0x1a1225)   // very dark purple
-        static let bgTertiary   = Color(hex: 0x251d33)   // dark purple
-        static let bgCard       = Color(hex: 0x1e1530)   // elevated cards
-        static let bgHover      = Color(hex: 0x302540)   // hover states
+        // Backgrounds
+        static let bgPrimary    = adaptive(dark: 0x0f0a1a, light: 0xf5f3f8)
+        static let bgSecondary  = adaptive(dark: 0x1a1225, light: 0xeae6f0)
+        static let bgTertiary   = adaptive(dark: 0x251d33, light: 0xddd8e6)
+        static let bgCard       = adaptive(dark: 0x1e1530, light: 0xffffff)
+        static let bgHover      = adaptive(dark: 0x302540, light: 0xd5cfe0)
 
-        // Brand purple
-        static let purple       = Color(hex: 0xbc8cff)   // lavender (SF legacy)
-        static let purpleLight  = Color(hex: 0xc084fc)
-        static let purpleDeep   = Color(hex: 0x7c3aed)
-        static let accent       = Color(hex: 0xf78166)   // coral/orange
-        static let accentHover  = Color(hex: 0xffa28b)
+        // Brand purple (stays vibrant in both modes)
+        static let purple       = adaptive(dark: 0xbc8cff, light: 0x7c3aed)
+        static let purpleLight  = adaptive(dark: 0xc084fc, light: 0x8b5cf6)
+        static let purpleDeep   = adaptive(dark: 0x7c3aed, light: 0x6d28d9)
+        static let accent       = adaptive(dark: 0xf78166, light: 0xe5603e)
+        static let accentHover  = adaptive(dark: 0xffa28b, light: 0xd14f2e)
 
-        // Extended palette (SF legacy)
-        static let blue         = Color(hex: 0x7c8aff)   // periwinkle
-        static let blueBright   = Color(hex: 0x3b82f6)
-        static let blueLight    = Color(hex: 0x60a5fa)
-        static let pink         = Color(hex: 0xf472b6)
-        static let cyan         = Color(hex: 0x06b6d4)
-        static let teal         = Color(hex: 0x14b8a6)
-        static let greenLight   = Color(hex: 0x34d399)   // emerald
-        static let greenDeep    = Color(hex: 0x16a34a)
-        static let yellowLight  = Color(hex: 0xfbbf24)
-        static let yellowDeep   = Color(hex: 0xf59e0b)
-        static let redLight     = Color(hex: 0xf87171)
-        static let redDeep      = Color(hex: 0xdc2626)
+        // Extended palette
+        static let blue         = adaptive(dark: 0x7c8aff, light: 0x4f5bd5)
+        static let blueBright   = adaptive(dark: 0x3b82f6, light: 0x2563eb)
+        static let blueLight    = adaptive(dark: 0x60a5fa, light: 0x3b82f6)
+        static let pink         = adaptive(dark: 0xf472b6, light: 0xdb2777)
+        static let cyan         = adaptive(dark: 0x06b6d4, light: 0x0891b2)
+        static let teal         = adaptive(dark: 0x14b8a6, light: 0x0d9488)
+        static let greenLight   = adaptive(dark: 0x34d399, light: 0x059669)
+        static let greenDeep    = adaptive(dark: 0x16a34a, light: 0x15803d)
+        static let yellowLight  = adaptive(dark: 0xfbbf24, light: 0xd97706)
+        static let yellowDeep   = adaptive(dark: 0xf59e0b, light: 0xb45309)
+        static let redLight     = adaptive(dark: 0xf87171, light: 0xdc2626)
+        static let redDeep      = adaptive(dark: 0xdc2626, light: 0xb91c1c)
 
         // Text
-        static let textPrimary  = Color(hex: 0xe6edf3)
-        static let textSecondary = Color(hex: 0x9e95b0)  // mauve (SF legacy)
-        static let textMuted    = Color(hex: 0x6e7681)
-        static let border       = Color(hex: 0x352d45)   // muted purple border
-        static let borderLight  = Color(hex: 0x3d444d)
+        static let textPrimary  = adaptive(dark: 0xe6edf3, light: 0x1a1225)
+        static let textSecondary = adaptive(dark: 0x9e95b0, light: 0x57516a)
+        static let textMuted    = adaptive(dark: 0x6e7681, light: 0x8b8598)
+        static let border       = adaptive(dark: 0x352d45, light: 0xd0c9dd)
+        static let borderLight  = adaptive(dark: 0x3d444d, light: 0xc5bfd3)
 
-        // Status
-        static let success      = Color(hex: 0x22c55e)
-        static let warning      = Color(hex: 0xf59e0b)
-        static let error        = Color(hex: 0xef4444)
-        static let info         = Color(hex: 0x6366f1)
+        // Status (darker in light mode for contrast)
+        static let success      = adaptive(dark: 0x22c55e, light: 0x16a34a)
+        static let warning      = adaptive(dark: 0xf59e0b, light: 0xd97706)
+        static let error        = adaptive(dark: 0xef4444, light: 0xdc2626)
+        static let info         = adaptive(dark: 0x6366f1, light: 0x4f46e5)
 
-        // Agent role colors
-        static let rte          = Color(hex: 0x3b82f6) // blue
-        static let po           = Color(hex: 0x22c55e) // green
-        static let architect    = Color(hex: 0x6366f1) // indigo
-        static let lead         = Color(hex: 0xf59e0b) // orange
-        static let dev          = Color(hex: 0x06b6d4) // cyan
-        static let qa           = Color(hex: 0xeab308) // yellow
-        static let devops       = Color(hex: 0x3b82f6) // blue
-        static let security     = Color(hex: 0xef4444) // red
-        static let ux           = Color(hex: 0xec4899) // pink
+        // Agent role colors (slightly darker in light mode)
+        static let rte          = adaptive(dark: 0x3b82f6, light: 0x2563eb)
+        static let po           = adaptive(dark: 0x22c55e, light: 0x16a34a)
+        static let architect    = adaptive(dark: 0x6366f1, light: 0x4f46e5)
+        static let lead         = adaptive(dark: 0xf59e0b, light: 0xd97706)
+        static let dev          = adaptive(dark: 0x06b6d4, light: 0x0891b2)
+        static let qa           = adaptive(dark: 0xeab308, light: 0xca8a04)
+        static let devops       = adaptive(dark: 0x3b82f6, light: 0x2563eb)
+        static let security     = adaptive(dark: 0xef4444, light: 0xdc2626)
+        static let ux           = adaptive(dark: 0xec4899, light: 0xdb2777)
+
+        /// Create an adaptive Color that auto-switches between dark and light appearances
+        private static func adaptive(dark: UInt, light: UInt) -> Color {
+            Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+                let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                let hex = isDark ? dark : light
+                return NSColor(
+                    srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+                    green:   CGFloat((hex >> 8)  & 0xFF) / 255,
+                    blue:    CGFloat(hex & 0xFF)         / 255,
+                    alpha:   1.0
+                )
+            }))
+        }
     }
 
     // MARK: Typography
