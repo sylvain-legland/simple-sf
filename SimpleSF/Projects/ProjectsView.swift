@@ -906,9 +906,14 @@ struct ProjectAccordion: View {
 
     /// Compact inline badges for tool_call / tool_result groups
     private func toolBadgeRow(_ tools: [SFBridge.AgentEvent]) -> some View {
+        // Determine which agent made these tool calls
+        let agentId = tools.first?.agentId ?? "unknown"
+        let agentName = tools.first.flatMap { !$0.agentName.isEmpty ? $0.agentName : nil }
+            ?? catalog.agentName(agentId)
+        let agentColor = catalog.agentColor(agentId)
+
         let badges: [(icon: String, label: String)] = tools.compactMap { event in
             let raw = event.data
-            // tool_call format: "tool_name|args"  tool_result format: "tool_name|result"
             let toolName = raw.components(separatedBy: "|").first?.trimmingCharacters(in: .whitespaces) ?? raw
             let shortName = toolName
                 .replacingOccurrences(of: "code_", with: "")
@@ -934,13 +939,18 @@ struct ProjectAccordion: View {
                 }
                 return (icon, shortName)
             }
-            return nil // skip tool_result (already shown via tool_call badge)
+            return nil
         }
 
         guard !badges.isEmpty else { return AnyView(EmptyView()) }
 
         return AnyView(
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
+                AgentAvatarView(agentId: agentId, size: 20)
+                    .overlay(Circle().stroke(agentColor.opacity(0.5), lineWidth: 1))
+                Text(agentName)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(agentColor)
                 Image(systemName: "gearshape.2")
                     .font(.system(size: 9))
                     .foregroundColor(SF.Colors.textMuted)
@@ -960,7 +970,7 @@ struct ProjectAccordion: View {
                 Spacer()
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 2)
+            .padding(.vertical, 4)
         )
     }
 
