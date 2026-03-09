@@ -465,18 +465,22 @@ struct ProjectAccordion: View {
         }
     }
 
-    /// Shows the best available conversation: live events > persisted messages > empty state
+    /// Shows the best available conversation: live events > persisted messages > DB discussion > empty
     @ViewBuilder
     private var conversationFeed: some View {
         if !projectEvents.isEmpty {
             liveEventsFeed
         } else if isActive && !bridge.events.isEmpty {
-            // Active project owns global events (only 1 project runs at a time)
             globalEventsFeed
         } else if let msgs = missionStatus?.messages, !msgs.isEmpty {
             missionMessagesFeed(msgs)
         } else {
-            emptyDiscussionPlaceholder
+            let dbMsgs = bridge.discussionMessagesForProject(project.name)
+            if !dbMsgs.isEmpty {
+                discussionMessagesFeed(dbMsgs)
+            } else {
+                emptyDiscussionPlaceholder
+            }
         }
     }
 
@@ -679,6 +683,51 @@ struct ProjectAccordion: View {
                     .font(.system(size: 12))
                     .foregroundColor(SF.Colors.textPrimary)
                     .lineLimit(6)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(10)
+        .background(SF.Colors.bgSecondary.opacity(0.5))
+        .cornerRadius(8)
+    }
+
+    // ── Discussion messages feed (from Rust engine DB) ──
+
+    private func discussionMessagesFeed(_ messages: [SFBridge.DiscussionMessage]) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                ForEach(messages) { msg in
+                    discussionMessageRow(msg)
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func discussionMessageRow(_ msg: SFBridge.DiscussionMessage) -> some View {
+        let color = catalog.agentColor(msg.agentId)
+        return HStack(alignment: .top, spacing: 8) {
+            AgentAvatarView(agentId: msg.agentId, size: 28)
+                .overlay(Circle().stroke(color.opacity(0.4), lineWidth: 1))
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text(msg.agentName)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(color)
+                    RoleBadge(role: msg.agentRole, color: color)
+                    Text("Tour \(msg.round)")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(SF.Colors.textMuted)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(SF.Colors.bgTertiary)
+                        .cornerRadius(4)
+                    Spacer()
+                    Text(String(msg.createdAt.suffix(8)))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(SF.Colors.textMuted)
+                }
+                MarkdownView(msg.content, fontSize: 12)
                     .textSelection(.enabled)
             }
         }
