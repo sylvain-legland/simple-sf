@@ -410,6 +410,19 @@ struct OnboardingView: View {
                     .controlSize(.small)
                     .disabled(mlx.activeModel == nil)
                 }
+
+                Spacer()
+
+                Toggle(isOn: Binding(
+                    get: { AppState.shared.mlxAutoRestart },
+                    set: { AppState.shared.setMLXAutoRestart($0) }
+                )) {
+                    Text("Auto-start")
+                        .font(.caption)
+                        .foregroundColor(SF.Colors.textSecondary)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
             }
 
             if !mlx.logLines.isEmpty {

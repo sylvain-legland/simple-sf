@@ -14,6 +14,8 @@ final class AppState: ObservableObject {
     @Published var selectedModel: String
     /// YOLO mode: auto-approve all gates (no human-in-the-loop)
     @Published var yoloMode: Bool
+    /// Auto-restart MLX server when app starts and MLX is the selected provider
+    @Published var mlxAutoRestart: Bool
 
     /// JSON file for LLM settings — survives codesign (unlike UserDefaults)
     private var llmSettingsURL: URL {
@@ -30,6 +32,7 @@ final class AppState: ObservableObject {
         var lang: String?
         var setupDone: Bool?
         var yoloMode: Bool?
+        var mlxAutoRestart: Bool?
     }
 
     private init() {
@@ -46,6 +49,7 @@ final class AppState: ObservableObject {
         }
         selectedModel = settings?.model ?? UserDefaults.standard.string(forKey: "sf_selected_model") ?? ""
         yoloMode = settings?.yoloMode ?? false
+        mlxAutoRestart = settings?.mlxAutoRestart ?? true
         if let lang = settings?.lang ?? UserDefaults.standard.string(forKey: "sf_lang") { selectedLang = lang }
     }
 
@@ -66,7 +70,8 @@ final class AppState: ObservableObject {
             localProvider: preferredLocalProvider,
             lang: selectedLang,
             setupDone: hasCompletedSetup,
-            yoloMode: yoloMode
+            yoloMode: yoloMode,
+            mlxAutoRestart: mlxAutoRestart
         )
         guard let data = try? JSONEncoder().encode(settings) else { return }
         try? data.write(to: llmSettingsURL, options: .atomic)
@@ -115,5 +120,10 @@ final class AppState: ObservableObject {
         yoloMode = enabled
         saveLLMSettings()
         SFBridge.shared.syncYoloMode()
+    }
+
+    func setMLXAutoRestart(_ enabled: Bool) {
+        mlxAutoRestart = enabled
+        saveLLMSettings()
     }
 }
