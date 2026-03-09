@@ -271,7 +271,7 @@ final class SFBridge: ObservableObject {
         bootstrapActiveProject()
     }
 
-    /// Discover mission ID for active projects and auto-resume them.
+    /// Discover mission ID for active projects and restore their conversation from DB.
     private func bootstrapActiveProject() {
         let activeProjects = ProjectStore.shared.projects.filter { $0.status == .active }
         guard !activeProjects.isEmpty else { return }
@@ -290,19 +290,45 @@ final class SFBridge: ObservableObject {
                     print("[SFBridge] Bootstrapped mission \(rustProject.id) for project \(project.name)")
                 }
             }
+
+            // Restore conversation from DB if we don't have events in memory/disk cache
+            _restoreConversationFromDB(projectId: project.id)
         }
 
         // Auto-resume: restart the first active project if nothing is running
         if !isRunning, let project = activeProjects.first {
             print("[SFBridge] Auto-resuming project: \(project.name)")
             currentProjectId = project.id
-            projectEvents[project.id] = []
             Task {
                 // Ensure keychain is scanned before LLM config
                 await KeychainService.shared.scanIfNeeded()
                 await syncLLMConfigAsync()
                 startMissionAsync(projectId: project.id, brief: project.description)
             }
+        }
+    }
+
+    /// Load conversation messages from the Rust DB into projectEvents (if not already populated)
+    private func _restoreConversationFromDB(projectId: String) {
+        // Skip if we already have events from disk cache or live session
+        if let existing = projectEvents[projectId], !existing.isEmpty { return }
+
+        guard let status = missionStatusForProject(projectId),
+              !status.messages.isEmpty else { return }
+
+        var restored: [AgentEvent] = []
+        // Messages come in reverse order (DESC) from DB — reverse to chronological
+        for msg in status.messages.reversed() {
+            guard msg.role == "assistant", !msg.content.isEmpty else { continue }
+            var event = AgentEvent(agentId: msg.agent_name, eventType: "response", data: msg.content)
+            event.agentName = msg.agent_name
+            event.role = msg.role
+            restored.append(event)
+        }
+
+        if !restored.isEmpty {
+            projectEvents[projectId] = restored
+            print("[SFBridge] Restored \(restored.count) messages from DB for project \(projectId)")
         }
     }
 
@@ -811,6 +837,10 @@ final class SFBridge: ObservableObject {
                     self.events.append(event)
                     if let pid = self.currentProjectId {
                         self.projectEvents[pid, default: []].append(event)
+                    }
+                    // Persist after each response so conversations survive crashes
+                    if eventType == "response" {
+                        self._persistProjectEvents()
                     }
                 }
             }
