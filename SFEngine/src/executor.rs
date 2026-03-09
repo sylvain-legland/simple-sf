@@ -14,6 +14,7 @@ const MAX_ROUNDS: usize = 100;
 #[repr(C)]
 pub enum AgentEvent {
     Thinking,
+    Reasoning { active: bool },
     ToolCall { tool: String, args: String },
     ToolResult { tool: String, result: String },
     Response { content: String },
@@ -76,11 +77,19 @@ pub async fn run_agent(
             on_event_clone(&agent_id_owned, AgentEvent::ResponseChunk { content: chunk.to_string() });
         });
 
+        // Build a reasoning callback to signal thinking indicator
+        let agent_id_reasoning = agent_id.to_string();
+        let on_event_reasoning = on_event.clone();
+        let reasoning_cb: llm::OnReasoningFn = Box::new(move |active: bool| {
+            on_event_reasoning(&agent_id_reasoning, AgentEvent::Reasoning { active });
+        });
+
         let resp = llm::chat_completion_streaming(
             &messages,
             Some(&system),
             if tool_schemas.is_empty() { None } else { Some(&tool_schemas) },
             chunk_cb,
+            Some(reasoning_cb),
         ).await?;
 
         if !resp.tool_calls.is_empty() {

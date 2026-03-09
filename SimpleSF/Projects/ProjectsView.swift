@@ -885,13 +885,13 @@ struct ProjectAccordion: View {
             ProgressView()
                 .controlSize(.small)
                 .tint(SF.Colors.purple)
-            Text("Agents en cours de réflexion…")
+            Text(bridge.isReasoning ? "Raisonnement en profondeur…" : "Agents en cours de réflexion…")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(SF.Colors.textMuted)
+                .foregroundColor(bridge.isReasoning ? SF.Colors.purple : SF.Colors.textMuted)
             Spacer()
         }
         .padding(10)
-        .background(SF.Colors.purple.opacity(0.06))
+        .background(SF.Colors.purple.opacity(bridge.isReasoning ? 0.12 : 0.06))
         .cornerRadius(6)
     }
 

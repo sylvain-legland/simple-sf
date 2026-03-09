@@ -91,13 +91,16 @@ pub fn get_config() -> Option<LLMConfig> {
 /// Optional callback for streaming chunks — receives each content delta as it arrives
 pub type OnChunkFn = Box<dyn Fn(&str) + Send + Sync>;
 
+/// Optional callback for reasoning state changes — true=started, false=ended
+pub type OnReasoningFn = Box<dyn Fn(bool) + Send + Sync>;
+
 /// No artificial token limit — omit max_tokens to let the model use its full capacity
 pub async fn chat_completion(
     messages: &[LLMMessage],
     system: Option<&str>,
     tools: Option<&[Value]>,
 ) -> Result<LLMResponse, String> {
-    chat_completion_inner(messages, system, tools, None).await
+    chat_completion_inner(messages, system, tools, None, None).await
 }
 
 /// Kept for backward compat — ignores max_tokens, delegates to chat_completion
@@ -107,7 +110,7 @@ pub async fn chat_completion_with_tokens(
     tools: Option<&[Value]>,
     _max_tokens: u32,
 ) -> Result<LLMResponse, String> {
-    chat_completion_inner(messages, system, tools, None).await
+    chat_completion_inner(messages, system, tools, None, None).await
 }
 
 /// Streaming variant — calls on_chunk for each content delta
@@ -116,8 +119,9 @@ pub async fn chat_completion_streaming(
     system: Option<&str>,
     tools: Option<&[Value]>,
     on_chunk: OnChunkFn,
+    on_reasoning: Option<OnReasoningFn>,
 ) -> Result<LLMResponse, String> {
-    chat_completion_inner(messages, system, tools, Some(on_chunk)).await
+    chat_completion_inner(messages, system, tools, Some(on_chunk), on_reasoning).await
 }
 
 /// Core implementation — NO max_tokens in the request body
@@ -126,6 +130,7 @@ async fn chat_completion_inner(
     system: Option<&str>,
     tools: Option<&[Value]>,
     on_chunk: Option<OnChunkFn>,
+    on_reasoning: Option<OnReasoningFn>,
 ) -> Result<LLMResponse, String> {
     let config = get_config().ok_or("LLM not configured")?;
 
@@ -221,7 +226,7 @@ async fn chat_completion_inner(
         // Streaming response (#7)
         let is_stream = body["stream"].as_bool().unwrap_or(false);
         if is_stream {
-            return parse_stream(resp, &on_chunk).await;
+            return parse_stream(resp, &on_chunk, &on_reasoning).await;
         }
 
         let json: Value = resp.json().await.map_err(|e| format!("JSON parse: {}", e))?;
@@ -231,8 +236,13 @@ async fn chat_completion_inner(
     Err(format!("LLM call failed after {} retries: {}", MAX_RETRIES + 1, last_err))
 }
 
-/// Parse SSE stream into a complete LLMResponse, emitting chunks via on_chunk
-async fn parse_stream(resp: reqwest::Response, on_chunk: &Option<OnChunkFn>) -> Result<LLMResponse, String> {
+/// Parse SSE stream into a complete LLMResponse, emitting chunks via on_chunk.
+/// Handles reasoning models (Qwen3.5, etc.) that emit `delta.reasoning` separately from `delta.content`.
+async fn parse_stream(
+    resp: reqwest::Response,
+    on_chunk: &Option<OnChunkFn>,
+    on_reasoning: &Option<OnReasoningFn>,
+) -> Result<LLMResponse, String> {
     use tokio::io::AsyncBufReadExt;
     use tokio_util::io::StreamReader;
     use futures_util::StreamExt;
@@ -243,6 +253,8 @@ async fn parse_stream(resp: reqwest::Response, on_chunk: &Option<OnChunkFn>) -> 
 
     let mut full_content = String::new();
     let mut tool_calls: Vec<ToolCall> = Vec::new();
+    let mut is_reasoning = false;
+    let mut had_reasoning = false;
 
     while let Ok(Some(line)) = lines.next_line().await {
         let line = line.trim_start().to_string();
@@ -252,14 +264,34 @@ async fn parse_stream(resp: reqwest::Response, on_chunk: &Option<OnChunkFn>) -> 
 
         if let Ok(chunk) = serde_json::from_str::<Value>(data) {
             if let Some(delta) = chunk["choices"].get(0).and_then(|c| c.get("delta")) {
+                // Handle reasoning tokens (Qwen3.5, DeepSeek, etc.)
+                // These arrive in delta.reasoning while delta.content is empty
+                if let Some(reasoning) = delta["reasoning"].as_str() {
+                    if !reasoning.is_empty() && !is_reasoning {
+                        is_reasoning = true;
+                        had_reasoning = true;
+                        if let Some(cb) = on_reasoning {
+                            cb(true);
+                        }
+                    }
+                }
+
                 if let Some(content) = delta["content"].as_str() {
                     if !content.is_empty() {
+                        // Reasoning phase ended, content phase started
+                        if is_reasoning {
+                            is_reasoning = false;
+                            if let Some(cb) = on_reasoning {
+                                cb(false);
+                            }
+                        }
                         full_content.push_str(content);
                         if let Some(cb) = on_chunk {
                             cb(content);
                         }
                     }
                 }
+
                 // Accumulate tool call deltas
                 if let Some(tcs) = delta["tool_calls"].as_array() {
                     for tc in tcs {
@@ -275,6 +307,20 @@ async fn parse_stream(resp: reqwest::Response, on_chunk: &Option<OnChunkFn>) -> 
                     }
                 }
             }
+        }
+    }
+
+    // If model spent all tokens on reasoning with no visible content
+    if full_content.is_empty() && had_reasoning {
+        eprintln!("[llm] Warning: model exhausted token budget on reasoning — no visible content");
+        full_content = "(Model spent its entire token budget on reasoning without producing visible output. This typically happens with reasoning models like Qwen3.5 on complex prompts. Try a simpler prompt or a different model.)".to_string();
+        if is_reasoning {
+            if let Some(cb) = on_reasoning {
+                cb(false); // end reasoning indicator
+            }
+        }
+        if let Some(cb) = on_chunk {
+            cb(&full_content);
         }
     }
 
@@ -294,7 +340,19 @@ fn parse_response(json: &Value) -> Result<LLMResponse, String> {
     let choice = json["choices"].get(0).ok_or("No choices in response")?;
     let message = &choice["message"];
 
-    let content = message["content"].as_str().map(|s| strip_thinking(s));
+    // Get content, stripping any <think> blocks
+    let mut content = message["content"].as_str().map(|s| strip_thinking(s));
+
+    // Handle reasoning models (Qwen3.5, etc.) — if content is empty but reasoning exists,
+    // the model exhausted its budget on thinking
+    if content.as_ref().map_or(true, |c| c.is_empty()) {
+        if let Some(reasoning) = message["reasoning"].as_str() {
+            if !reasoning.is_empty() {
+                eprintln!("[llm] Warning: non-streaming response has reasoning but no content");
+                content = Some("(Model spent its token budget on reasoning. Try a simpler prompt or different model.)".to_string());
+            }
+        }
+    }
 
     let mut tool_calls = Vec::new();
     if let Some(tcs) = message["tool_calls"].as_array() {

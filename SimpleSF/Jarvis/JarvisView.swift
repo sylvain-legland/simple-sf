@@ -169,10 +169,21 @@ struct JarvisView: View {
                                 }
                             }
 
-                            // Live thinking indicators only
+                            // Live thinking/reasoning indicators
                             if bridge.discussionRunning {
-                                ForEach(bridge.discussionEvents.filter { $0.eventType == "discuss_thinking" }) { event in
-                                    thinkingIndicator(event: event)
+                                if bridge.isReasoning {
+                                    HStack(spacing: 12) {
+                                        ProgressView().controlSize(.small)
+                                        Text("Réflexion en cours…")
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(SF.Colors.purple)
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 8)
+                                } else {
+                                    ForEach(bridge.discussionEvents.filter { $0.eventType == "discuss_thinking" }) { event in
+                                        thinkingIndicator(event: event)
+                                    }
                                 }
                             }
 
