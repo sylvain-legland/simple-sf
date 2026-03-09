@@ -17,11 +17,11 @@ pub static YOLO_MODE: AtomicBool = AtomicBool::new(false);
 
 /// Fallback SAFe workflow phases (used if workflow not found in catalog)
 const SAFE_PHASES: &[(&str, &str, &[&str])] = &[
-    ("vision",  "network",     &["rte", "product"]),
-    ("design",  "sequential",  &["lead_dev", "architecte"]),
-    ("dev",     "parallel",    &["dev", "dev_frontend"]),
-    ("qa",      "sequential",  &["qa_lead"]),
-    ("review",  "network",     &["lead_dev", "product"]),
+    ("vision",  "network",     &["rte-marie", "po-lucas"]),
+    ("design",  "sequential",  &["archi-pierre", "lead-thomas"]),
+    ("dev",     "parallel",    &["dev-emma", "dev-karim"]),
+    ("qa",      "sequential",  &["qa-sophie"]),
+    ("review",  "network",     &["lead-thomas", "po-lucas"]),
 ];
 
 const MAX_NETWORK_ROUNDS: usize = 10;
@@ -792,29 +792,29 @@ async fn run_parallel(
 fn auto_assign_agents(phase_name: &str) -> Vec<String> {
     let lower = phase_name.to_lowercase();
     let ids: &[&str] = if lower.contains("idéation") || lower.contains("ideation") || lower.contains("vision") {
-        &["rte", "product"]
+        &["rte-marie", "po-lucas"]
     } else if lower.contains("stratégi") || lower.contains("strategi") || lower.contains("comité") || lower.contains("committee") {
-        &["rte", "product"]
+        &["rte-marie", "po-lucas"]
     } else if lower.contains("constitution") || lower.contains("setup") {
-        &["rte", "product"]
+        &["rte-marie", "po-lucas"]
     } else if lower.contains("architect") || lower.contains("design") && !lower.contains("system") {
-        &["system-architect-art", "rte"]
+        &["archi-pierre", "lead-thomas"]
     } else if lower.contains("design sys") || lower.contains("token") || lower.contains("ui") {
-        &["system-architect-art", "product"]
+        &["archi-pierre", "po-lucas"]
     } else if lower.contains("sprint") || lower.contains("dev") || lower.contains("développement") {
-        &["worker", "code-critic"]
+        &["dev-emma", "dev-karim"]
     } else if lower.contains("build") || lower.contains("verify") || lower.contains("ci") || lower.contains("pipeline") {
-        &["devops", "worker"]
+        &["lead-thomas", "dev-karim"]
     } else if lower.contains("revue") || lower.contains("review") || lower.contains("conformité") {
-        &["code-critic", "product"]
+        &["lead-thomas", "po-lucas"]
     } else if lower.contains("test") || lower.contains("qa") || lower.contains("campagne") {
-        &["tester", "code-critic"]
+        &["qa-sophie", "lead-thomas"]
     } else if lower.contains("deploy") || lower.contains("production") || lower.contains("release") {
-        &["devops", "rte"]
+        &["lead-thomas", "rte-marie"]
     } else if lower.contains("incident") || lower.contains("tma") || lower.contains("maintenance") || lower.contains("correctif") {
-        &["devops", "tester"]
+        &["lead-thomas", "qa-sophie"]
     } else {
-        &["rte", "product"]
+        &["rte-marie", "po-lucas"]
     };
     ids.iter().map(|s| s.to_string()).collect()
 }
