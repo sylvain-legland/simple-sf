@@ -1345,7 +1345,7 @@ struct ProjectAccordion: View {
     // ── Status indicator ──
     @ViewBuilder
     private var statusIndicator: some View {
-        if isActive {
+        if isActive && bridge.isRunning {
             HStack(spacing: 5) {
                 ProgressView().scaleEffect(0.55)
                 Text("Agents en cours…")
@@ -1355,6 +1355,19 @@ struct ProjectAccordion: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(SF.Colors.purple.opacity(0.1))
+            .cornerRadius(6)
+        } else if isActive {
+            HStack(spacing: 5) {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 6))
+                    .foregroundColor(SF.Colors.success)
+                Text("Prêt")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(SF.Colors.success)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(SF.Colors.success.opacity(0.1))
             .cornerRadius(6)
         } else if isQueued {
             HStack(spacing: 5) {
