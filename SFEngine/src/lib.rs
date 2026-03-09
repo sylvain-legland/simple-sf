@@ -1,14 +1,14 @@
-mod db;
-mod llm;
-mod agents;
-mod executor;
-mod engine;
-mod ideation;
-mod tools;
-mod protocols;
-mod guard;
-mod catalog;
-mod bench;
+pub mod db;
+pub mod llm;
+pub mod agents;
+pub mod executor;
+pub mod engine;
+pub mod ideation;
+pub mod tools;
+pub mod protocols;
+pub mod guard;
+pub mod catalog;
+pub mod bench;
 mod ffi;
 
 pub use ffi::*;
