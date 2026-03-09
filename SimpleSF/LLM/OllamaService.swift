@@ -95,12 +95,31 @@ final class OllamaService: ObservableObject {
     // MARK: - Stop Ollama
 
     func stop() {
+        // Try graceful shutdown via /api/quit first (Ollama 0.6+)
+        let quitURL = URL(string: "\(baseURL)/api/quit")!
+        var req = URLRequest(url: quitURL)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 3
+        Task.detached {
+            _ = try? await URLSession.shared.data(for: req)
+        }
+
+        // Also terminate the Ollama.app if it's running
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            for app in NSWorkspace.shared.runningApplications where app.bundleIdentifier == "com.ollama.ollama" {
+                app.terminate()
+            }
+        }
+
+        // Fallback: pkill
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
         task.arguments = ["-f", "ollama serve"]
         try? task.run()
         task.waitUntilExit()
+
         isRunning = false
         availableModels = []
+        activeModel = nil
     }
 }
