@@ -66,11 +66,19 @@ final class MLXService: ObservableObject {
                 // Only include if it has a config.json (MLX model marker)
                 let configPath = (fullPath as NSString).appendingPathComponent("config.json")
                 guard FileManager.default.fileExists(atPath: configPath) else { continue }
-                // Extract readable name
+                // Extract readable name — reconstruct HF repo ID (org/model)
                 let parts = entry.split(separator: "--", maxSplits: 2)
-                let name = parts.count >= 3 ? String(parts[2]).replacingOccurrences(of: "--", with: "/") :
-                           parts.count >= 2 ? String(parts[1]).replacingOccurrences(of: "--", with: "/") :
-                           entry
+                let name: String
+                if parts.count >= 3 {
+                    // models--mlx-community--Qwen3.5-35B-A3B-4bit → mlx-community/Qwen3.5-35B-A3B-4bit
+                    let org = String(parts[1])
+                    let model = String(parts[2]).replacingOccurrences(of: "--", with: "/")
+                    name = "\(org)/\(model)"
+                } else if parts.count >= 2 {
+                    name = String(parts[1]).replacingOccurrences(of: "--", with: "/")
+                } else {
+                    name = entry
+                }
                 // Parse model type from config.json
                 var modelType = ""
                 if let cfgData = FileManager.default.contents(atPath: configPath),
