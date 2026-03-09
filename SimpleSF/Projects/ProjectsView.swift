@@ -470,8 +470,8 @@ struct ProjectAccordion: View {
     private var conversationFeed: some View {
         if !projectEvents.isEmpty {
             liveEventsFeed
-        } else if !bridge.events.isEmpty && bridge.currentProjectId == project.id {
-            // Fallback: global events belong to this project (e.g. after restart)
+        } else if isActive && !bridge.events.isEmpty {
+            // Active project owns global events (only 1 project runs at a time)
             globalEventsFeed
         } else if let msgs = missionStatus?.messages, !msgs.isEmpty {
             missionMessagesFeed(msgs)
