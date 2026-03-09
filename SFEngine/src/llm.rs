@@ -363,7 +363,7 @@ async fn parse_stream(
     Ok(LLMResponse { content, tool_calls })
 }
 
-fn compute_backoff(attempt: u32, retry_after_secs: Option<u64>) -> u64 {
+pub fn compute_backoff(attempt: u32, retry_after_secs: Option<u64>) -> u64 {
     if let Some(ra) = retry_after_secs {
         return (ra * 1000).min(MAX_DELAY_MS);
     }
@@ -412,7 +412,7 @@ fn parse_response(json: &Value) -> Result<LLMResponse, String> {
     Ok(LLMResponse { content, tool_calls })
 }
 
-fn strip_thinking(s: &str) -> String {
+pub fn strip_thinking(s: &str) -> String {
     let mut out = s.to_string();
     while let Some(start) = out.find("<think>") {
         if let Some(end) = out.find("</think>") {

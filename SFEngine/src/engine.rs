@@ -1099,3 +1099,26 @@ fn load_conversation_history(max_sessions: usize, max_chars: usize) -> String {
     }
     history
 }
+
+// ── Public test wrappers for pattern functions ──
+
+pub async fn run_sequential_test(
+    agent_ids: &[&str], task: &str, phase: &str, workspace: &str,
+    mission_id: &str, phase_id: &str, on_event: &EventCallback,
+) -> Result<String, String> {
+    run_sequential(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await
+}
+
+pub async fn run_parallel_test(
+    agent_ids: &[&str], task: &str, phase: &str, workspace: &str,
+    mission_id: &str, phase_id: &str, on_event: &EventCallback,
+) -> Result<String, String> {
+    run_parallel(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await
+}
+
+pub async fn run_network_test(
+    agent_ids: &[&str], task: &str, phase: &str, workspace: &str,
+    mission_id: &str, phase_id: &str, on_event: &EventCallback,
+) -> Result<String, String> {
+    run_network(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await
+}
