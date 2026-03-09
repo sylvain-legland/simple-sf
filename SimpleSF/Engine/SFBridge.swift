@@ -59,9 +59,14 @@ final class SFBridge: ObservableObject {
     @Published var events: [AgentEvent] = []
     @Published var isRunning = false
     @Published var currentMissionId: String?
+    @Published var currentProjectId: String?
     @Published var engineReady = false
     @Published var ideationEvents: [AgentEvent] = []
     @Published var ideationRunning = false
+
+    // Per-project event history and mission mapping
+    @Published var projectEvents: [String: [AgentEvent]] = [:]
+    var projectMissionIds: [String: String] = [:]
 
     struct AgentEvent: Identifiable {
         let id = UUID()
@@ -353,8 +358,11 @@ final class SFBridge: ObservableObject {
 
     /// Non-blocking mission start — runs FFI call on background thread.
     func startMissionAsync(projectId: String, brief: String) {
+        // Store events for project before clearing
         events.removeAll()
         isRunning = true
+        currentProjectId = projectId
+        projectEvents[projectId] = []   // fresh events for this project
         let pid = projectId
         let b = brief
         Task.detached {
@@ -369,6 +377,9 @@ final class SFBridge: ObservableObject {
             }
             await MainActor.run {
                 SFBridge.shared.currentMissionId = missionId
+                if let mid = missionId {
+                    SFBridge.shared.projectMissionIds[pid] = mid
+                }
             }
         }
     }
@@ -406,6 +417,21 @@ final class SFBridge: ObservableObject {
 
     func missionStatus() -> MissionStatus? {
         guard let mid = currentMissionId else { return nil }
+        return missionStatusById(mid)
+    }
+
+    /// Get mission status for a specific project (uses stored mission ID mapping)
+    func missionStatusForProject(_ projectId: String) -> MissionStatus? {
+        guard let mid = projectMissionIds[projectId] else { return nil }
+        return missionStatusById(mid)
+    }
+
+    /// Get events for a specific project
+    func eventsForProject(_ projectId: String) -> [AgentEvent] {
+        return projectEvents[projectId] ?? []
+    }
+
+    private func missionStatusById(_ mid: String) -> MissionStatus? {
         return mid.withCString { ptr -> MissionStatus? in
             guard let result = _sf_mission_status(ptr) else { return nil }
             let json = String(cString: result)
@@ -527,10 +553,16 @@ final class SFBridge: ObservableObject {
             case "mission_complete":
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.events.append(event)
+                if let pid = self.currentProjectId {
+                    self.projectEvents[pid, default: []].append(event)
+                }
                 self.isRunning = false
             case "error":
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.events.append(event)
+                if let pid = self.currentProjectId {
+                    self.projectEvents[pid, default: []].append(event)
+                }
                 if self.discussionRunning { self.discussionRunning = false }
             default:
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
@@ -538,6 +570,9 @@ final class SFBridge: ObservableObject {
                     self.ideationEvents.append(event)
                 } else {
                     self.events.append(event)
+                    if let pid = self.currentProjectId {
+                        self.projectEvents[pid, default: []].append(event)
+                    }
                 }
             }
         }
