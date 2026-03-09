@@ -16,9 +16,6 @@ const MAX_RETRIES: u32 = 5;
 const BASE_DELAY_MS: u64 = 2000;
 const MAX_DELAY_MS: u64 = 60_000;
 
-/// No artificial token limit — let the model use its full context window
-const DEFAULT_MAX_TOKENS: u32 = 128_000;
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LLMMessage {
     pub role: String,
@@ -91,22 +88,30 @@ pub fn get_config() -> Option<LLMConfig> {
     })
 }
 
-/// Backward-compatible wrapper — uses DEFAULT_MAX_TOKENS (no artificial limit)
+/// No artificial token limit — omit max_tokens to let the model use its full capacity
 pub async fn chat_completion(
     messages: &[LLMMessage],
     system: Option<&str>,
     tools: Option<&[Value]>,
 ) -> Result<LLMResponse, String> {
-    chat_completion_with_tokens(messages, system, tools, DEFAULT_MAX_TOKENS).await
+    chat_completion_inner(messages, system, tools).await
 }
 
-/// Chat completion with configurable max_tokens + retry with exponential backoff.
-/// Streaming callback: if provided, chunks are sent as they arrive (#7).
+/// Kept for backward compat — ignores max_tokens, delegates to chat_completion
 pub async fn chat_completion_with_tokens(
     messages: &[LLMMessage],
     system: Option<&str>,
     tools: Option<&[Value]>,
-    max_tokens: u32,
+    _max_tokens: u32,
+) -> Result<LLMResponse, String> {
+    chat_completion_inner(messages, system, tools).await
+}
+
+/// Core implementation — NO max_tokens in the request body
+async fn chat_completion_inner(
+    messages: &[LLMMessage],
+    system: Option<&str>,
+    tools: Option<&[Value]>,
 ) -> Result<LLMResponse, String> {
     let config = get_config().ok_or("LLM not configured")?;
 
@@ -121,7 +126,6 @@ pub async fn chat_completion_with_tokens(
     let mut body = json!({
         "model": config.model,
         "messages": msgs,
-        "max_tokens": max_tokens,
         "temperature": 0.7,
         "stream": true,
     });
@@ -129,7 +133,6 @@ pub async fn chat_completion_with_tokens(
     if let Some(t) = tools {
         if !t.is_empty() {
             body["tools"] = Value::Array(t.to_vec());
-            // Can't stream with tool calls on most providers
             body["stream"] = json!(false);
         }
     }
