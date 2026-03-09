@@ -18,3 +18,7 @@ serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
+
+[[example]]
+name = "pacman_mission"
+path = "examples/pacman_mission.rs"
