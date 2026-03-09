@@ -292,8 +292,14 @@ pub extern "C" fn sf_jarvis_discuss(
 
 /// Returns JSON array of the most recent discussion session's messages.
 /// Format: [{"agent_id":"...","agent_name":"...","role":"...","content":"...","round":N}]
+/// Safe to call before DB init — returns empty array.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_load_discussion_history() -> *mut c_char {
+    // Safety: return empty if DB not yet initialized
+    if !db::is_initialized() {
+        return c_str("[]").into_raw();
+    }
+
     let msgs: Vec<serde_json::Value> = db::with_db(|conn| {
         // Find the most recent discussion session with messages
         let session_id: Option<String> = conn.query_row(

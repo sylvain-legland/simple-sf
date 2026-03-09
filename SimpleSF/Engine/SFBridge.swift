@@ -97,7 +97,7 @@ final class SFBridge: ObservableObject {
         projectMissionIds = UserDefaults.standard.dictionary(forKey: Self.missionIdsKey) as? [String: String] ?? [:]
         currentProjectId = UserDefaults.standard.string(forKey: "sf_current_project_id")
         _loadProjectEvents()
-        _loadDiscussionHistory()
+        // Note: _loadDiscussionHistory() is called later in initialize() after DB is ready
     }
 
     private func _persistMissionIds() {
@@ -263,6 +263,9 @@ final class SFBridge: ObservableObject {
         syncYoloMode()
 
         engineReady = true
+
+        // Restore discussion history now that DB is ready
+        _loadDiscussionHistory()
 
         // Bootstrap: if a project is active but has no mission mapping, discover it
         bootstrapActiveProject()

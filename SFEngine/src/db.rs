@@ -10,6 +10,10 @@ pub fn init_db(path: &str) {
     DB.set(Mutex::new(conn)).ok();
 }
 
+pub fn is_initialized() -> bool {
+    DB.get().is_some()
+}
+
 pub fn with_db<F, T>(f: F) -> T
 where F: FnOnce(&Connection) -> T {
     let lock = DB.get().expect("DB not initialized");
