@@ -132,16 +132,9 @@ final class LLMService: ObservableObject {
 
     // Active provider: respects explicit user selection, then auto-detect
     var activeProvider: LLMProvider? {
-        // Explicit selection — trust it even if keychain scan isn't done yet
+        // Explicit selection — trust it unconditionally
         if let sel = AppState.shared.selectedProvider {
-            switch sel {
-            case .mlx where MLXService.shared.isRunning: return .mlx
-            case .ollama where OllamaService.shared.isRunning: return .ollama
-            case let p where !p.isLocal:
-                // Trust user's explicit cloud selection; don't require storedProviders check
-                return p
-            default: break // local provider selected but not running
-            }
+            return sel
         }
         // Auto-detect
         let pref = AppState.shared.preferredLocalProvider
