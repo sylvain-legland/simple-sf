@@ -1037,8 +1037,34 @@ struct ProjectAccordion: View {
 
                     // ── Content ──
                     if !event.data.isEmpty {
-                        MarkdownView(event.data, fontSize: 12)
-                            .textSelection(.enabled)
+                        let cleanContent = Self.stripToolCallLines(event.data)
+                        if !cleanContent.isEmpty {
+                            MarkdownView(cleanContent, fontSize: 12)
+                                .textSelection(.enabled)
+                        }
+                        // Inline tool badges extracted from [Calling tools: ...] lines
+                        let inlineTools = Self.extractInlineTools(event.data)
+                        if !inlineTools.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "wrench.and.screwdriver")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(SF.Colors.textMuted)
+                                ForEach(Array(inlineTools.enumerated()), id: \.offset) { _, tool in
+                                    HStack(spacing: 3) {
+                                        Image(systemName: Self.toolIcon(tool))
+                                            .font(.system(size: 9))
+                                        Text(tool)
+                                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    }
+                                    .foregroundColor(SF.Colors.textSecondary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(SF.Colors.bgTertiary)
+                                    .cornerRadius(4)
+                                }
+                                Spacer()
+                            }
+                        }
                     }
 
                     // Typing cursor for last active event
@@ -1096,6 +1122,62 @@ struct ProjectAccordion: View {
             .padding(.vertical, 2)
             .background(bg)
             .cornerRadius(4)
+    }
+
+    // MARK: - Tool call text → badge conversion
+
+    /// Strip "[Calling tools: ...]" lines and standalone tool call text from content
+    private static func stripToolCallLines(_ text: String) -> String {
+        text.components(separatedBy: "\n")
+            .filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("[Calling tools:") && trimmed.hasSuffix("]") { return false }
+                if trimmed.hasPrefix("[Tool ") && trimmed.contains("result:") { return false }
+                return true
+            }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Extract tool names from "[Calling tools: name(args), name2(args)]" lines
+    private static func extractInlineTools(_ text: String) -> [String] {
+        var tools: [String] = []
+        for line in text.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("[Calling tools:"), trimmed.hasSuffix("]") else { continue }
+            let inner = String(trimmed.dropFirst("[Calling tools:".count).dropLast())
+                .trimmingCharacters(in: .whitespaces)
+            // Parse "name(args), name2(args)"
+            for part in inner.components(separatedBy: ",") {
+                let name = part.trimmingCharacters(in: .whitespaces)
+                    .components(separatedBy: "(").first?
+                    .trimmingCharacters(in: .whitespaces) ?? ""
+                if !name.isEmpty {
+                    let short = name
+                        .replacingOccurrences(of: "code_", with: "")
+                        .replacingOccurrences(of: "file_", with: "")
+                        .replacingOccurrences(of: "memory_", with: "mem:")
+                        .replacingOccurrences(of: "git_", with: "git:")
+                        .replacingOccurrences(of: "list_", with: "ls:")
+                        .replacingOccurrences(of: "deep_", with: "")
+                    tools.append(short)
+                }
+            }
+        }
+        return tools
+    }
+
+    private static func toolIcon(_ name: String) -> String {
+        switch true {
+        case name.contains("read"):   return "doc.text"
+        case name.contains("write"):  return "square.and.pencil"
+        case name.contains("edit"):   return "pencil"
+        case name.contains("search"): return "magnifyingglass"
+        case name.hasPrefix("ls:"):   return "list.bullet"
+        case name.hasPrefix("git:"):  return "arrow.triangle.branch"
+        case name.hasPrefix("mem:"):  return "brain"
+        default:                       return "wrench"
+        }
     }
 
     @ViewBuilder
