@@ -17,7 +17,7 @@ pub fn is_initialized() -> bool {
 pub fn with_db<F, T>(f: F) -> T
 where F: FnOnce(&Connection) -> T {
     let lock = DB.get().expect("DB not initialized");
-    let conn = lock.lock().unwrap();
+    let conn = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     f(&conn)
 }
 
