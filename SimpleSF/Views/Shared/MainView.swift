@@ -115,13 +115,81 @@ struct SidebarView: View {
     }
 
     private var providerBadge: some View {
-        HStack(spacing: 6) {
-            StatusDot(active: llm.activeProvider != nil, size: 7)
-            Text(llm.activeDisplayName)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(llm.activeProvider != nil ? SF.Colors.textSecondary : SF.Colors.warning)
-                .lineLimit(1)
+        let provider = llm.activeProvider
+        let isActive = provider != nil
+
+        return VStack(spacing: 0) {
+            Divider().opacity(0.3)
+            HStack(spacing: 8) {
+                // Provider icon
+                Image(systemName: providerIcon(provider))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isActive ? providerColor(provider) : SF.Colors.textMuted)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(provider?.displayName ?? "No LLM")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(isActive ? SF.Colors.textPrimary : SF.Colors.warning)
+                    Text(activeModelShort(provider))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(isActive ? SF.Colors.textMuted : SF.Colors.error)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer()
+
+                // Status dot
+                Circle()
+                    .fill(isActive ? SF.Colors.success : SF.Colors.error)
+                    .frame(width: 6, height: 6)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
-        .padding(12)
+    }
+
+    private func providerIcon(_ provider: LLMProvider?) -> String {
+        switch provider {
+        case .mlx:        return "cpu"
+        case .ollama:     return "desktopcomputer"
+        case .openai:     return "sparkle"
+        case .anthropic:  return "brain.head.profile"
+        case .gemini:     return "diamond.fill"
+        case .minimax:    return "bolt.fill"
+        case .openrouter: return "network"
+        case .glm:        return "globe.asia.australia.fill"
+        case .alibaba:    return "cloud.fill"
+        case .kimi:       return "moon.fill"
+        case .none:       return "exclamationmark.triangle"
+        }
+    }
+
+    private func providerColor(_ provider: LLMProvider?) -> Color {
+        switch provider {
+        case .mlx:        return SF.Colors.purple
+        case .ollama:     return SF.Colors.info
+        case .openai:     return SF.Colors.success
+        case .anthropic:  return SF.Colors.warning
+        case .minimax:    return SF.Colors.accent
+        default:          return SF.Colors.textSecondary
+        }
+    }
+
+    private func activeModelShort(_ provider: LLMProvider?) -> String {
+        guard let provider else { return "Not configured" }
+        switch provider {
+        case .mlx:
+            let name = MLXService.shared.activeModel?.name ?? "loading…"
+            let short = name.split(separator: "/").last.map(String.init) ?? name
+            // Strip quantization suffix for display: "Qwen3.5-35B-A3B-4bit" → "Qwen3.5-35B-A3B"
+            return short
+        case .ollama:
+            return OllamaService.shared.activeModel?.name ?? "loading…"
+        default:
+            let sel = AppState.shared.selectedModel
+            return sel.isEmpty ? provider.defaultModel : sel
+        }
     }
 }
