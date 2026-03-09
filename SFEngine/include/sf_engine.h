@@ -27,6 +27,16 @@ char* sf_mission_status(const char* mission_id);
 // Agents
 char* sf_list_agents(void);
 
+// Discussions
+char* sf_jarvis_discuss(const char* message, const char* project_context);
+char* sf_load_discussion_history(void);
+
+// Ideation
+char* sf_start_ideation(const char* idea);
+
+// Settings
+void sf_set_yolo(int enabled);
+
 // Memory management
 void sf_free_string(char* s);
 
