@@ -1073,12 +1073,14 @@ name = "sf-engine"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "futures-util",
  "regex",
  "reqwest",
  "rusqlite",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "uuid",
 ]
 

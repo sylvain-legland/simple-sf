@@ -31,6 +31,7 @@ pub struct AgentInfo {
     pub skills: Vec<String>,
     pub hierarchy_rank: i64,
     pub can_veto: bool,
+    pub max_tokens: i64,
 }
 
 /// Get agent info from cache (fast, no DB)
@@ -128,10 +129,11 @@ fn seed_agents_json(data_dir: &str, cache: &mut HashMap<String, AgentInfo>) {
                 a["motivation"].as_str().unwrap_or(""),
                 hierarchy_rank,
                 a["project_id"].as_str().unwrap_or(""),
-            ]).ok();
+            ]).unwrap_or_else(|e| { eprintln!("[catalog] DB error: {}", e); 0 });
 
             let tools: Vec<String> = serde_json::from_str(tools_json).unwrap_or_default();
             let skills: Vec<String> = serde_json::from_str(skills_json).unwrap_or_default();
+            let max_tokens = a["max_tokens"].as_i64().unwrap_or(0);
             cache.insert(id.to_string(), AgentInfo {
                 id: id.to_string(),
                 name: name.to_string(),
@@ -142,6 +144,7 @@ fn seed_agents_json(data_dir: &str, cache: &mut HashMap<String, AgentInfo>) {
                 color: color.to_string(),
                 tagline: tagline.to_string(),
                 tools, skills, hierarchy_rank, can_veto,
+                max_tokens,
             });
         }
     });
@@ -173,7 +176,7 @@ fn seed_skills_json(data_dir: &str) {
                 s["source"].as_str().unwrap_or(""),
                 s["source_url"].as_str().unwrap_or(""),
                 s["tags_json"].as_str().unwrap_or("[]"),
-            ]).ok();
+            ]).unwrap_or_else(|e| { eprintln!("[catalog] DB error: {}", e); 0 });
         }
     });
     eprintln!("[catalog] Loaded {} skills", count);
@@ -208,7 +211,7 @@ fn seed_patterns_json(data_dir: &str) {
                 p["memory_config_json"].as_str().unwrap_or("{}"),
                 p["icon"].as_str().unwrap_or(""),
                 p["is_builtin"].as_i64().unwrap_or(0),
-            ]).ok();
+            ]).unwrap_or_else(|e| { eprintln!("[catalog] DB error: {}", e); 0 });
         }
     });
     eprintln!("[catalog] Loaded {} patterns", count);
@@ -239,7 +242,7 @@ fn seed_workflows_json(data_dir: &str) {
                 w["config_json"].as_str().unwrap_or("{}"),
                 w["icon"].as_str().unwrap_or(""),
                 w["is_builtin"].as_i64().unwrap_or(0),
-            ]).ok();
+            ]).unwrap_or_else(|e| { eprintln!("[catalog] DB error: {}", e); 0 });
         }
     });
     eprintln!("[catalog] Loaded {} workflows", count);
@@ -265,7 +268,7 @@ fn seed_fallback_agents(cache: &mut HashMap<String, AgentInfo>) {
             conn.execute(
                 "INSERT OR IGNORE INTO agents (id, name, role, description, persona) VALUES (?1,?2,?3,?4,?4)",
                 params![id, name, role, desc],
-            ).ok();
+            ).unwrap_or_else(|e| { eprintln!("[catalog] DB error: {}", e); 0 });
             cache.insert(id.to_string(), AgentInfo {
                 id: id.to_string(),
                 name: name.to_string(),
@@ -278,6 +281,7 @@ fn seed_fallback_agents(cache: &mut HashMap<String, AgentInfo>) {
                 tools: vec![], skills: vec![],
                 hierarchy_rank: 50,
                 can_veto: false,
+                max_tokens: 0,
             });
         }
     });

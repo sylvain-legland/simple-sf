@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::path::Path;
 use std::fs;
-use std::sync::Mutex;
+use std::time::Duration;
 
 // ══════════════════════════════════════════════════════════════
 // TOOL REGISTRY — 18 tools ported from the SF platform
@@ -65,7 +65,7 @@ fn all_tool_schemas() -> HashMap<&'static str, Value> {
         "type": "function",
         "function": {
             "name": "code_read",
-            "description": "Read a file's content. Returns up to 8000 chars.",
+            "description": "Read a file's complete content.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -386,11 +386,7 @@ fn tool_code_read(args: &Value, workspace: &str) -> String {
     }
     let full = Path::new(workspace).join(path);
     match fs::read_to_string(&full) {
-        Ok(c) => {
-            if c.len() > 8000 {
-                format!("{}\n... (truncated, {} bytes total)", &c[..8000], c.len())
-            } else { c }
-        }
+        Ok(c) => c,
         Err(e) => format!("Error reading {}: {}", path, e),
     }
 }
@@ -439,7 +435,6 @@ fn tool_code_search(args: &Value, workspace: &str) -> String {
         Ok(o) => {
             let out = String::from_utf8_lossy(&o.stdout);
             if out.is_empty() { "No matches found".to_string() }
-            else if out.len() > 4000 { format!("{}\n... (truncated)", &out[..4000]) }
             else { out.to_string() }
         }
         Err(e) => format!("Search error: {}", e),
@@ -459,8 +454,7 @@ fn tool_list_files(args: &Value, workspace: &str) -> String {
         match output {
             Ok(o) => {
                 let out = String::from_utf8_lossy(&o.stdout);
-                if out.len() > 4000 { format!("{}\n... (truncated)", &out[..4000]) }
-                else { out.to_string() }
+                out.to_string()
             }
             Err(e) => format!("Error: {}", e),
         }
@@ -538,8 +532,6 @@ fn tool_deep_search(args: &Value, workspace: &str) -> String {
 
     if results.is_empty() {
         format!("No results found for '{}'", query)
-    } else if results.len() > 6000 {
-        format!("{}\n... (truncated)", &results[..6000])
     } else {
         results
     }
@@ -610,32 +602,37 @@ fn tool_git_create_branch(args: &Value, workspace: &str) -> String {
     run_shell(&cmd, workspace, 10)
 }
 
-// ── Memory Tools ───────────────────────────────────────────
-
-static MEMORY: std::sync::OnceLock<Mutex<HashMap<String, (String, String)>>> = std::sync::OnceLock::new();
-
-fn memory_store() -> &'static Mutex<HashMap<String, (String, String)>> {
-    MEMORY.get_or_init(|| Mutex::new(HashMap::new()))
-}
+// ── Memory Tools — persisted to SQLite (#4) ───────────────
 
 fn tool_memory_search(args: &Value) -> String {
     let query = args["query"].as_str().unwrap_or("").to_lowercase();
-    let store = memory_store().lock().unwrap();
+    let _scope = args["scope"].as_str().unwrap_or("all");
 
-    let mut results: Vec<String> = Vec::new();
-    for (key, (value, category)) in store.iter() {
-        if key.to_lowercase().contains(&query)
-            || value.to_lowercase().contains(&query)
-            || category.to_lowercase().contains(&query) {
-            results.push(format!("[{}] {}: {}", category, key, value));
+    crate::db::with_db(|conn| {
+        // Use LIKE for flexible matching across key, value, and category
+        let pattern = format!("%{}%", query);
+        let mut stmt = conn.prepare(
+            "SELECT key, value, category FROM memory WHERE \
+             LOWER(key) LIKE ?1 OR LOWER(value) LIKE ?1 OR LOWER(category) LIKE ?1 \
+             ORDER BY created_at DESC LIMIT 20"
+        ).unwrap();
+
+        let results: Vec<String> = stmt.query_map(
+            rusqlite::params![pattern],
+            |row| {
+                let key: String = row.get(0)?;
+                let value: String = row.get(1)?;
+                let category: String = row.get(2)?;
+                Ok(format!("[{}] {}: {}", category, key, value))
+            },
+        ).unwrap().filter_map(|r| r.ok()).collect();
+
+        if results.is_empty() {
+            format!("No memory found for '{}'", query)
+        } else {
+            results.join("\n\n")
         }
-    }
-
-    if results.is_empty() {
-        format!("No memory found for '{}'", query)
-    } else {
-        results.join("\n\n")
-    }
+    })
 }
 
 fn tool_memory_store(args: &Value) -> String {
@@ -647,9 +644,18 @@ fn tool_memory_store(args: &Value) -> String {
         return "Error: key and value are required".to_string();
     }
 
-    let mut store = memory_store().lock().unwrap();
-    store.insert(key.clone(), (value, category.clone()));
-    format!("Stored memory '{}' in category '{}'", key, category)
+    crate::db::with_db(|conn| {
+        match conn.execute(
+            "INSERT INTO memory (key, value, category) VALUES (?1, ?2, ?3)",
+            rusqlite::params![&key, &value, &category],
+        ) {
+            Ok(_) => format!("Stored memory '{}' in category '{}'", key, category),
+            Err(e) => {
+                eprintln!("[db] Failed to store memory: {}", e);
+                format!("Error storing memory: {}", e)
+            }
+        }
+    })
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -662,7 +668,7 @@ const BLOCKED_PATTERNS: &[&str] = &[
     "curl | sh", "wget | sh", "chmod 777",
 ];
 
-fn run_shell(cmd: &str, workspace: &str, _timeout_secs: u64) -> String {
+fn run_shell(cmd: &str, workspace: &str, timeout_secs: u64) -> String {
     // Security check
     let cmd_lower = cmd.to_lowercase();
     for blocked in BLOCKED_PATTERNS {
@@ -671,26 +677,47 @@ fn run_shell(cmd: &str, workspace: &str, _timeout_secs: u64) -> String {
         }
     }
 
-    let output = Command::new("sh")
+    let mut child = match Command::new("sh")
         .args(["-c", cmd])
         .current_dir(workspace)
-        .output();
-    match output {
-        Ok(o) => {
-            let stdout = String::from_utf8_lossy(&o.stdout);
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            let mut result = String::new();
-            if !stdout.is_empty() { result.push_str(&stdout); }
-            if !stderr.is_empty() {
-                if !result.is_empty() { result.push('\n'); }
-                result.push_str(&stderr);
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn() {
+        Ok(c) => c,
+        Err(e) => return format!("Failed to run command: {}", e),
+    };
+
+    // Real timeout enforcement (#11)
+    let timeout = Duration::from_secs(timeout_secs);
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_status)) => break,
+            Ok(None) => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    return format!("Command timed out after {}s: {}", timeout_secs, cmd);
+                }
+                std::thread::sleep(Duration::from_millis(100));
             }
-            if result.len() > 4000 {
-                format!("{}\n... (truncated)", &result[..4000])
-            } else if result.is_empty() {
-                format!("Command completed (exit {})", o.status.code().unwrap_or(-1))
-            } else { result }
+            Err(e) => return format!("Error waiting for command: {}", e),
         }
-        Err(e) => format!("Failed to run command: {}", e),
     }
+
+    let output = match child.wait_with_output() {
+        Ok(o) => o,
+        Err(e) => return format!("Failed to read output: {}", e),
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut result = String::new();
+    if !stdout.is_empty() { result.push_str(&stdout); }
+    if !stderr.is_empty() {
+        if !result.is_empty() { result.push('\n'); }
+        result.push_str(&stderr);
+    }
+    if result.is_empty() {
+        format!("Command completed (exit {})", output.status.code().unwrap_or(-1))
+    } else { result }
 }

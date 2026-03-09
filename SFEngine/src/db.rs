@@ -1,4 +1,4 @@
-use rusqlite::{Connection, params};
+use rusqlite::Connection;
 use std::sync::Mutex;
 
 static DB: std::sync::OnceLock<Mutex<Connection>> = std::sync::OnceLock::new();
