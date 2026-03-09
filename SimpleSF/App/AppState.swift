@@ -12,6 +12,8 @@ final class AppState: ObservableObject {
     @Published var selectedProvider: LLMProvider?
     /// Model override for the selected provider (empty = use default)
     @Published var selectedModel: String
+    /// YOLO mode: auto-approve all gates (no human-in-the-loop)
+    @Published var yoloMode: Bool
 
     /// JSON file for LLM settings — survives codesign (unlike UserDefaults)
     private var llmSettingsURL: URL {
@@ -27,6 +29,7 @@ final class AppState: ObservableObject {
         var localProvider: String?
         var lang: String?
         var setupDone: Bool?
+        var yoloMode: Bool?
     }
 
     private init() {
@@ -42,6 +45,7 @@ final class AppState: ObservableObject {
             selectedProvider = nil
         }
         selectedModel = settings?.model ?? UserDefaults.standard.string(forKey: "sf_selected_model") ?? ""
+        yoloMode = settings?.yoloMode ?? false
         if let lang = settings?.lang ?? UserDefaults.standard.string(forKey: "sf_lang") { selectedLang = lang }
     }
 
@@ -61,7 +65,8 @@ final class AppState: ObservableObject {
             model: selectedModel.isEmpty ? nil : selectedModel,
             localProvider: preferredLocalProvider,
             lang: selectedLang,
-            setupDone: hasCompletedSetup
+            setupDone: hasCompletedSetup,
+            yoloMode: yoloMode
         )
         guard let data = try? JSONEncoder().encode(settings) else { return }
         try? data.write(to: llmSettingsURL, options: .atomic)
@@ -104,5 +109,11 @@ final class AppState: ObservableObject {
         hasCompletedSetup = true
         UserDefaults.standard.set(true, forKey: "sf_setup_done")
         saveLLMSettings()
+    }
+
+    func setYoloMode(_ enabled: Bool) {
+        yoloMode = enabled
+        saveLLMSettings()
+        SFBridge.shared.syncYoloMode()
     }
 }

@@ -18,6 +18,9 @@ func _sf_set_callback(_ cb: SFEventCallback)
 @_silgen_name("sf_configure_llm")
 func _sf_configure_llm(_ provider: UnsafePointer<CChar>?, _ apiKey: UnsafePointer<CChar>?, _ baseUrl: UnsafePointer<CChar>?, _ model: UnsafePointer<CChar>?)
 
+@_silgen_name("sf_set_yolo")
+func _sf_set_yolo(_ enabled: Bool)
+
 @_silgen_name("sf_create_project")
 func _sf_create_project(_ name: UnsafePointer<CChar>?, _ desc: UnsafePointer<CChar>?, _ tech: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 
@@ -213,6 +216,9 @@ final class SFBridge: ObservableObject {
         // Set callback (routes through a global C function)
         _sf_set_callback(sfEventHandler)
 
+        // Sync settings to engine
+        syncYoloMode()
+
         engineReady = true
 
         // Bootstrap: if a project is active but has no mission mapping, discover it
@@ -252,6 +258,11 @@ final class SFBridge: ObservableObject {
                 startMissionAsync(projectId: project.id, brief: project.description)
             }
         }
+    }
+
+    /// Sync YOLO mode to the Rust engine
+    func syncYoloMode() {
+        _sf_set_yolo(AppState.shared.yoloMode)
     }
 
     /// Synchronous config sync — used after user-initiated provider changes.
