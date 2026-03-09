@@ -465,19 +465,30 @@ struct ProjectAccordion: View {
         }
     }
 
-    /// Shows the best available conversation: live events > persisted messages > DB discussion > empty
+    /// Shows the best available conversation: live events > discussion events > persisted > DB > empty
     @ViewBuilder
     private var conversationFeed: some View {
         if !projectEvents.isEmpty {
             liveEventsFeed
         } else if isActive && !bridge.events.isEmpty {
             globalEventsFeed
+        } else if isActive && !bridge.discussionEvents.isEmpty {
+            // Jarvis discussion events from current session
+            eventScrollFeed(events: bridge.discussionEvents)
         } else if let msgs = missionStatus?.messages, !msgs.isEmpty {
             missionMessagesFeed(msgs)
         } else {
+            // Try DB: first match project name, then fall back to most recent session with messages
             let dbMsgs = bridge.discussionMessagesForProject(project.name)
             if !dbMsgs.isEmpty {
                 discussionMessagesFeed(dbMsgs)
+            } else if isActive {
+                let allMsgs = bridge.mostRecentDiscussionMessages()
+                if !allMsgs.isEmpty {
+                    discussionMessagesFeed(allMsgs)
+                } else {
+                    activeNoDataPlaceholder
+                }
             } else {
                 emptyDiscussionPlaceholder
             }
@@ -746,6 +757,22 @@ struct ProjectAccordion: View {
                     .font(.system(size: 32))
                     .foregroundColor(SF.Colors.textMuted.opacity(0.5))
                 Text("Lancez le workflow pour voir la discussion des agents")
+                    .font(.system(size: 13))
+                    .foregroundColor(SF.Colors.textMuted)
+            }
+            .padding(.top, 30)
+            Spacer()
+        }
+    }
+
+    private var activeNoDataPlaceholder: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: 8) {
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .tint(SF.Colors.purple)
+                Text("Les agents travaillent — la conversation apparaîtra ici")
                     .font(.system(size: 13))
                     .foregroundColor(SF.Colors.textMuted)
             }
