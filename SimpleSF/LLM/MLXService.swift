@@ -142,15 +142,23 @@ final class MLXService: ObservableObject {
         state = .starting
         logLines = []
 
+        // Resolve python3 path — /usr/bin/env may not find homebrew python in codesigned apps
+        let python3Path = Self.findPython3()
+
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        proc.executableURL = URL(fileURLWithPath: python3Path)
         proc.arguments = [
-            "python3", "-m", "mlx_lm", "server",
+            "-m", "mlx_lm", "server",
             "--model", chosen.path,
             "--host", "127.0.0.1",
             "--port", String(port)
         ]
-        proc.environment = ProcessInfo.processInfo.environment
+        // Ensure homebrew paths are in PATH for the subprocess
+        var env = ProcessInfo.processInfo.environment
+        let extraPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/opt/homebrew/sbin"]
+        let existingPath = env["PATH"] ?? "/usr/bin:/bin"
+        env["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
+        proc.environment = env
 
         let pipe = Pipe()
         let errPipe = Pipe()
@@ -224,6 +232,21 @@ final class MLXService: ObservableObject {
         task.arguments = ["-f", "mlx_lm.*server"]
         try? task.run()
         task.waitUntilExit()
+    }
+
+    /// Find python3 binary — prefer homebrew, fall back to system
+    private static func findPython3() -> String {
+        let candidates = [
+            "/opt/homebrew/bin/python3",
+            "/usr/local/bin/python3",
+            "/usr/bin/python3"
+        ]
+        for path in candidates {
+            if FileManager.default.fileExists(atPath: path) {
+                return path
+            }
+        }
+        return "/usr/bin/env"  // last resort
     }
 
     // MARK: - Health check

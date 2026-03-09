@@ -281,6 +281,19 @@ struct OnboardingView: View {
                         .font(.caption)
                         .foregroundColor(SF.Colors.textSecondary)
                 }
+
+                HStack(spacing: 12) {
+                    Button(action: { ollama.stop() }) {
+                        Label("Stop", systemImage: "stop.circle.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    .controlSize(.small)
+
+                    Text("Port \(ollama.port)")
+                        .font(.caption.monospaced())
+                        .foregroundColor(SF.Colors.textSecondary)
+                }
             } else {
                 HStack(spacing: 12) {
                     Button(action: { ollama.start() }) {
