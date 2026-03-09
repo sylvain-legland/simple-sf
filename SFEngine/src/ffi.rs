@@ -172,6 +172,7 @@ pub extern "C" fn sf_start_mission(project_id: *const c_char, brief: *const c_ch
         let callback: EventCallback = std::sync::Arc::new(|agent_id: &str, event: AgentEvent| {
             match event {
                 AgentEvent::Thinking => emit(agent_id, "thinking", ""),
+                AgentEvent::Reasoning { active } => emit(agent_id, "reasoning", if active { "start" } else { "end" }),
                 AgentEvent::ToolCall { tool, args } => emit(agent_id, "tool_call", &format!("{}|{}", tool, args)),
                 AgentEvent::ToolResult { tool, result } => emit(agent_id, "tool_result", &format!("{}|{}", tool, result)),
                 AgentEvent::Response { content } => emit(agent_id, "response", &content),
@@ -268,6 +269,7 @@ pub extern "C" fn sf_jarvis_discuss(
         let callback: EventCallback = std::sync::Arc::new(|agent_id: &str, event: AgentEvent| {
             match event {
                 AgentEvent::Thinking => emit(agent_id, "discuss_thinking", ""),
+                AgentEvent::Reasoning { active } => emit(agent_id, "discuss_reasoning", if active { "start" } else { "end" }),
                 AgentEvent::Response { content } => emit(agent_id, "discuss_response", &content),
                 AgentEvent::ResponseChunk { content } => emit(agent_id, "discuss_chunk", &content),
                 AgentEvent::Error { message } => emit(agent_id, "error", &message),
@@ -366,6 +368,7 @@ pub extern "C" fn sf_start_ideation(idea: *const c_char) -> *mut c_char {
         let callback: EventCallback = std::sync::Arc::new(|agent_id: &str, event: AgentEvent| {
             match event {
                 AgentEvent::Thinking => emit(agent_id, "thinking", ""),
+                AgentEvent::Reasoning { active } => emit(agent_id, "ideation_reasoning", if active { "start" } else { "end" }),
                 AgentEvent::Response { content } => emit(agent_id, "ideation_response", &content),
                 AgentEvent::ResponseChunk { content } => emit(agent_id, "ideation_chunk", &content),
                 AgentEvent::Error { message } => emit(agent_id, "error", &message),

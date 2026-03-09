@@ -682,6 +682,7 @@ final class SFBridge: ObservableObject {
     @Published var discussionEvents: [AgentEvent] = []
     @Published var discussionRunning = false
     @Published var discussionSynthesis: String?
+    @Published var isReasoning = false
 
     func startDiscussion(message: String, projectContext: String) -> String? {
         discussionEvents.removeAll()
@@ -724,6 +725,8 @@ final class SFBridge: ObservableObject {
             case "discuss_thinking":
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.discussionEvents.append(event)
+            case "discuss_reasoning":
+                self.isReasoning = (data == "start")
             case "discuss_response":
                 let event = AgentEvent.fromDiscussJSON(agentId: agentId, eventType: eventType, json: data)
                 self.discussionEvents.append(event)
@@ -735,6 +738,8 @@ final class SFBridge: ObservableObject {
                 self._persistProjectEvents()
 
             // Ideation events
+            case "ideation_reasoning":
+                self.isReasoning = (data == "start")
             case "ideation_response":
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.ideationEvents.append(event)
@@ -744,6 +749,8 @@ final class SFBridge: ObservableObject {
                 self.ideationRunning = false
 
             // Streaming chunks for mission/project events
+            case "reasoning":
+                self.isReasoning = (data == "start")
             case "response_chunk":
                 self._appendChunk(agentId: agentId, chunk: data, to: &self.events, eventType: "response")
                 if let pid = self.currentProjectId {
