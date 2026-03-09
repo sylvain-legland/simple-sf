@@ -91,7 +91,7 @@ pub async fn run_ideation(
                 persona, round + 1, label
             );
 
-            let resp = llm::chat_completion(&messages, Some(&system), None).await;
+            let resp = llm::chat_completion_with_tokens(&messages, Some(&system), None, 8192).await;
 
             let content = match resp {
                 Ok(r) => r.content.unwrap_or_else(|| "(no response)".into()),

@@ -7,9 +7,14 @@ static HTTP: OnceLock<Client> = OnceLock::new();
 
 fn client() -> &'static Client {
     HTTP.get_or_init(|| Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
+        .timeout(std::time::Duration::from_secs(180))
         .build().unwrap())
 }
+
+/// Retry config
+const MAX_RETRIES: u32 = 3;
+const BASE_DELAY_MS: u64 = 2000;   // 2s initial backoff
+const MAX_DELAY_MS: u64 = 30_000;  // 30s max backoff
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LLMMessage {
@@ -66,6 +71,16 @@ pub async fn chat_completion(
     system: Option<&str>,
     tools: Option<&[Value]>,
 ) -> Result<LLMResponse, String> {
+    chat_completion_with_tokens(messages, system, tools, 4096).await
+}
+
+/// Chat completion with configurable max_tokens + retry with exponential backoff.
+pub async fn chat_completion_with_tokens(
+    messages: &[LLMMessage],
+    system: Option<&str>,
+    tools: Option<&[Value]>,
+    max_tokens: u32,
+) -> Result<LLMResponse, String> {
     let config = get_config().ok_or("LLM not configured")?;
 
     let mut msgs: Vec<Value> = Vec::new();
@@ -79,7 +94,7 @@ pub async fn chat_completion(
     let mut body = json!({
         "model": config.model,
         "messages": msgs,
-        "max_tokens": 4096,
+        "max_tokens": max_tokens,
         "temperature": 0.7,
     });
 
@@ -89,23 +104,87 @@ pub async fn chat_completion(
         }
     }
 
-    let resp = client()
-        .post(format!("{}/chat/completions", config.base_url))
-        .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", config.api_key))
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("HTTP error: {}", e))?;
+    let url = format!("{}/chat/completions", config.base_url);
+    let mut last_err = String::new();
 
-    if !resp.status().is_success() {
+    for attempt in 0..=MAX_RETRIES {
+        if attempt > 0 {
+            let delay = compute_backoff(attempt, None);
+            eprintln!("[llm] Retry {}/{} in {}ms...", attempt, MAX_RETRIES, delay);
+            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+        }
+
+        let result = client()
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", config.api_key))
+            .json(&body)
+            .send()
+            .await;
+
+        let resp = match result {
+            Ok(r) => r,
+            Err(e) => {
+                last_err = format!("HTTP error: {}", e);
+                if e.is_timeout() || e.is_connect() {
+                    eprintln!("[llm] Network error (attempt {}): {}", attempt + 1, e);
+                    continue; // retry on network errors
+                }
+                return Err(last_err);
+            }
+        };
+
         let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("LLM API {} : {}", status, text));
+
+        // Rate limited (429) — retry with Retry-After if provided
+        if status.as_u16() == 429 {
+            let retry_after = resp.headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse::<u64>().ok());
+            let text = resp.text().await.unwrap_or_default();
+            last_err = format!("Rate limited (429): {}", text);
+            eprintln!("[llm] Rate limited (attempt {}). Retry-After: {:?}", attempt + 1, retry_after);
+            if attempt < MAX_RETRIES {
+                let delay = compute_backoff(attempt + 1, retry_after);
+                tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+            }
+            continue;
+        }
+
+        // Server errors (500-599) — retry
+        if status.is_server_error() {
+            let text = resp.text().await.unwrap_or_default();
+            last_err = format!("Server error {} : {}", status, text);
+            eprintln!("[llm] Server error {} (attempt {})", status, attempt + 1);
+            continue;
+        }
+
+        // Client errors (400-499 except 429) — don't retry
+        if status.is_client_error() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("LLM API {} : {}", status, text));
+        }
+
+        // Success — parse response
+        let json: Value = resp.json().await.map_err(|e| format!("JSON parse: {}", e))?;
+        return parse_response(&json);
     }
 
-    let json: Value = resp.json().await.map_err(|e| format!("JSON parse: {}", e))?;
+    Err(format!("LLM call failed after {} retries: {}", MAX_RETRIES + 1, last_err))
+}
 
+/// Exponential backoff: 2s, 4s, 8s... capped at MAX_DELAY_MS.
+/// Respects Retry-After header if provided (in seconds).
+fn compute_backoff(attempt: u32, retry_after_secs: Option<u64>) -> u64 {
+    if let Some(ra) = retry_after_secs {
+        return (ra * 1000).min(MAX_DELAY_MS);
+    }
+    let delay = BASE_DELAY_MS * 2u64.pow(attempt.saturating_sub(1));
+    delay.min(MAX_DELAY_MS)
+}
+
+fn parse_response(json: &Value) -> Result<LLMResponse, String> {
     let choice = json["choices"].get(0).ok_or("No choices in response")?;
     let message = &choice["message"];
 
