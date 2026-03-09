@@ -173,8 +173,16 @@ async fn chat_completion_inner(
             Ok(r) => r,
             Err(e) => {
                 last_err = format!("HTTP error: {}", e);
-                if e.is_timeout() || e.is_connect() {
-                    eprintln!("[llm] Network error (attempt {}): {}", attempt + 1, e);
+                if e.is_connect() {
+                    // Connection refused — server is down, fail fast after 1 retry
+                    if attempt >= 1 {
+                        return Err(format!("Server unreachable (connection refused): {}", e));
+                    }
+                    eprintln!("[llm] Connection refused (attempt {}), retrying once...", attempt + 1);
+                    continue;
+                }
+                if e.is_timeout() {
+                    eprintln!("[llm] Timeout (attempt {}): {}", attempt + 1, e);
                     continue;
                 }
                 return Err(last_err);
