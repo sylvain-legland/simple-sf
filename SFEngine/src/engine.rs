@@ -10,6 +10,8 @@ use rusqlite::params;
 use uuid::Uuid;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+const PHASE_TIMEOUT_SECS: u64 = 600; // 10 min max per phase
+
 /// YOLO mode: auto-approve all gates (skip human-in-the-loop checkpoints)
 pub static YOLO_MODE: AtomicBool = AtomicBool::new(false);
 
@@ -351,6 +353,7 @@ pub async fn run_mission(
 
     let mut phase_outputs: Vec<String> = Vec::new();
     let mut vetoed = false;
+    let mut veto_conditions: Option<String> = None; // YOLO: carry veto feedback forward
 
     for (phase_name, pattern, raw_agent_ids) in &owned_phases {
         // Auto-assign agents when the workflow phase has none
@@ -391,11 +394,28 @@ pub async fn run_mission(
             eprintln!("[db] Failed to insert mission phase: {}", e);
         }
 
-        let task = build_phase_task(phase_name, brief, &phase_outputs);
+        let mut task = build_phase_task(phase_name, brief, &phase_outputs);
+
+        // YOLO: inject previous VETO conditions so the next team addresses them
+        if let Some(ref conditions) = veto_conditions {
+            task = format!(
+                "{}\n\n## AVERTISSEMENT — Phase précédente VETO (overridé en YOLO)\n\
+                 Les conditions suivantes ont été soulevées et DOIVENT être adressées:\n{}",
+                task, conditions
+            );
+            veto_conditions = None; // consumed
+        }
 
         let agent_ids_slice: Vec<&str> = agent_ids.iter().map(|s| s.as_str()).collect();
-        // Run pattern with retry on failure (#14)
-        let result = run_phase_with_retry(&agent_ids_slice, &task, phase_name, pattern, workspace, mission_id, &phase_id, on_event).await;
+        // Run pattern with timeout + retry on failure (#14)
+        let phase_future = run_phase_with_retry(&agent_ids_slice, &task, phase_name, pattern, workspace, mission_id, &phase_id, on_event);
+        let result = match tokio::time::timeout(
+            std::time::Duration::from_secs(PHASE_TIMEOUT_SECS),
+            phase_future,
+        ).await {
+            Ok(inner) => inner,
+            Err(_) => Err(format!("Phase {} timed out after {}s", phase_name, PHASE_TIMEOUT_SECS)),
+        };
 
         match result {
             Ok(output) => {
@@ -406,8 +426,11 @@ pub async fn run_mission(
 
                 if raw_gate == "vetoed" && yolo {
                     on_event("engine", AgentEvent::Response {
-                        content: format!("YOLO -- Phase {} -- VETO overridden, continuing.", phase_name),
+                        content: format!("YOLO ── Phase {} ── VETO overridden, conditions carried to next phase.", phase_name),
                     });
+                    // Extract veto conditions to inject into next phase
+                    let cond_extract = truncate_ctx(&output, 1500);
+                    veto_conditions = Some(cond_extract);
                 }
 
                 phase_outputs.push(format!("[{}] {}", phase_name, output));
@@ -797,23 +820,29 @@ fn auto_assign_agents(phase_name: &str) -> Vec<String> {
 }
 
 /// Robust gate detection (#13) — case-insensitive, flexible patterns
-fn check_gate_raw(output: &str) -> String {
+/// Normalizes spacing around colons for reliable matching
+pub fn check_gate_raw(output: &str) -> String {
     let upper = output.to_uppercase();
-    let lower = output.to_lowercase();
+    // Normalize "WORD : VALUE" → "WORD: VALUE" for uniform matching
+    let norm = upper.replace(" : ", ": ").replace(" :", ":");
 
-    let is_veto = upper.contains("[VETO]") || upper.contains("[NOGO]")
-        || upper.contains("STATUT: NOGO") || upper.contains("DÉCISION: NOGO")
-        || upper.contains("DECISION: NOGO")
-        || lower.contains("[veto]") || lower.contains("[no-go]") || lower.contains("[no go]")
-        || upper.contains("VERDICT: NOGO") || upper.contains("VERDICT: VETO")
-        || upper.contains("STATUT : NOGO") || upper.contains("DÉCISION : NOGO");
+    let is_veto = norm.contains("[VETO]") || norm.contains("[NOGO]")
+        || norm.contains("STATUT: NOGO") || norm.contains("DÉCISION: NOGO")
+        || norm.contains("DECISION: NOGO")
+        || norm.contains("[NO-GO]") || norm.contains("[NO GO]")
+        || norm.contains("VERDICT: NOGO") || norm.contains("VERDICT: VETO")
+        || norm.contains("CONCLUSION: NOGO") || norm.contains("CONCLUSION: VETO")
+        // Bare "NOGO" with word boundary (preceded by space/newline/colon)
+        || norm.contains("VERDICT: NOGO (")
+        || norm.contains(": NOGO\n") || norm.contains(": NOGO —")
+        || norm.contains(": NOGO -");
 
-    let is_approve = upper.contains("[APPROVE]") || upper.contains("[APPROVED]")
-        || upper.contains("STATUT: GO") || upper.contains("DÉCISION: GO")
-        || upper.contains("DECISION: GO")
-        || upper.contains("[GO]") || upper.contains("[LGTM]")
-        || upper.contains("VERDICT: GO") || upper.contains("VERDICT: APPROVE")
-        || upper.contains("STATUT : GO") || upper.contains("DÉCISION : GO");
+    let is_approve = norm.contains("[APPROVE]") || norm.contains("[APPROVED]")
+        || norm.contains("STATUT: GO") || norm.contains("DÉCISION: GO")
+        || norm.contains("DECISION: GO")
+        || norm.contains("[GO]") || norm.contains("[LGTM]")
+        || norm.contains("VERDICT: GO") || norm.contains("VERDICT: APPROVE")
+        || norm.contains("CONCLUSION: GO") || norm.contains("CONCLUSION: APPROVE");
 
     if is_veto {
         "vetoed".into()
