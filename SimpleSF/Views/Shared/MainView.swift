@@ -54,6 +54,7 @@ struct SidebarView: View {
     @Binding var selection: SidebarItem
     @ObservedObject private var llm = LLMService.shared
     @ObservedObject private var bridge = SFBridge.shared
+    @ObservedObject private var appState = AppState.shared
 
     var body: some View {
         List(selection: $selection) {
@@ -85,8 +86,33 @@ struct SidebarView: View {
             .padding(.vertical, 8)
         }
         .safeAreaInset(edge: .bottom) {
-            providerBadge
+            VStack(spacing: 8) {
+                yoloToggle
+                providerBadge
+            }
         }
+    }
+
+    private var yoloToggle: some View {
+        HStack(spacing: 6) {
+            Image(systemName: appState.yoloMode ? "bolt.fill" : "bolt.slash")
+                .font(.system(size: 10))
+                .foregroundColor(appState.yoloMode ? SF.Colors.warning : SF.Colors.textMuted)
+            Text("YOLO")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(appState.yoloMode ? SF.Colors.warning : SF.Colors.textMuted)
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { appState.yoloMode },
+                set: { appState.setYoloMode($0) }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .labelsHidden()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .help("YOLO: auto-approve all GO/NOGO gates")
     }
 
     private var providerBadge: some View {

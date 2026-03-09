@@ -74,6 +74,12 @@ pub extern "C" fn sf_configure_llm(
     llm::configure_llm(&from_c(provider), &from_c(api_key), &from_c(base_url), &from_c(model));
 }
 
+/// Enable/disable YOLO mode (auto-approve all gates).
+#[unsafe(no_mangle)]
+pub extern "C" fn sf_set_yolo(enabled: bool) {
+    engine::YOLO_MODE.store(enabled, std::sync::atomic::Ordering::Relaxed);
+}
+
 // ──────────────────────────────────────────
 // FFI: Projects
 // ──────────────────────────────────────────

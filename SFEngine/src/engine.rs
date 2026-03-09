@@ -7,6 +7,10 @@ use crate::llm::{self, LLMMessage};
 use crate::protocols;
 use rusqlite::params;
 use uuid::Uuid;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// YOLO mode: auto-approve all gates (skip human-in-the-loop checkpoints)
+pub static YOLO_MODE: AtomicBool = AtomicBool::new(false);
 
 /// Fallback SAFe workflow phases (used if workflow not found in catalog)
 const SAFE_PHASES: &[(&str, &str, &[&str])] = &[
@@ -344,8 +348,16 @@ pub async fn run_mission(
         match result {
             Ok(output) => {
                 // Check for gates (veto/approve)
-                let gate = check_gate(&output);
+                let raw_gate = check_gate_raw(&output);
+                let yolo = YOLO_MODE.load(Ordering::Relaxed);
+                let gate = if raw_gate == "vetoed" && yolo { "approved".to_string() } else { raw_gate.clone() };
                 let gate_status = if gate == "vetoed" { "vetoed" } else { "completed" };
+
+                if raw_gate == "vetoed" && yolo {
+                    on_event("engine", AgentEvent::Response {
+                        content: format!("YOLO -- Phase {} -- VETO overridden, continuing.", phase_name),
+                    });
+                }
 
                 phase_outputs.push(format!("[{}] {}", phase_name, output));
                 db::with_db(|conn| {
@@ -358,7 +370,7 @@ pub async fn run_mission(
                 if gate == "vetoed" {
                     vetoed = true;
                     on_event("engine", AgentEvent::Response {
-                        content: format!("🛑 Phase {} — VETO detected. Mission halted.", phase_name),
+                        content: format!("Phase {} -- VETO detected. Mission halted.", phase_name),
                     });
                 }
             }
@@ -613,8 +625,8 @@ async fn run_parallel(
 // Phase Gates (Go/No-Go)
 // ──────────────────────────────────────────
 
-/// Check for veto/approve signals in phase output.
-fn check_gate(output: &str) -> String {
+/// Detect raw veto/approve signals in phase output (no YOLO override).
+fn check_gate_raw(output: &str) -> String {
     let upper = output.to_uppercase();
     let is_veto = upper.contains("[VETO]") || upper.contains("[NOGO]")
         || upper.contains("STATUT: NOGO") || upper.contains("DÉCISION: NOGO");
@@ -626,7 +638,7 @@ fn check_gate(output: &str) -> String {
     } else if is_approve {
         "approved".into()
     } else {
-        "completed".into() // No explicit gate signal = pass
+        "completed".into()
     }
 }
 
