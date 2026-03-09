@@ -17,6 +17,13 @@ struct SimpleSFApp: App {
                 .background(SF.Colors.bgPrimary)
                 .task {
                     await KeychainService.shared.scanIfNeeded()
+                    // Auto-restart MLX server if selected and enabled
+                    let state = AppState.shared
+                    if state.mlxAutoRestart,
+                       (state.selectedProvider == .mlx || state.preferredLocalProvider == "mlx"),
+                       !MLXService.shared.isRunning {
+                        MLXService.shared.start()
+                    }
                     await SFBridge.shared.syncLLMConfigAsync()
                 }
         }
