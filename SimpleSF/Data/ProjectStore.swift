@@ -11,6 +11,7 @@ struct Project: Codable, Identifiable, Hashable {
     var updatedAt: String = ISO8601DateFormatter().string(from: Date())
     var path: String?
     var gitURL: String?
+    var missionId: String?
 
     static func == (lhs: Project, rhs: Project) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -96,6 +97,13 @@ final class ProjectStore: ObservableObject {
         if let idx = projects.firstIndex(where: { $0.id == id }) {
             projects[idx].status = status
             projects[idx].updatedAt = ISO8601DateFormatter().string(from: Date())
+            save()
+        }
+    }
+
+    func setMissionId(_ projectId: String, missionId: String) {
+        if let idx = projects.firstIndex(where: { $0.id == projectId }) {
+            projects[idx].missionId = missionId
             save()
         }
     }
