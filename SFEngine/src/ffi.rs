@@ -287,6 +287,52 @@ pub extern "C" fn sf_jarvis_discuss(
 }
 
 // ──────────────────────────────────────────
+// FFI: Load discussion history (for UI restore)
+// ──────────────────────────────────────────
+
+/// Returns JSON array of the most recent discussion session's messages.
+/// Format: [{"agent_id":"...","agent_name":"...","role":"...","content":"...","round":N}]
+#[unsafe(no_mangle)]
+pub extern "C" fn sf_load_discussion_history() -> *mut c_char {
+    let msgs: Vec<serde_json::Value> = db::with_db(|conn| {
+        // Find the most recent discussion session with messages
+        let session_id: Option<String> = conn.query_row(
+            "SELECT ds.id FROM discussion_sessions ds \
+             INNER JOIN discussion_messages dm ON dm.session_id = ds.id \
+             GROUP BY ds.id ORDER BY ds.created_at DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        ).ok();
+
+        let sid = match session_id {
+            Some(s) => s,
+            None => return Ok::<Vec<_>, String>(Vec::new()),
+        };
+
+        let mut stmt = conn.prepare(
+            "SELECT agent_id, agent_name, agent_role, content, round \
+             FROM discussion_messages WHERE session_id = ?1 \
+             ORDER BY round ASC, id ASC"
+        ).map_err(|e| e.to_string())?;
+
+        let rows = stmt.query_map(rusqlite::params![&sid], |row| {
+            Ok(serde_json::json!({
+                "agent_id": row.get::<_, String>(0)?,
+                "agent_name": row.get::<_, String>(1)?,
+                "role": row.get::<_, String>(2)?,
+                "content": row.get::<_, String>(3)?,
+                "round": row.get::<_, i32>(4)?,
+            }))
+        }).map_err(|e| e.to_string())?;
+
+        Ok(rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
+    }).unwrap_or_default();
+
+    let json = serde_json::to_string(&msgs).unwrap_or_else(|_| "[]".into());
+    c_str(&json).into_raw()
+}
+
+// ──────────────────────────────────────────
 // FFI: Ideation (network discussion pattern)
 // ──────────────────────────────────────────
 

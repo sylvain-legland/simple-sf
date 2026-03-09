@@ -128,10 +128,19 @@ pub async fn run_intake_with_team(
     let rte = &agents_data[0]; // rte (Marc Delacroix)
     on_event(&rte.id, AgentEvent::Thinking);
 
+    // Load previous conversation history for continuity
+    let prior_history = load_conversation_history(3, 4000);
+    let history_section = if prior_history.is_empty() {
+        String::new()
+    } else {
+        format!("\n\n[Historique des échanges précédents] :\n{}\n\n\
+                 Tiens compte de cet historique — ne répète pas ce qui a déjà été dit/décidé.", prior_history)
+    };
+
     let rte_prompt = format!(
         "Tu es {} et tu diriges cette session de cadrage avec ton équipe : {}.\n\n\
          Le client demande : \"{}\"\n\n\
-         Contexte projets existants : {}\n\n\
+         Contexte projets existants : {}{}\n\n\
          En tant que RTE :\n\
          1. Cadre le sujet : de quoi s'agit-il, quel type de projet ?\n\
          2. Adresse-toi à chaque membre par son prénom : dis à @Pierre (Architecte) ce que tu attends \
@@ -140,7 +149,7 @@ pub async fn run_intake_with_team(
          3. Pose 1-2 questions clés pour orienter la discussion.\n\
          4. Estime une durée et un niveau de complexité.\n\n\
          Sois directe et structurée. Pas de code, pas de longs paragraphes.",
-        rte.name, team_str, topic, project_context
+        rte.name, team_str, topic, project_context, history_section
     );
 
     let rte_system = format!(
@@ -254,7 +263,7 @@ pub async fn run_intake_with_team(
     let po_synthesis_prompt = format!(
         "Tu es {} (Product Owner). L'équipe vient de discuter la demande du client.\n\n\
          Demande originale : \"{}\"\n\n\
-         Discussion de l'équipe :\n{}\n\n\
+         Discussion de l'équipe :\n{}\n{}\n\
          En tant que PO, tu as l'autorité pour décider. Fais ta synthèse :\n\
          1. Résume les points clés de la discussion (2-3 lignes)\n\
          2. Décide du scope MVP et de la stack technique retenue\n\
@@ -266,7 +275,10 @@ pub async fn run_intake_with_team(
          Le brief dans START_MISSION doit être DÉTAILLÉ : features, structure de fichiers, contraintes, \
          critères d'acceptation.\n\n\
          Adresse-toi au client directement (\"Je vous propose...\", \"Nous allons...\").",
-        po.name, topic, prev_context
+        po.name, topic, prev_context,
+        if prior_history.is_empty() { String::new() } else {
+            format!("\n[Historique précédent] :\n{}\n", &prior_history[..prior_history.len().min(2000)])
+        }
     );
 
     let po_system = format!(
@@ -991,4 +1003,48 @@ fn store_discussion_msg(session_id: &str, agent_id: &str, agent_name: &str, agen
     }) {
         eprintln!("[db] Failed to store discussion message: {}", e);
     }
+}
+
+/// Load conversation history from previous discussion sessions.
+/// Returns a formatted string summarizing past exchanges, most recent first.
+fn load_conversation_history(max_sessions: usize, max_chars: usize) -> String {
+    let mut history = String::new();
+    let sessions: Vec<(String, String, String)> = db::with_db(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, topic, created_at FROM discussion_sessions \
+             ORDER BY created_at DESC LIMIT ?1"
+        ).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map(params![max_sessions as i64], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+        }).map_err(|e| e.to_string())?;
+        Ok::<Vec<_>, String>(rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
+    }).unwrap_or_default();
+
+    for (session_id, topic, created_at) in &sessions {
+        let msgs: Vec<(String, String, String)> = db::with_db(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT agent_name, agent_role, content FROM discussion_messages \
+                 WHERE session_id = ?1 ORDER BY round ASC, id ASC"
+            ).map_err(|e| e.to_string())?;
+            let rows = stmt.query_map(params![session_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+            }).map_err(|e| e.to_string())?;
+            Ok::<Vec<_>, String>(rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
+        }).unwrap_or_default();
+
+        if msgs.is_empty() { continue; }
+
+        history.push_str(&format!("\n── Session du {} — «{}» ──\n", created_at, topic));
+        for (name, role, content) in &msgs {
+            let truncated = if content.len() > 400 { &content[..400] } else { content.as_str() };
+            history.push_str(&format!("@{} ({}) : {}\n\n", name, role, truncated));
+        }
+
+        if history.len() >= max_chars { break; }
+    }
+
+    if history.len() > max_chars {
+        history.truncate(max_chars);
+    }
+    history
 }

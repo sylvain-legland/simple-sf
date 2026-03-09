@@ -51,6 +51,9 @@ func _sf_start_ideation(_ idea: UnsafePointer<CChar>?) -> UnsafeMutablePointer<C
 @_silgen_name("sf_jarvis_discuss")
 func _sf_jarvis_discuss(_ message: UnsafePointer<CChar>?, _ projectContext: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 
+@_silgen_name("sf_load_discussion_history")
+func _sf_load_discussion_history() -> UnsafeMutablePointer<CChar>?
+
 @_silgen_name("sf_free_string")
 func _sf_free_string(_ s: UnsafeMutablePointer<CChar>?)
 
@@ -94,6 +97,7 @@ final class SFBridge: ObservableObject {
         projectMissionIds = UserDefaults.standard.dictionary(forKey: Self.missionIdsKey) as? [String: String] ?? [:]
         currentProjectId = UserDefaults.standard.string(forKey: "sf_current_project_id")
         _loadProjectEvents()
+        _loadDiscussionHistory()
     }
 
     private func _persistMissionIds() {
@@ -123,6 +127,45 @@ final class SFBridge: ObservableObject {
                 projectEvents[projectId] = events
             }
         }
+    }
+
+    /// Restore the most recent discussion from the Rust DB into discussionEvents
+    private func _loadDiscussionHistory() {
+        guard let rawPtr = _sf_load_discussion_history() else { return }
+        let json = String(cString: rawPtr)
+        _sf_free_string(rawPtr)
+
+        guard let data = json.data(using: .utf8),
+              let msgs = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              !msgs.isEmpty else { return }
+
+        var restored: [AgentEvent] = []
+        for msg in msgs {
+            let agentId = msg["agent_id"] as? String ?? "unknown"
+            let content = msg["content"] as? String ?? ""
+            let agentName = msg["agent_name"] as? String ?? ""
+            let role = msg["role"] as? String ?? ""
+            let round = msg["round"] as? Int ?? 0
+
+            // Reconstruct as discuss_response JSON (same format as live events)
+            let richJSON = """
+            {"content":\(Self._jsonEscape(content)),"agent_name":"\(Self._jsonEscape(agentName))","role":"\(Self._jsonEscape(role))","message_type":"response","to_agents":[],"round":\(round)}
+            """
+            let event = AgentEvent.fromDiscussJSON(agentId: agentId, eventType: "discuss_response", json: richJSON)
+            restored.append(event)
+        }
+
+        discussionEvents = restored
+    }
+
+    private static func _jsonEscape(_ s: String) -> String {
+        // For embedding in JSON string values
+        let escaped = s.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\t", with: "\\t")
+        return "\"\(escaped)\""
     }
 
     struct AgentEvent: Identifiable, Codable {
