@@ -796,42 +796,83 @@ struct ProjectAccordion: View {
     }
 
     private func eventScrollFeed(events feedEvents: [SFBridge.AgentEvent]) -> some View {
-        ScrollViewReader { proxy in
+        // Determine current pattern from active phase
+        let currentPattern: String? = {
+            let phases = displayPhases
+            if let running = phases.first(where: { $0.status == "running" }) { return running.pattern }
+            return phases.first?.pattern
+        }()
+
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
+                    // Pattern header
+                    if let pattern = currentPattern, !pattern.isEmpty {
+                        HStack(spacing: 6) {
+                            PatternBadge(pattern: pattern)
+                            Text("·")
+                                .foregroundColor(SF.Colors.textMuted)
+                            Text("\(feedEvents.count) messages")
+                                .font(.system(size: 10))
+                                .foregroundColor(SF.Colors.textMuted)
+                            Spacer()
+                        }
+                        .padding(.bottom, 4)
+                    }
+
                     ForEach(feedEvents) { event in
-                        eventRow(event).id(event.id)
+                        eventRow(event, isLast: event.id == feedEvents.last?.id)
+                            .id(event.id)
+                    }
+
+                    // Streaming indicator at the bottom
+                    if isActive && bridge.isRunning {
+                        streamingIndicator.id("streaming-tail")
                     }
                 }
                 .padding(16)
             }
             .onChange(of: feedEvents.count) { _, _ in
-                if let last = feedEvents.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                withAnimation {
+                    if isActive && bridge.isRunning {
+                        proxy.scrollTo("streaming-tail", anchor: .bottom)
+                    } else if let last = feedEvents.last {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
                 }
             }
         }
     }
 
-    private func eventRow(_ event: SFBridge.AgentEvent) -> some View {
+    private var streamingIndicator: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+                .tint(SF.Colors.purple)
+            Text("Agents en cours de réflexion…")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(SF.Colors.textMuted)
+            Spacer()
+        }
+        .padding(10)
+        .background(SF.Colors.purple.opacity(0.06))
+        .cornerRadius(6)
+    }
+
+    private func eventRow(_ event: SFBridge.AgentEvent, isLast: Bool = false) -> some View {
         let color = catalog.agentColor(event.agentId)
-        let agentRole = catalog.agentRole(event.agentId)
+        let displayRole = !event.role.isEmpty ? event.role : catalog.agentRole(event.agentId)
+        let displayName = !event.agentName.isEmpty ? event.agentName : catalog.agentName(event.agentId)
         return HStack(alignment: .top, spacing: 8) {
             AgentAvatarView(agentId: event.agentId, size: 28)
                 .overlay(Circle().stroke(color.opacity(0.4), lineWidth: 1))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
-                    Text(catalog.agentName(event.agentId))
+                    Text(displayName)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(color)
-                    if !agentRole.isEmpty {
-                        Text(agentRole)
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(SF.Colors.textSecondary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(color.opacity(0.1))
-                            .cornerRadius(3)
+                    if !displayRole.isEmpty {
+                        RoleBadge(role: displayRole, color: color)
                     }
                     if !event.messageType.isEmpty && event.messageType != "response" {
                         Text(event.messageType)
@@ -843,24 +884,64 @@ struct ProjectAccordion: View {
                             .cornerRadius(3)
                     }
                     Spacer()
+                    if event.round > 0 {
+                        Text("R\(event.round)")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(SF.Colors.purple)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(SF.Colors.purple.opacity(0.1))
+                            .cornerRadius(3)
+                    }
                     Text(event.timestamp, style: .time)
                         .font(.system(size: 9))
                         .foregroundColor(SF.Colors.textMuted)
                 }
+                // Recipients
                 if !event.toAgents.isEmpty {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 4) {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 7))
                             .foregroundColor(SF.Colors.textMuted)
-                        ForEach(event.toAgents.prefix(3), id: \.self) { rid in
-                            Text(catalog.agentName(rid))
-                                .font(.system(size: 9))
-                                .foregroundColor(SF.Colors.textSecondary)
+                        ForEach(event.toAgents, id: \.self) { rid in
+                            HStack(spacing: 2) {
+                                AgentAvatarView(agentId: rid, size: 14)
+                                Text(catalog.agentName(rid))
+                                    .font(.system(size: 9))
+                                    .foregroundColor(SF.Colors.textSecondary)
+                            }
                         }
                     }
                 }
-                if !event.data.isEmpty && event.eventType != "thinking" {
-                    MarkdownView(String(event.data.prefix(500)), fontSize: 11)
+                // Content
+                if !event.data.isEmpty && event.eventType != "thinking" && event.eventType != "discuss_thinking" {
+                    MarkdownView(event.data, fontSize: 11)
+                } else if event.eventType == "thinking" || event.eventType == "discuss_thinking" {
+                    HStack(spacing: 4) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 9))
+                            .foregroundColor(SF.Colors.textMuted)
+                        Text(event.data.isEmpty ? "Réflexion…" : String(event.data.prefix(120)) + "…")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(SF.Colors.textMuted)
+                            .italic()
+                            .lineLimit(2)
+                    }
+                }
+                // Typing cursor for last active event
+                if isLast && isActive && bridge.isRunning {
+                    HStack(spacing: 2) {
+                        Circle().fill(SF.Colors.purple).frame(width: 4, height: 4)
+                            .opacity(0.8)
+                            .modifier(PulseAnimation())
+                        Circle().fill(SF.Colors.purple).frame(width: 4, height: 4)
+                            .opacity(0.5)
+                            .modifier(PulseAnimation(delay: 0.2))
+                        Circle().fill(SF.Colors.purple).frame(width: 4, height: 4)
+                            .opacity(0.3)
+                            .modifier(PulseAnimation(delay: 0.4))
+                    }
+                    .padding(.top, 2)
                 }
             }
         }

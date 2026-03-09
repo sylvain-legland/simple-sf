@@ -252,3 +252,16 @@ struct StatusDot: View {
             .frame(width: size, height: size)
     }
 }
+
+/// Pulsing opacity animation for typing indicators
+struct PulseAnimation: ViewModifier {
+    var delay: Double = 0
+    @State private var animating = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(animating ? 1.0 : 0.2)
+            .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true).delay(delay), value: animating)
+            .onAppear { animating = true }
+    }
+}
