@@ -402,8 +402,16 @@ struct ProjectAccordion: View {
             }
             .padding(.leading, 24)
 
-            // Mini timeline (collapsed only)
-            if !isExpanded {
+            // Phase timeline (always visible — clickable when expanded)
+            if isExpanded {
+                ClickablePhaseTimeline(
+                    activePhase: activePhase,
+                    projectDone: isDone,
+                    selectedIndex: $selectedPhaseIndex,
+                    phases: missionStatus?.phases ?? simulatedPhases()
+                )
+                .padding(.leading, 24)
+            } else {
                 MiniPhaseTimeline(activePhase: activePhase, projectDone: isDone)
                     .padding(.leading, 24)
             }
@@ -414,111 +422,8 @@ struct ProjectAccordion: View {
     // MARK: - Discussion Panel (expanded state)
 
     private var discussionPanel: some View {
-        VStack(spacing: 0) {
-            // Full clickable phase timeline
-            phaseTimeline
-
-            Divider().background(SF.Colors.border)
-
-            // Phase detail or live feed
-            phaseDetailOrFeed
-                .frame(minHeight: 200, maxHeight: 400)
-        }
-    }
-
-    // ── Full phase timeline (clickable, 36px dots) ──
-
-    private var phaseTimeline: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                let phases = missionStatus?.phases ?? simulatedPhases()
-                ForEach(Array(phases.enumerated()), id: \.offset) { index, phase in
-                    HStack(spacing: 0) {
-                        phaseNode(index: index, phase: phase)
-                        if index < phases.count - 1 {
-                            phaseConnector(done: phase.status == "completed")
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-        }
-        .frame(height: 100)
-        .background(SF.Colors.bgSecondary.opacity(0.5))
-    }
-
-    private func phaseNode(index: Int, phase: SFBridge.PhaseInfo) -> some View {
-        let isSelected = selectedPhaseIndex == index
-        let isRunning = phase.status == "running"
-        let isDoneP = phase.status == "completed"
-        let isFailed = phase.status == "failed" || phase.status == "vetoed"
-
-        return Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedPhaseIndex = selectedPhaseIndex == index ? nil : index
-            }
-        }) {
-            VStack(spacing: 5) {
-                ZStack {
-                    Circle()
-                        .fill(phaseCircleFill(status: phase.status))
-                        .frame(width: 32, height: 32)
-                    if isRunning {
-                        Circle()
-                            .stroke(SF.Colors.purple, lineWidth: 2)
-                            .frame(width: 38, height: 38)
-                            .opacity(0.6)
-                    }
-                    if isDoneP {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                    } else if isFailed {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                    } else if isRunning {
-                        ProgressView().scaleEffect(0.5).tint(.white)
-                    } else {
-                        Text("\(index + 1)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(SF.Colors.textMuted)
-                    }
-                }
-
-                Text(phaseShortName(phase.phase_name))
-                    .font(.system(size: 9, weight: isSelected ? .bold : .medium))
-                    .foregroundColor(isSelected ? SF.Colors.purple : isDoneP ? SF.Colors.textSecondary : SF.Colors.textMuted)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 64)
-
-                Text(phase.pattern)
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(patternColor(phase.pattern))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(patternColor(phase.pattern).opacity(0.1))
-                    .cornerRadius(3)
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 3)
-        .padding(.vertical, 4)
-        .background(isSelected ? SF.Colors.purple.opacity(0.08) : Color.clear)
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? SF.Colors.purple.opacity(0.4) : Color.clear, lineWidth: 1)
-        )
-    }
-
-    private func phaseConnector(done: Bool) -> some View {
-        Rectangle()
-            .fill(done ? SF.Colors.success.opacity(0.5) : SF.Colors.border)
-            .frame(width: 16, height: 2)
-            .padding(.bottom, 28)
+        phaseDetailOrFeed
+            .frame(minHeight: 200, maxHeight: 400)
     }
 
     // ── Phase detail or live events ──
@@ -1009,6 +914,117 @@ struct ProjectAccordion: View {
     private func stopPolling() {
         pollTimer?.invalidate()
         pollTimer = nil
+    }
+}
+
+// MARK: - Clickable Phase Timeline (expanded card — dots select phase)
+
+struct ClickablePhaseTimeline: View {
+    let activePhase: Int
+    let projectDone: Bool
+    @Binding var selectedIndex: Int?
+    let phases: [SFBridge.PhaseInfo]
+
+    private let dotSize: CGFloat = 26
+    private let labelWidth: CGFloat = 58
+    private let connectorWidth: CGFloat = 10
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(0..<phases.count, id: \.self) { i in
+                    HStack(spacing: 0) {
+                        phaseDot(index: i, phase: phases[i])
+                        if i < phases.count - 1 {
+                            phaseConnector(index: i)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+        }
+        .frame(height: 58)
+    }
+
+    private func phaseDot(index: Int, phase: SFBridge.PhaseInfo) -> some View {
+        let isCompleted = phase.status == "completed"
+        let isRunning = phase.status == "running"
+        let isFailed = phase.status == "failed" || phase.status == "vetoed"
+        let isSelected = selectedIndex == index
+
+        return Button(action: {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                selectedIndex = selectedIndex == index ? nil : index
+            }
+        }) {
+            VStack(spacing: 3) {
+                ZStack {
+                    Circle()
+                        .fill(dotFill(completed: isCompleted || projectDone, active: isRunning, failed: isFailed))
+                        .frame(width: dotSize, height: dotSize)
+
+                    if isSelected {
+                        Circle()
+                            .stroke(SF.Colors.purple, lineWidth: 2.5)
+                            .frame(width: dotSize + 6, height: dotSize + 6)
+                    } else if isRunning {
+                        Circle()
+                            .stroke(SF.Colors.purple.opacity(0.6), lineWidth: 2)
+                            .frame(width: dotSize + 5, height: dotSize + 5)
+                    }
+
+                    if isCompleted || projectDone {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                    } else if isFailed {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                    } else if isRunning {
+                        ProgressView().scaleEffect(0.45).tint(.white)
+                    } else {
+                        Text("\(index + 1)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(isSelected ? .white : SF.Colors.textMuted)
+                    }
+                }
+
+                Text(safePhases[safe: index]?.short ?? phase.phase_name)
+                    .font(.system(size: 8, weight: isSelected ? .bold : .medium))
+                    .foregroundColor(
+                        isSelected ? SF.Colors.purple :
+                        (isCompleted || projectDone) ? SF.Colors.textSecondary :
+                        isRunning ? SF.Colors.purple :
+                        SF.Colors.textMuted.opacity(0.5)
+                    )
+                    .lineLimit(1)
+                    .frame(width: labelWidth)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func phaseConnector(index: Int) -> some View {
+        let isCompleted = index < activePhase || projectDone
+        return Rectangle()
+            .fill(isCompleted ? SF.Colors.success.opacity(0.5) : SF.Colors.border.opacity(0.4))
+            .frame(width: connectorWidth, height: 2)
+            .padding(.bottom, 16)
+    }
+
+    private func dotFill(completed: Bool, active: Bool, failed: Bool) -> Color {
+        if completed { return SF.Colors.success }
+        if failed    { return SF.Colors.error }
+        if active    { return SF.Colors.purple }
+        return SF.Colors.bgTertiary
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 
