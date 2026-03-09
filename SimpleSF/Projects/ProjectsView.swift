@@ -48,22 +48,24 @@ private let safePhases: [(name: String, short: String, pattern: String)] = [
     ("Correctif & TMA",     "Correctif",       "loop"),
 ]
 
-// Derive simulated phase progress from project status
 private func simulatedActivePhase(for status: ProjectStatus, progress: Double) -> Int {
     switch status {
     case .idea:     return 0
     case .planning: return 1
     case .active:   return max(2, min(13, Int(progress * 13.0)))
     case .paused:   return max(2, min(13, Int(progress * 13.0)))
-    case .done:     return 14 // all completed
+    case .done:     return 14
     }
 }
+
+// MARK: - Projects View (accordion: card + inline discussion)
 
 @MainActor
 struct ProjectsView: View {
     @ObservedObject private var store = ProjectStore.shared
     @ObservedObject private var bridge = SFBridge.shared
     @State private var searchText = ""
+    @State private var expandedProjectId: String?
 
     private var filtered: [Project] {
         guard !searchText.isEmpty else { return store.projects }
@@ -118,7 +120,11 @@ struct ProjectsView: View {
                 LazyVStack(spacing: 12) {
                     if !store.projects.isEmpty {
                         ForEach(filtered) { project in
-                            ProjectCard(project: project)
+                            ProjectAccordion(
+                                project: project,
+                                isExpanded: expandedProjectId == project.id,
+                                toggle: { toggleExpand(project.id) }
+                            )
                         }
                     } else {
                         emptyState
@@ -126,11 +132,16 @@ struct ProjectsView: View {
                 }
                 .padding(24)
 
-                // Pilot projects section
                 pilotSection
             }
         }
         .background(SF.Colors.bgPrimary)
+    }
+
+    private func toggleExpand(_ id: String) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            expandedProjectId = expandedProjectId == id ? nil : id
+        }
     }
 
     // MARK: - Pilot Projects Section
@@ -272,25 +283,69 @@ struct ProjectsView: View {
     }
 }
 
-// MARK: - Project Card with Phase Timeline + Controls
+// MARK: - Project Accordion (card header + collapsible discussion panel)
 
-struct ProjectCard: View {
+@MainActor
+struct ProjectAccordion: View {
     let project: Project
+    let isExpanded: Bool
+    let toggle: () -> Void
+
     @ObservedObject private var bridge = SFBridge.shared
+    @ObservedObject private var catalog = SFCatalog.shared
+    @State private var missionStatus: SFBridge.MissionStatus?
+    @State private var selectedPhaseIndex: Int?
+    @State private var pollTimer: Timer?
 
     private var activePhase: Int {
         simulatedActivePhase(for: project.status, progress: project.progress)
     }
-
     private var isActive: Bool { project.status == .active }
     private var isPaused: Bool { project.status == .paused }
     private var isQueued: Bool { project.status == .planning }
     private var isDone: Bool { project.status == .done }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // ── Row 1: Name + tech + status + controls
-            HStack(spacing: 10) {
+        VStack(spacing: 0) {
+            // ── Card header (always visible, clickable to toggle)
+            cardHeader
+                .contentShape(Rectangle())
+                .onTapGesture { toggle() }
+
+            // ── Expanded: inline discussion panel
+            if isExpanded {
+                Divider().background(SF.Colors.purple.opacity(0.3))
+                discussionPanel
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(SF.Colors.bgCard)
+        .cornerRadius(SF.Radius.lg)
+        .overlay(
+            RoundedRectangle(cornerRadius: SF.Radius.lg)
+                .stroke(
+                    isExpanded ? SF.Colors.purple.opacity(0.6) :
+                    isActive ? SF.Colors.purple.opacity(0.4) :
+                    SF.Colors.border,
+                    lineWidth: isExpanded ? 2 : 1
+                )
+        )
+        .onChange(of: isExpanded) { _, expanded in
+            if expanded { startPolling() } else { stopPolling() }
+        }
+    }
+
+    // MARK: - Card Header
+
+    private var cardHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Row 1: chevron + name + tech + status + controls
+            HStack(spacing: 8) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(SF.Colors.purple)
+                    .frame(width: 16)
+
                 Text(project.name)
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(SF.Colors.textPrimary)
@@ -307,22 +362,19 @@ struct ProjectCard: View {
 
                 Spacer()
 
-                // Live status indicator
                 statusIndicator
-
-                // Play / Pause / Stop buttons
                 controlButtons
             }
 
-            // ── Description
-            if !project.description.isEmpty {
+            if !project.description.isEmpty && !isExpanded {
                 Text(project.description)
                     .font(.system(size: 13))
                     .foregroundColor(SF.Colors.textSecondary)
                     .lineLimit(2)
+                    .padding(.leading, 24)
             }
 
-            // ── Global progress bar (full width)
+            // Progress bar
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Image(systemName: "flowchart.fill")
@@ -348,20 +400,516 @@ struct ProjectCard: View {
                 }
                 .frame(height: 6)
             }
+            .padding(.leading, 24)
 
-            // ── Phase timeline (bigger dots)
-            MiniPhaseTimeline(activePhase: activePhase, projectDone: isDone)
+            // Mini timeline (collapsed only)
+            if !isExpanded {
+                MiniPhaseTimeline(activePhase: activePhase, projectDone: isDone)
+                    .padding(.leading, 24)
+            }
         }
         .padding(16)
-        .background(SF.Colors.bgCard)
-        .cornerRadius(SF.Radius.lg)
+    }
+
+    // MARK: - Discussion Panel (expanded state)
+
+    private var discussionPanel: some View {
+        VStack(spacing: 0) {
+            // Full clickable phase timeline
+            phaseTimeline
+
+            Divider().background(SF.Colors.border)
+
+            // Phase detail or live feed
+            phaseDetailOrFeed
+                .frame(minHeight: 200, maxHeight: 400)
+        }
+    }
+
+    // ── Full phase timeline (clickable, 36px dots) ──
+
+    private var phaseTimeline: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                let phases = missionStatus?.phases ?? simulatedPhases()
+                ForEach(Array(phases.enumerated()), id: \.offset) { index, phase in
+                    HStack(spacing: 0) {
+                        phaseNode(index: index, phase: phase)
+                        if index < phases.count - 1 {
+                            phaseConnector(done: phase.status == "completed")
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+        .frame(height: 100)
+        .background(SF.Colors.bgSecondary.opacity(0.5))
+    }
+
+    private func phaseNode(index: Int, phase: SFBridge.PhaseInfo) -> some View {
+        let isSelected = selectedPhaseIndex == index
+        let isRunning = phase.status == "running"
+        let isDoneP = phase.status == "completed"
+        let isFailed = phase.status == "failed" || phase.status == "vetoed"
+
+        return Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedPhaseIndex = selectedPhaseIndex == index ? nil : index
+            }
+        }) {
+            VStack(spacing: 5) {
+                ZStack {
+                    Circle()
+                        .fill(phaseCircleFill(status: phase.status))
+                        .frame(width: 32, height: 32)
+                    if isRunning {
+                        Circle()
+                            .stroke(SF.Colors.purple, lineWidth: 2)
+                            .frame(width: 38, height: 38)
+                            .opacity(0.6)
+                    }
+                    if isDoneP {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                    } else if isFailed {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                    } else if isRunning {
+                        ProgressView().scaleEffect(0.5).tint(.white)
+                    } else {
+                        Text("\(index + 1)")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(SF.Colors.textMuted)
+                    }
+                }
+
+                Text(phaseShortName(phase.phase_name))
+                    .font(.system(size: 9, weight: isSelected ? .bold : .medium))
+                    .foregroundColor(isSelected ? SF.Colors.purple : isDoneP ? SF.Colors.textSecondary : SF.Colors.textMuted)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 64)
+
+                Text(phase.pattern)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(patternColor(phase.pattern))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(patternColor(phase.pattern).opacity(0.1))
+                    .cornerRadius(3)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 3)
+        .padding(.vertical, 4)
+        .background(isSelected ? SF.Colors.purple.opacity(0.08) : Color.clear)
+        .cornerRadius(8)
         .overlay(
-            RoundedRectangle(cornerRadius: SF.Radius.lg)
-                .stroke(isActive ? SF.Colors.purple.opacity(0.5) : SF.Colors.border, lineWidth: isActive ? 1.5 : 1)
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? SF.Colors.purple.opacity(0.4) : Color.clear, lineWidth: 1)
         )
     }
 
-    // ── Status indicator: spinner / queued / done
+    private func phaseConnector(done: Bool) -> some View {
+        Rectangle()
+            .fill(done ? SF.Colors.success.opacity(0.5) : SF.Colors.border)
+            .frame(width: 16, height: 2)
+            .padding(.bottom, 28)
+    }
+
+    // ── Phase detail or live events ──
+
+    @ViewBuilder
+    private var phaseDetailOrFeed: some View {
+        let phases = missionStatus?.phases ?? simulatedPhases()
+        if let idx = selectedPhaseIndex, idx < phases.count {
+            phaseDetailPanel(phases[idx], index: idx)
+        } else {
+            liveEventsFeed
+        }
+    }
+
+    private func phaseDetailPanel(_ phase: SFBridge.PhaseInfo, index: Int) -> some View {
+        VStack(spacing: 0) {
+            // Phase header
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(phaseCircleFill(status: phase.status))
+                        .frame(width: 28, height: 28)
+                    if phase.status == "completed" {
+                        Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                    } else {
+                        Text("\(index + 1)").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(phase.phase_name)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(SF.Colors.textPrimary)
+                    HStack(spacing: 6) {
+                        PatternBadge(pattern: phase.pattern)
+                        phaseStatusChip(phase.status)
+                    }
+                }
+
+                Spacer()
+
+                agentAvatarStack(phase.agent_ids)
+
+                Button(action: { selectedPhaseIndex = nil }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(SF.Colors.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(SF.Colors.bgSecondary)
+
+            Divider().background(SF.Colors.border)
+
+            // Phase messages
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    let phaseMessages = messagesForPhase(phase)
+                    if phaseMessages.isEmpty {
+                        HStack {
+                            Spacer()
+                            VStack(spacing: 6) {
+                                Image(systemName: phase.status == "pending" ? "clock" : "bubble.left.and.bubble.right")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(SF.Colors.textMuted)
+                                Text(phase.status == "pending" ? "Phase en attente" : "Discussion en cours…")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(SF.Colors.textMuted)
+                            }
+                            .padding(.top, 30)
+                            Spacer()
+                        }
+                    } else {
+                        ForEach(phaseMessages) { msg in
+                            phaseMessageCard(msg, pattern: phase.pattern, phaseAgentIds: phase.agent_ids)
+                        }
+                    }
+
+                    // Phase output
+                    if let output = phase.output, !output.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(SF.Colors.textSecondary)
+                                Text("Résultat de phase")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(SF.Colors.textSecondary)
+                            }
+                            MarkdownView(output, fontSize: 12)
+                                .textSelection(.enabled)
+                        }
+                        .padding(12)
+                        .background(SF.Colors.bgTertiary)
+                        .cornerRadius(8)
+                    }
+                }
+                .padding(16)
+            }
+        }
+    }
+
+    private func phaseMessageCard(_ msg: SFBridge.MessageInfo, pattern: String, phaseAgentIds: String) -> some View {
+        let aid = msg.role
+        let color = catalog.agentColor(aid)
+        let agentRole = catalog.agentRole(aid)
+        let recipients: [String] = {
+            guard let data = phaseAgentIds.data(using: .utf8),
+                  let arr = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+            return arr.filter { $0 != aid }
+        }()
+
+        return HStack(alignment: .top, spacing: 0) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color)
+                .frame(width: 3)
+
+            HStack(alignment: .top, spacing: 10) {
+                AgentAvatarView(agentId: aid, size: 36)
+                    .overlay(Circle().stroke(color.opacity(0.5), lineWidth: 2))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 5) {
+                        Text(msg.agent_name)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(color)
+                        if !agentRole.isEmpty {
+                            Text(agentRole)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(SF.Colors.textSecondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(color.opacity(0.1))
+                                .cornerRadius(3)
+                        }
+                        PatternBadge(pattern: pattern)
+                        Spacer()
+                        Text(msg.created_at.suffix(8))
+                            .font(.system(size: 9))
+                            .foregroundColor(SF.Colors.textMuted)
+                    }
+
+                    if !recipients.isEmpty {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 8))
+                                .foregroundColor(SF.Colors.textMuted)
+                            ForEach(recipients.prefix(3), id: \.self) { rid in
+                                HStack(spacing: 2) {
+                                    AgentAvatarView(agentId: rid, size: 14)
+                                    Text(catalog.agentName(rid))
+                                        .font(.system(size: 9))
+                                        .foregroundColor(SF.Colors.textSecondary)
+                                }
+                            }
+                            if recipients.count > 3 {
+                                Text("+\(recipients.count - 3)")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(SF.Colors.textMuted)
+                            }
+                        }
+                    }
+
+                    MarkdownView(msg.content, fontSize: 12)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .background(SF.Colors.bgCard)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(SF.Colors.border.opacity(0.3), lineWidth: 0.5)
+        )
+    }
+
+    // ── Live events feed ──
+
+    private var liveEventsFeed: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 6) {
+                    if bridge.events.isEmpty && !isActive {
+                        HStack {
+                            Spacer()
+                            VStack(spacing: 8) {
+                                Image(systemName: "play.circle")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(SF.Colors.textMuted.opacity(0.5))
+                                Text("Lancez le workflow pour voir la discussion des agents")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(SF.Colors.textMuted)
+                            }
+                            .padding(.top, 30)
+                            Spacer()
+                        }
+                    } else {
+                        ForEach(bridge.events) { event in
+                            eventRow(event).id(event.id)
+                        }
+                    }
+                }
+                .padding(16)
+            }
+            .onChange(of: bridge.events.count) { _, _ in
+                if let last = bridge.events.last {
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
+        }
+    }
+
+    private func eventRow(_ event: SFBridge.AgentEvent) -> some View {
+        let color = catalog.agentColor(event.agentId)
+        let agentRole = catalog.agentRole(event.agentId)
+        return HStack(alignment: .top, spacing: 8) {
+            AgentAvatarView(agentId: event.agentId, size: 28)
+                .overlay(Circle().stroke(color.opacity(0.4), lineWidth: 1))
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text(catalog.agentName(event.agentId))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(color)
+                    if !agentRole.isEmpty {
+                        Text(agentRole)
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(SF.Colors.textSecondary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(color.opacity(0.1))
+                            .cornerRadius(3)
+                    }
+                    if !event.messageType.isEmpty && event.messageType != "response" {
+                        Text(event.messageType)
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(messageTypeColor(event.messageType))
+                            .cornerRadius(3)
+                    }
+                    Spacer()
+                    Text(event.timestamp, style: .time)
+                        .font(.system(size: 9))
+                        .foregroundColor(SF.Colors.textMuted)
+                }
+                if !event.toAgents.isEmpty {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 7))
+                            .foregroundColor(SF.Colors.textMuted)
+                        ForEach(event.toAgents.prefix(3), id: \.self) { rid in
+                            Text(catalog.agentName(rid))
+                                .font(.system(size: 9))
+                                .foregroundColor(SF.Colors.textSecondary)
+                        }
+                    }
+                }
+                if !event.data.isEmpty && event.eventType != "thinking" {
+                    MarkdownView(String(event.data.prefix(500)), fontSize: 11)
+                }
+            }
+        }
+        .padding(8)
+        .background(SF.Colors.bgCard)
+        .cornerRadius(6)
+    }
+
+    // MARK: - Helpers
+
+    private func simulatedPhases() -> [SFBridge.PhaseInfo] {
+        safePhases.enumerated().map { i, p in
+            SFBridge.PhaseInfo(
+                id: "sim-\(i)",
+                phase_name: p.name,
+                pattern: p.pattern,
+                status: i < activePhase ? "completed" : (i == activePhase && isActive ? "running" : "pending"),
+                agent_ids: "[]",
+                output: nil,
+                started_at: nil,
+                completed_at: nil
+            )
+        }
+    }
+
+    private func messagesForPhase(_ phase: SFBridge.PhaseInfo) -> [SFBridge.MessageInfo] {
+        guard let messages = missionStatus?.messages else { return [] }
+        let ids: [String] = {
+            guard let data = phase.agent_ids.data(using: .utf8),
+                  let arr = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+            return arr
+        }()
+        if ids.isEmpty { return Array(messages.reversed()) }
+        return messages.reversed().filter { msg in
+            ids.contains(msg.role) || ids.contains(msg.agent_name.lowercased())
+        }
+    }
+
+    private func agentAvatarStack(_ agentIdsJson: String) -> some View {
+        let ids: [String] = {
+            guard let data = agentIdsJson.data(using: .utf8),
+                  let arr = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+            return arr
+        }()
+        return HStack(spacing: -6) {
+            ForEach(ids.prefix(4), id: \.self) { aid in
+                AgentAvatarView(agentId: aid, size: 24)
+                    .overlay(Circle().stroke(SF.Colors.bgSecondary, lineWidth: 1.5))
+            }
+            if ids.count > 4 {
+                Text("+\(ids.count - 4)")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(SF.Colors.textSecondary)
+                    .frame(width: 24, height: 24)
+                    .background(SF.Colors.bgTertiary)
+                    .clipShape(Circle())
+            }
+        }
+    }
+
+    private func phaseCircleFill(status: String) -> Color {
+        switch status {
+        case "completed": return SF.Colors.success
+        case "running":   return SF.Colors.purple
+        case "failed":    return SF.Colors.error
+        case "vetoed":    return SF.Colors.warning
+        default:          return SF.Colors.bgTertiary
+        }
+    }
+
+    private func phaseStatusChip(_ status: String) -> some View {
+        let (label, color): (String, Color) = {
+            switch status {
+            case "completed": return ("✓ Terminé", SF.Colors.success)
+            case "running":   return ("⏳ En cours", SF.Colors.purple)
+            case "failed":    return ("✗ Échoué", SF.Colors.error)
+            case "vetoed":    return ("⚠ Véto", SF.Colors.warning)
+            default:          return ("En attente", SF.Colors.textMuted)
+            }
+        }()
+        return Text(label)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.1))
+            .cornerRadius(4)
+    }
+
+    private func patternColor(_ pattern: String) -> Color {
+        switch pattern {
+        case "network":           return SF.Colors.info
+        case "sequential":        return SF.Colors.success
+        case "parallel":          return .cyan
+        case "hierarchical":      return SF.Colors.purple
+        case "loop":              return SF.Colors.warning
+        case "aggregator":        return .teal
+        case "human-in-the-loop": return SF.Colors.accent
+        case "router":            return .mint
+        default:                  return SF.Colors.textMuted
+        }
+    }
+
+    private func phaseShortName(_ name: String) -> String {
+        let map: [String: String] = [
+            "Idéation": "Idéation", "Comité Stratégique": "Comité Strat.",
+            "Constitution": "Constitution", "Architecture": "Architecture",
+            "Design System": "Design Sys.", "Sprints Dev": "Sprints Dev",
+            "Build & Verify": "Build & Verify", "Pipeline CI/CD": "Pipeline CI",
+            "Revue UX": "Revue UX", "Campagne QA": "Campagne QA",
+            "Exécution Tests": "Exécution", "Deploy Prod": "Deploy Prod",
+            "Routage TMA": "Routage", "Correctif & TMA": "Correctif",
+        ]
+        return map[name] ?? name
+    }
+
+    private func messageTypeColor(_ type: String) -> Color {
+        switch type {
+        case "instruction", "delegation": return SF.Colors.yellowDeep
+        case "approval":                  return SF.Colors.success
+        case "veto":                      return SF.Colors.error
+        case "synthesis":                 return SF.Colors.po
+        default:                          return SF.Colors.textMuted
+        }
+    }
+
+    // ── Status indicator ──
     @ViewBuilder
     private var statusIndicator: some View {
         if isActive {
@@ -377,107 +925,67 @@ struct ProjectCard: View {
             .cornerRadius(6)
         } else if isQueued {
             HStack(spacing: 5) {
-                Image(systemName: "clock.fill")
-                    .font(.system(size: 10))
-                Text("Queued")
-                    .font(.system(size: 11, weight: .semibold))
+                Image(systemName: "clock.fill").font(.system(size: 10))
+                Text("Queued").font(.system(size: 11, weight: .semibold))
             }
             .foregroundColor(SF.Colors.warning)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 10).padding(.vertical, 5)
             .background(SF.Colors.warning.opacity(0.1))
             .cornerRadius(6)
         } else if isPaused {
             HStack(spacing: 5) {
-                Image(systemName: "pause.circle.fill")
-                    .font(.system(size: 10))
-                Text("Paused")
-                    .font(.system(size: 11, weight: .semibold))
+                Image(systemName: "pause.circle.fill").font(.system(size: 10))
+                Text("Paused").font(.system(size: 11, weight: .semibold))
             }
             .foregroundColor(SF.Colors.warning)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 10).padding(.vertical, 5)
             .background(SF.Colors.warning.opacity(0.1))
             .cornerRadius(6)
         } else if isDone {
             HStack(spacing: 5) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 10))
-                Text("Terminé")
-                    .font(.system(size: 11, weight: .semibold))
+                Image(systemName: "checkmark.circle.fill").font(.system(size: 10))
+                Text("Terminé").font(.system(size: 11, weight: .semibold))
             }
             .foregroundColor(SF.Colors.success)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 10).padding(.vertical, 5)
             .background(SF.Colors.success.opacity(0.1))
             .cornerRadius(6)
         } else {
             Text(project.status.displayName)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(Color(hex: project.status.color))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 10).padding(.vertical, 5)
                 .background(Color(hex: project.status.color).opacity(0.12))
                 .cornerRadius(6)
         }
     }
 
-    // ── Play / Pause / Stop (video-style)
+    // ── Play / Pause / Stop ──
     private var controlButtons: some View {
         HStack(spacing: 4) {
             if isActive {
-                // Pause
                 Button(action: { ProjectStore.shared.setStatus(project.id, status: .paused) }) {
-                    Image(systemName: "pause.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(SF.Colors.warning)
-                        .frame(width: 28, height: 28)
-                        .background(SF.Colors.warning.opacity(0.12))
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
-                // Stop
+                    Image(systemName: "pause.fill").font(.system(size: 12)).foregroundColor(SF.Colors.warning)
+                        .frame(width: 28, height: 28).background(SF.Colors.warning.opacity(0.12)).cornerRadius(6)
+                }.buttonStyle(.plain)
                 Button(action: { ProjectStore.shared.setStatus(project.id, status: .idea) }) {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(SF.Colors.error)
-                        .frame(width: 28, height: 28)
-                        .background(SF.Colors.error.opacity(0.12))
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
+                    Image(systemName: "stop.fill").font(.system(size: 12)).foregroundColor(SF.Colors.error)
+                        .frame(width: 28, height: 28).background(SF.Colors.error.opacity(0.12)).cornerRadius(6)
+                }.buttonStyle(.plain)
             } else if isPaused {
-                // Resume
                 Button(action: { ProjectStore.shared.setStatus(project.id, status: .active) }) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(SF.Colors.success)
-                        .frame(width: 28, height: 28)
-                        .background(SF.Colors.success.opacity(0.12))
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
-                // Stop
+                    Image(systemName: "play.fill").font(.system(size: 12)).foregroundColor(SF.Colors.success)
+                        .frame(width: 28, height: 28).background(SF.Colors.success.opacity(0.12)).cornerRadius(6)
+                }.buttonStyle(.plain)
                 Button(action: { ProjectStore.shared.setStatus(project.id, status: .idea) }) {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(SF.Colors.error)
-                        .frame(width: 28, height: 28)
-                        .background(SF.Colors.error.opacity(0.12))
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
+                    Image(systemName: "stop.fill").font(.system(size: 12)).foregroundColor(SF.Colors.error)
+                        .frame(width: 28, height: 28).background(SF.Colors.error.opacity(0.12)).cornerRadius(6)
+                }.buttonStyle(.plain)
             } else if !isDone {
-                // Play
                 Button(action: { launchProject() }) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(SF.Colors.success)
-                        .frame(width: 28, height: 28)
-                        .background(SF.Colors.success.opacity(0.12))
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
+                    Image(systemName: "play.fill").font(.system(size: 12)).foregroundColor(SF.Colors.success)
+                        .frame(width: 28, height: 28).background(SF.Colors.success.opacity(0.12)).cornerRadius(6)
+                }.buttonStyle(.plain)
             }
         }
     }
@@ -489,9 +997,22 @@ struct ProjectCard: View {
             bridge.startMissionAsync(projectId: project.id, brief: project.description)
         }
     }
+
+    private func startPolling() {
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            Task { @MainActor in
+                self.missionStatus = bridge.missionStatus()
+            }
+        }
+    }
+
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+    }
 }
 
-// MARK: - Mini Phase Timeline (14 dots, horizontally scrollable, bigger)
+// MARK: - Mini Phase Timeline (collapsed card — 14 dots)
 
 struct MiniPhaseTimeline: View {
     let activePhase: Int
@@ -575,7 +1096,7 @@ struct MiniPhaseTimeline: View {
     }
 }
 
-// MARK: - Color hex-string init (used by ProjectStatus.color)
+// MARK: - Color hex-string init
 
 extension Color {
     init(hex: String) {

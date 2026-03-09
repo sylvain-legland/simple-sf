@@ -21,7 +21,6 @@ struct MainView: View {
         case .jarvis:    JarvisView()
         case .projects:  ProjectsView()
         case .ideation:  IdeationView()
-        case .teams:     MissionView()
         case .settings:  OnboardingView()
         }
     }
@@ -30,14 +29,13 @@ struct MainView: View {
 // MARK: - Sidebar
 
 enum SidebarItem: String, Hashable {
-    case jarvis, projects, ideation, teams, settings
+    case jarvis, projects, ideation, settings
 
     var label: String {
         switch self {
         case .jarvis:    return "Jarvis"
         case .projects:  return "Projects"
         case .ideation:  return "Ideation"
-        case .teams:     return "Value Stream"
         case .settings:  return "Settings"
         }
     }
@@ -47,7 +45,6 @@ enum SidebarItem: String, Hashable {
         case .jarvis:    return "sparkles"
         case .projects:  return "folder.fill"
         case .ideation:  return "lightbulb.fill"
-        case .teams:     return "flowchart.fill"
         case .settings:  return "gearshape.fill"
         }
     }
@@ -60,12 +57,12 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $selection) {
-            ForEach([SidebarItem.jarvis, .projects, .ideation, .teams, .settings], id: \.self) { item in
+            ForEach([SidebarItem.jarvis, .projects, .ideation, .settings], id: \.self) { item in
                 HStack(spacing: 8) {
                     Label(item.label, systemImage: item.icon)
                         .font(.system(size: 13))
                         .tag(item)
-                    if item == .teams && bridge.isRunning {
+                    if item == .projects && bridge.isRunning {
                         Spacer()
                         ProgressView().scaleEffect(0.5)
                     }
