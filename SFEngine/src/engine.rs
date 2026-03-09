@@ -10,7 +10,7 @@ use rusqlite::params;
 use uuid::Uuid;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-const PHASE_TIMEOUT_SECS: u64 = 600; // 10 min max per phase
+const PHASE_TIMEOUT_SECS: u64 = 900; // 15 min max per phase
 
 /// YOLO mode: auto-approve all gates (skip human-in-the-loop checkpoints)
 pub static YOLO_MODE: AtomicBool = AtomicBool::new(false);
@@ -21,7 +21,8 @@ const SAFE_PHASES: &[(&str, &str, &[&str])] = &[
     ("design",  "sequential",  &["archi-pierre", "lead-thomas"]),
     ("dev",     "parallel",    &["dev-emma", "dev-karim"]),
     ("qa",      "sequential",  &["qa-sophie"]),
-    ("review",  "network",     &["lead-thomas", "po-lucas"]),
+    ("build",   "sequential",  &["lead-thomas"]),
+    ("deploy",  "sequential",  &["rte-marie"]),
 ];
 
 const MAX_NETWORK_ROUNDS: usize = 10;
@@ -508,8 +509,10 @@ pub async fn run_mission(
 }
 
 // ──────────────────────────────────────────
-// Phase retry (#14) — retry once on failure with error context
+// Phase retry — up to 3 retries with exponential backoff + LLM health probe
 // ──────────────────────────────────────────
+
+const MAX_PHASE_RETRIES: usize = 3;
 
 async fn run_phase_with_retry(
     agent_ids: &[&str],
@@ -521,21 +524,78 @@ async fn run_phase_with_retry(
     phase_id: &str,
     on_event: &EventCallback,
 ) -> Result<String, String> {
-    let first = run_pattern(agent_ids, task, phase, pattern, workspace, mission_id, phase_id, on_event).await;
-    match first {
-        Ok(output) => Ok(output),
-        Err(e) => {
-            eprintln!("[engine] Phase {} failed (attempt 1): {}", phase, e);
+    let mut last_error = String::new();
+    let mut current_task = task.to_string();
+
+    for attempt in 0..=MAX_PHASE_RETRIES {
+        if attempt > 0 {
+            let backoff_secs = 2u64.pow(attempt as u32); // 2s, 4s, 8s
+            eprintln!("[engine] Phase {} attempt {} — backoff {}s", phase, attempt + 1, backoff_secs);
             on_event("engine", AgentEvent::Response {
-                content: format!("Phase {} failed, retrying with error context...", phase),
+                content: format!("Phase {} failed (attempt {}), retrying in {}s...", phase, attempt, backoff_secs),
             });
-            // Retry with error feedback injected into task
-            let retry_task = format!(
-                "{}\n\n## PREVIOUS ATTEMPT FAILED:\n{}\n\nFix the issues and try again.",
-                task, e
+            tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
+
+            // LLM health probe — quick check before burning a retry
+            if let Err(probe_err) = llm_health_probe().await {
+                eprintln!("[engine] LLM health probe failed: {} — waiting 10s more", probe_err);
+                on_event("engine", AgentEvent::Response {
+                    content: format!("LLM unreachable ({}), waiting 10s before retry...", probe_err),
+                });
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            }
+
+            // Inject previous error feedback
+            current_task = format!(
+                "{}\n\n## PREVIOUS ATTEMPT {} FAILED:\n{}\n\nFix the issues and try again.",
+                task, attempt, last_error
             );
-            run_pattern(agent_ids, &retry_task, phase, pattern, workspace, mission_id, phase_id, on_event).await
         }
+
+        match run_pattern(agent_ids, &current_task, phase, pattern, workspace, mission_id, phase_id, on_event).await {
+            Ok(output) => return Ok(output),
+            Err(e) => {
+                eprintln!("[engine] Phase {} failed (attempt {}): {}", phase, attempt + 1, e);
+                last_error = e;
+            }
+        }
+    }
+
+    Err(format!("Phase {} failed after {} retries: {}", phase, MAX_PHASE_RETRIES, last_error))
+}
+
+/// Quick LLM health check — send a trivial prompt to verify connectivity
+async fn llm_health_probe() -> Result<(), String> {
+    let config = crate::llm::get_config().ok_or("LLM not configured")?;
+    let base = config.base_url.trim_end_matches('/');
+    let url = if base.ends_with("/v1") {
+        format!("{}/chat/completions", base)
+    } else {
+        format!("{}/v1/chat/completions", base)
+    };
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let body = serde_json::json!({
+        "model": config.model,
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 5
+    });
+
+    let resp = client.post(&url)
+        .header("Authorization", format!("Bearer {}", config.api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("unreachable: {}", e))?;
+
+    if resp.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!("HTTP {}", resp.status()))
     }
 }
 
@@ -929,22 +989,30 @@ fn build_phase_task(phase: &str, brief: &str, previous: &[String]) -> String {
     } else if lower.contains("sprint") || lower.contains("dev") || lower.contains("développement") {
         format!(
             "BRIEF: {}\n\n\
-             IMPLEMENT the project:\n\
+             IMPLEMENT the COMPLETE project:\n\
              1. Read the architecture/subtasks from previous phases\n\
-             2. Use code_write to create EVERY file (real code, no stubs)\n\
-             3. Create dependency manifests\n\
-             4. Run build to verify compilation\n\
-             NO placeholders, NO TODOs. Real production code only.{}",
+             2. Use code_write to create EVERY file with COMPLETE production code\n\
+             3. Create dependency manifests (Package.swift, Cargo.toml, package.json etc.)\n\
+             4. Write ALL source files -- models, views, game logic, assets, everything\n\
+             5. Each file must be COMPLETE -- no stubs, no TODOs, no placeholder comments\n\
+             6. Use code_read to verify files you've written are correct\n\
+             7. Use build tool to verify compilation after writing code\n\
+             8. If build fails, use code_edit to fix errors and rebuild\n\
+             YOU ARE THE DEVELOPER. Write real production code. Every single file the app needs.{}",
             brief, context
         )
     } else if lower.contains("build") || lower.contains("verify") {
         format!(
             "BRIEF: {}\n\n\
-             Build and verify:\n\
-             1. Run build commands to compile the project\n\
-             2. Fix any compilation errors\n\
-             3. Verify all dependencies are resolved\n\
-             4. Confirm the executable/artifact is produced{}",
+             BUILD AND COMPILE:\n\
+             1. Use list_files to see what code exists in the workspace\n\
+             2. Use code_read to verify the source files are complete (no stubs, no TODOs)\n\
+             3. If ANY file is incomplete or has placeholder code, use code_write to fix it with REAL implementation\n\
+             4. Use the build tool to compile: swift build (for Swift), cargo build (for Rust), npm run build (for JS)\n\
+             5. If build fails, read the errors, use code_edit to fix them, then build again\n\
+             6. Repeat until the build succeeds with zero errors\n\
+             7. Use the test tool to run tests if any exist\n\
+             YOU MUST achieve a CLEAN BUILD. Do NOT stop until the project compiles without errors.{}",
             brief, context
         )
     } else if lower.contains("pipeline") || lower.contains("ci") {
@@ -982,11 +1050,13 @@ fn build_phase_task(phase: &str, brief: &str, previous: &[String]) -> String {
     } else if lower.contains("deploy") || lower.contains("production") || lower.contains("release") {
         format!(
             "BRIEF: {}\n\n\
-             Deployment to production:\n\
-             1. Prepare release artifacts\n\
-             2. Define deployment steps\n\
-             3. Document rollback procedure\n\
-             4. Verify deployment checklist{}",
+             DEPLOY AND LAUNCH:\n\
+             1. Use list_files to verify all build artifacts exist\n\
+             2. Use the build tool to do a final release build\n\
+             3. Use the test tool to run the executable and verify it launches\n\
+             4. If ANY issue, fix it with code_edit and rebuild\n\
+             5. Confirm the application is ready to ship\n\
+             The application MUST compile and be launchable. Output the exact command to run it.{}",
             brief, context
         )
     } else if lower.contains("incident") || lower.contains("tma") || lower.contains("maintenance") || lower.contains("correctif") {

@@ -204,27 +204,48 @@ async fn main() {
 
     // ── 6. Show workspace results ──
     eprintln!("\n📁 Workspace contents:");
-    if let Ok(entries) = std::fs::read_dir(WORKSPACE) {
-        fn show_tree(path: &std::path::Path, prefix: &str) {
-            if let Ok(entries) = std::fs::read_dir(path) {
-                let mut entries: Vec<_> = entries.filter_map(|e| e.ok()).collect();
-                entries.sort_by_key(|e| e.file_name());
-                for entry in entries {
-                    let name = entry.file_name();
-                    let name = name.to_string_lossy();
-                    if name.starts_with('.') { continue; }
-                    let meta = entry.metadata().ok();
-                    if let Some(m) = &meta {
-                        if m.is_dir() {
-                            eprintln!("{}📂 {}/", prefix, name);
-                            show_tree(&entry.path(), &format!("{}  ", prefix));
-                        } else {
-                            eprintln!("{}📄 {} ({} bytes)", prefix, name, m.len());
-                        }
+    fn show_tree(path: &std::path::Path, prefix: &str) {
+        if let Ok(entries) = std::fs::read_dir(path) {
+            let mut entries: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+            entries.sort_by_key(|e| e.file_name());
+            for entry in entries {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with('.') { continue; }
+                let meta = entry.metadata().ok();
+                if let Some(m) = &meta {
+                    if m.is_dir() {
+                        eprintln!("{}📂 {}/", prefix, name);
+                        show_tree(&entry.path(), &format!("{}  ", prefix));
+                    } else {
+                        eprintln!("{}📄 {} ({} bytes)", prefix, name, m.len());
                     }
                 }
             }
         }
-        show_tree(std::path::Path::new(WORKSPACE), "  ");
+    }
+    show_tree(std::path::Path::new(WORKSPACE), "  ");
+
+    // ── 7. Try to build and open the app ──
+    eprintln!("\n🔨 Attempting swift build...");
+    let build_output = std::process::Command::new("/usr/bin/swift")
+        .args(["build"])
+        .current_dir(WORKSPACE)
+        .output();
+    match build_output {
+        Ok(out) => {
+            if out.status.success() {
+                eprintln!("✅ BUILD SUCCESS");
+                eprintln!("\n🚀 Launching Pac-Man...");
+                let _ = std::process::Command::new("/usr/bin/swift")
+                    .args(["run"])
+                    .current_dir(WORKSPACE)
+                    .spawn();
+            } else {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                eprintln!("❌ BUILD FAILED:\n{}", &stderr[..stderr.len().min(2000)]);
+            }
+        }
+        Err(e) => eprintln!("❌ Could not run swift build: {}", e),
     }
 }
