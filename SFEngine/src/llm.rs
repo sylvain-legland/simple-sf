@@ -88,13 +88,16 @@ pub fn get_config() -> Option<LLMConfig> {
     })
 }
 
+/// Optional callback for streaming chunks — receives each content delta as it arrives
+pub type OnChunkFn = Box<dyn Fn(&str) + Send + Sync>;
+
 /// No artificial token limit — omit max_tokens to let the model use its full capacity
 pub async fn chat_completion(
     messages: &[LLMMessage],
     system: Option<&str>,
     tools: Option<&[Value]>,
 ) -> Result<LLMResponse, String> {
-    chat_completion_inner(messages, system, tools).await
+    chat_completion_inner(messages, system, tools, None).await
 }
 
 /// Kept for backward compat — ignores max_tokens, delegates to chat_completion
@@ -104,7 +107,17 @@ pub async fn chat_completion_with_tokens(
     tools: Option<&[Value]>,
     _max_tokens: u32,
 ) -> Result<LLMResponse, String> {
-    chat_completion_inner(messages, system, tools).await
+    chat_completion_inner(messages, system, tools, None).await
+}
+
+/// Streaming variant — calls on_chunk for each content delta
+pub async fn chat_completion_streaming(
+    messages: &[LLMMessage],
+    system: Option<&str>,
+    tools: Option<&[Value]>,
+    on_chunk: OnChunkFn,
+) -> Result<LLMResponse, String> {
+    chat_completion_inner(messages, system, tools, Some(on_chunk)).await
 }
 
 /// Core implementation — NO max_tokens in the request body
@@ -112,6 +125,7 @@ async fn chat_completion_inner(
     messages: &[LLMMessage],
     system: Option<&str>,
     tools: Option<&[Value]>,
+    on_chunk: Option<OnChunkFn>,
 ) -> Result<LLMResponse, String> {
     let config = get_config().ok_or("LLM not configured")?;
 
@@ -199,7 +213,7 @@ async fn chat_completion_inner(
         // Streaming response (#7)
         let is_stream = body["stream"].as_bool().unwrap_or(false);
         if is_stream {
-            return parse_stream(resp).await;
+            return parse_stream(resp, &on_chunk).await;
         }
 
         let json: Value = resp.json().await.map_err(|e| format!("JSON parse: {}", e))?;
@@ -209,8 +223,8 @@ async fn chat_completion_inner(
     Err(format!("LLM call failed after {} retries: {}", MAX_RETRIES + 1, last_err))
 }
 
-/// Parse SSE stream into a complete LLMResponse
-async fn parse_stream(resp: reqwest::Response) -> Result<LLMResponse, String> {
+/// Parse SSE stream into a complete LLMResponse, emitting chunks via on_chunk
+async fn parse_stream(resp: reqwest::Response, on_chunk: &Option<OnChunkFn>) -> Result<LLMResponse, String> {
     use tokio::io::AsyncBufReadExt;
     use tokio_util::io::StreamReader;
     use futures_util::StreamExt;
@@ -231,7 +245,12 @@ async fn parse_stream(resp: reqwest::Response) -> Result<LLMResponse, String> {
         if let Ok(chunk) = serde_json::from_str::<Value>(data) {
             if let Some(delta) = chunk["choices"].get(0).and_then(|c| c.get("delta")) {
                 if let Some(content) = delta["content"].as_str() {
-                    full_content.push_str(content);
+                    if !content.is_empty() {
+                        full_content.push_str(content);
+                        if let Some(cb) = on_chunk {
+                            cb(content);
+                        }
+                    }
                 }
                 // Accumulate tool call deltas
                 if let Some(tcs) = delta["tool_calls"].as_array() {

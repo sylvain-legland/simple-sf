@@ -169,12 +169,13 @@ pub extern "C" fn sf_start_mission(project_id: *const c_char, brief: *const c_ch
     let mid_clone = mid.clone();
 
     runtime().spawn(async move {
-        let callback: EventCallback = Box::new(|agent_id: &str, event: AgentEvent| {
+        let callback: EventCallback = std::sync::Arc::new(|agent_id: &str, event: AgentEvent| {
             match event {
                 AgentEvent::Thinking => emit(agent_id, "thinking", ""),
                 AgentEvent::ToolCall { tool, args } => emit(agent_id, "tool_call", &format!("{}|{}", tool, args)),
                 AgentEvent::ToolResult { tool, result } => emit(agent_id, "tool_result", &format!("{}|{}", tool, result)),
                 AgentEvent::Response { content } => emit(agent_id, "response", &content),
+                AgentEvent::ResponseChunk { content } => emit(agent_id, "response_chunk", &content),
                 AgentEvent::Error { message } => emit(agent_id, "error", &message),
             }
         });
@@ -264,10 +265,11 @@ pub extern "C" fn sf_jarvis_discuss(
     let sid_clone = sid.clone();
 
     runtime().spawn(async move {
-        let callback: EventCallback = Box::new(|agent_id: &str, event: AgentEvent| {
+        let callback: EventCallback = std::sync::Arc::new(|agent_id: &str, event: AgentEvent| {
             match event {
                 AgentEvent::Thinking => emit(agent_id, "discuss_thinking", ""),
                 AgentEvent::Response { content } => emit(agent_id, "discuss_response", &content),
+                AgentEvent::ResponseChunk { content } => emit(agent_id, "discuss_chunk", &content),
                 AgentEvent::Error { message } => emit(agent_id, "error", &message),
                 _ => {}
             }
@@ -361,10 +363,11 @@ pub extern "C" fn sf_start_ideation(idea: *const c_char) -> *mut c_char {
     let sid_clone = sid.clone();
 
     runtime().spawn(async move {
-        let callback: EventCallback = Box::new(|agent_id: &str, event: AgentEvent| {
+        let callback: EventCallback = std::sync::Arc::new(|agent_id: &str, event: AgentEvent| {
             match event {
                 AgentEvent::Thinking => emit(agent_id, "thinking", ""),
                 AgentEvent::Response { content } => emit(agent_id, "ideation_response", &content),
+                AgentEvent::ResponseChunk { content } => emit(agent_id, "ideation_chunk", &content),
                 AgentEvent::Error { message } => emit(agent_id, "error", &message),
                 _ => {}
             }

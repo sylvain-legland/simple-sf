@@ -172,7 +172,7 @@ final class SFBridge: ObservableObject {
         let id: UUID
         let agentId: String
         let eventType: String
-        let data: String
+        var data: String
         let timestamp: Date
 
         // Rich metadata (parsed from JSON for discuss_response events)
@@ -729,6 +729,8 @@ final class SFBridge: ObservableObject {
             case "discuss_response":
                 let event = AgentEvent.fromDiscussJSON(agentId: agentId, eventType: eventType, json: data)
                 self.discussionEvents.append(event)
+            case "discuss_chunk":
+                self._appendChunk(agentId: agentId, chunk: data, to: &self.discussionEvents, eventType: "discuss_response")
             case "discuss_complete":
                 self.discussionSynthesis = data
                 self.discussionRunning = false
@@ -738,8 +740,17 @@ final class SFBridge: ObservableObject {
             case "ideation_response":
                 let event = AgentEvent(agentId: agentId, eventType: eventType, data: data)
                 self.ideationEvents.append(event)
+            case "ideation_chunk":
+                self._appendChunk(agentId: agentId, chunk: data, to: &self.ideationEvents, eventType: "ideation_response")
             case "ideation_complete":
                 self.ideationRunning = false
+
+            // Streaming chunks for mission/project events
+            case "response_chunk":
+                self._appendChunk(agentId: agentId, chunk: data, to: &self.events, eventType: "response")
+                if let pid = self.currentProjectId {
+                    self._appendChunk(agentId: agentId, chunk: data, to: &self.projectEvents[pid, default: []], eventType: "response")
+                }
 
             // Mission events
             case "mission_complete":
@@ -787,6 +798,21 @@ final class SFBridge: ObservableObject {
                     }
                 }
             }
+        }
+    }
+
+    /// Append a streaming chunk to the last event from this agent, or create a new one
+    @MainActor
+    private func _appendChunk(agentId: String, chunk: String, to events: inout [AgentEvent], eventType: String) {
+        if let idx = events.lastIndex(where: { $0.agentId == agentId && $0.eventType == eventType }) {
+            events[idx].data += chunk
+        } else {
+            var event = AgentEvent(agentId: agentId, eventType: eventType, data: chunk)
+            if let info = self.agentInfo(agentId) {
+                event.agentName = info.name
+                event.role = info.role
+            }
+            events.append(event)
         }
     }
 
