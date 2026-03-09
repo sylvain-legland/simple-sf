@@ -444,11 +444,20 @@ struct ProjectAccordion: View {
         let phases = missionStatus?.phases ?? simulatedPhases()
         if let idx = selectedPhaseIndex, idx < phases.count {
             phaseDetailPanel(phases[idx], index: idx)
-        } else if projectEvents.isEmpty, let msgs = missionStatus?.messages, !msgs.isEmpty {
-            // No live events but mission has persisted messages — show conversation
+        } else {
+            conversationFeed
+        }
+    }
+
+    /// Shows the best available conversation: live events > persisted messages > empty state
+    @ViewBuilder
+    private var conversationFeed: some View {
+        if !projectEvents.isEmpty {
+            liveEventsFeed
+        } else if let msgs = missionStatus?.messages, !msgs.isEmpty {
             missionMessagesFeed(msgs)
         } else {
-            liveEventsFeed
+            emptyDiscussionPlaceholder
         }
     }
 
@@ -661,37 +670,28 @@ struct ProjectAccordion: View {
 
     // ── Live events feed ──
 
+    private var emptyDiscussionPlaceholder: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: 8) {
+                Image(systemName: "play.circle")
+                    .font(.system(size: 32))
+                    .foregroundColor(SF.Colors.textMuted.opacity(0.5))
+                Text("Lancez le workflow pour voir la discussion des agents")
+                    .font(.system(size: 13))
+                    .foregroundColor(SF.Colors.textMuted)
+            }
+            .padding(.top, 30)
+            Spacer()
+        }
+    }
+
     private var liveEventsFeed: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
-                    if projectEvents.isEmpty {
-                        HStack {
-                            Spacer()
-                            VStack(spacing: 8) {
-                                if isActive {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
-                                        .tint(SF.Colors.purple)
-                                    Text("Agents en cours de travail…")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(SF.Colors.textMuted)
-                                } else {
-                                    Image(systemName: "play.circle")
-                                        .font(.system(size: 32))
-                                        .foregroundColor(SF.Colors.textMuted.opacity(0.5))
-                                    Text("Lancez le workflow pour voir la discussion des agents")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(SF.Colors.textMuted)
-                                }
-                            }
-                            .padding(.top, 30)
-                            Spacer()
-                        }
-                    } else {
-                        ForEach(projectEvents) { event in
-                            eventRow(event).id(event.id)
-                        }
+                    ForEach(projectEvents) { event in
+                        eventRow(event).id(event.id)
                     }
                 }
                 .padding(16)
