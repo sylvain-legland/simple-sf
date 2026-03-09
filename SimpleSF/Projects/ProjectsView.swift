@@ -863,91 +863,178 @@ struct ProjectAccordion: View {
         let color = catalog.agentColor(event.agentId)
         let displayRole = !event.role.isEmpty ? event.role : catalog.agentRole(event.agentId)
         let displayName = !event.agentName.isEmpty ? event.agentName : catalog.agentName(event.agentId)
-        return HStack(alignment: .top, spacing: 8) {
-            AgentAvatarView(agentId: event.agentId, size: 28)
-                .overlay(Circle().stroke(color.opacity(0.4), lineWidth: 1))
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Text(displayName)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(color)
-                    if !displayRole.isEmpty {
-                        RoleBadge(role: displayRole, color: color)
-                    }
-                    if !event.messageType.isEmpty && event.messageType != "response" {
-                        Text(event.messageType)
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(messageTypeColor(event.messageType))
-                            .cornerRadius(3)
-                    }
-                    Spacer()
-                    if event.round > 0 {
-                        Text("R\(event.round)")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .foregroundColor(SF.Colors.purple)
-                            .padding(.horizontal, 3)
-                            .padding(.vertical, 1)
-                            .background(SF.Colors.purple.opacity(0.1))
-                            .cornerRadius(3)
-                    }
-                    Text(event.timestamp, style: .time)
-                        .font(.system(size: 9))
-                        .foregroundColor(SF.Colors.textMuted)
-                }
-                // Recipients
-                if !event.toAgents.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 7))
-                            .foregroundColor(SF.Colors.textMuted)
-                        ForEach(event.toAgents, id: \.self) { rid in
-                            HStack(spacing: 2) {
-                                AgentAvatarView(agentId: rid, size: 14)
-                                Text(catalog.agentName(rid))
-                                    .font(.system(size: 9))
-                                    .foregroundColor(SF.Colors.textSecondary)
+        let mtype = event.messageType.isEmpty ? "response" : event.messageType
+        let borderColor = eventBorderColor(mtype)
+
+        // Thinking events: compact indicator (same as Jarvis)
+        if event.eventType == "thinking" || event.eventType == "discuss_thinking" {
+            return AnyView(thinkingRow(event))
+        }
+
+        // Full card (Jarvis-style, scaled down)
+        return AnyView(
+            HStack(alignment: .top, spacing: 0) {
+                // Left accent border
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(borderColor)
+                    .frame(width: 3)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    // ── Metadata header ──
+                    HStack(spacing: 8) {
+                        AgentAvatarView(agentId: event.agentId, size: 32)
+                            .overlay(Circle().stroke(color.opacity(0.6), lineWidth: 2))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(displayName)
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(color)
+                                if mtype != "response" {
+                                    eventTypeBadge(mtype)
+                                }
+                                if event.round > 0 {
+                                    Text("R\(event.round)")
+                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                        .foregroundColor(SF.Colors.purple)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(SF.Colors.purple.opacity(0.1))
+                                        .cornerRadius(4)
+                                }
                             }
+                            HStack(spacing: 5) {
+                                if !displayRole.isEmpty {
+                                    Text(displayRole)
+                                        .font(.system(size: 11).italic())
+                                        .foregroundColor(SF.Colors.textSecondary)
+                                }
+                                // Current phase pattern
+                                if let pat = currentPhasePattern, !pat.isEmpty {
+                                    PatternBadge(pattern: pat)
+                                }
+                            }
+                        }
+
+                        Spacer()
+
+                        // Recipients (right side)
+                        if !event.toAgents.isEmpty {
+                            eventRecipientsView(event.toAgents)
+                        }
+
+                        Text(event.timestamp, style: .time)
+                            .font(.system(size: 9))
+                            .foregroundColor(SF.Colors.textMuted)
+                    }
+
+                    Divider().background(SF.Colors.border.opacity(0.5))
+
+                    // ── Content ──
+                    if !event.data.isEmpty {
+                        MarkdownView(event.data, fontSize: 12)
+                            .textSelection(.enabled)
+                    }
+
+                    // Typing cursor for last active event
+                    if isLast && isActive && bridge.isRunning {
+                        HStack(spacing: 3) {
+                            Circle().fill(SF.Colors.purple).frame(width: 4, height: 4)
+                                .modifier(PulseAnimation())
+                            Circle().fill(SF.Colors.purple).frame(width: 4, height: 4)
+                                .modifier(PulseAnimation(delay: 0.2))
+                            Circle().fill(SF.Colors.purple).frame(width: 4, height: 4)
+                                .modifier(PulseAnimation(delay: 0.4))
                         }
                     }
                 }
-                // Content
-                if !event.data.isEmpty && event.eventType != "thinking" && event.eventType != "discuss_thinking" {
-                    MarkdownView(event.data, fontSize: 11)
-                } else if event.eventType == "thinking" || event.eventType == "discuss_thinking" {
-                    HStack(spacing: 4) {
-                        Image(systemName: "brain.head.profile")
-                            .font(.system(size: 9))
-                            .foregroundColor(SF.Colors.textMuted)
-                        Text(event.data.isEmpty ? "Réflexion…" : String(event.data.prefix(120)) + "…")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(SF.Colors.textMuted)
-                            .italic()
-                            .lineLimit(2)
-                    }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+            .background(SF.Colors.bgCard)
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(SF.Colors.border.opacity(0.5), lineWidth: 0.5)
+            )
+        )
+    }
+
+    /// Current phase pattern (for display in event cards)
+    private var currentPhasePattern: String? {
+        let phases = displayPhases
+        if let running = phases.first(where: { $0.status == "running" }) { return running.pattern }
+        return nil
+    }
+
+    private func thinkingRow(_ event: SFBridge.AgentEvent) -> some View {
+        let name = !event.agentName.isEmpty ? event.agentName : catalog.agentName(event.agentId)
+        return HStack(spacing: 10) {
+            AgentAvatarView(agentId: event.agentId, size: 28)
+            ProgressView().controlSize(.small)
+            Text("\(name) rédige…")
+                .font(.system(size: 12))
+                .foregroundColor(SF.Colors.textMuted)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private func eventTypeBadge(_ type: String) -> some View {
+        let (bg, fg) = eventBadgeColors(type)
+        Text(type.uppercased())
+            .font(.system(size: 9, weight: .bold))
+            .foregroundColor(fg)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(bg)
+            .cornerRadius(4)
+    }
+
+    @ViewBuilder
+    private func eventRecipientsView(_ toAgents: [String]) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "arrow.right")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(SF.Colors.textMuted)
+            ForEach(toAgents, id: \.self) { agentId in
+                let displayName = agentId == "all" ? "Tous" : catalog.agentName(agentId)
+                let c = catalog.agentColor(agentId)
+                HStack(spacing: 3) {
+                    AgentAvatarView(agentId: agentId, size: 16)
+                    Text(displayName)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(c)
                 }
-                // Typing cursor for last active event
-                if isLast && isActive && bridge.isRunning {
-                    HStack(spacing: 2) {
-                        Circle().fill(SF.Colors.purple).frame(width: 4, height: 4)
-                            .opacity(0.8)
-                            .modifier(PulseAnimation())
-                        Circle().fill(SF.Colors.purple).frame(width: 4, height: 4)
-                            .opacity(0.5)
-                            .modifier(PulseAnimation(delay: 0.2))
-                        Circle().fill(SF.Colors.purple).frame(width: 4, height: 4)
-                            .opacity(0.3)
-                            .modifier(PulseAnimation(delay: 0.4))
-                    }
-                    .padding(.top, 2)
-                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(c.opacity(0.1))
+                .cornerRadius(4)
             }
         }
-        .padding(8)
-        .background(SF.Colors.bgCard)
-        .cornerRadius(6)
+    }
+
+    private func eventBorderColor(_ type: String) -> Color {
+        switch type {
+        case "instruction", "delegation": return SF.Colors.yellowDeep
+        case "response", "approval":      return Color(red: 0.13, green: 0.77, blue: 0.37)
+        case "veto":                      return SF.Colors.error
+        case "synthesis":                 return SF.Colors.po
+        default:                          return SF.Colors.textMuted.opacity(0.5)
+        }
+    }
+
+    private func eventBadgeColors(_ type: String) -> (Color, Color) {
+        switch type {
+        case "instruction":  return (SF.Colors.yellowDeep.opacity(0.2), SF.Colors.yellowDeep)
+        case "delegation":   return (SF.Colors.purple.opacity(0.2), SF.Colors.purple)
+        case "approval":     return (Color(red: 0.13, green: 0.77, blue: 0.37).opacity(0.2), Color(red: 0.13, green: 0.77, blue: 0.37))
+        case "veto":         return (SF.Colors.error.opacity(0.2), SF.Colors.error)
+        case "synthesis":    return (SF.Colors.po.opacity(0.2), SF.Colors.po)
+        default:             return (SF.Colors.textMuted.opacity(0.15), SF.Colors.textMuted)
+        }
     }
 
     // MARK: - Helpers
