@@ -111,14 +111,20 @@ pub fn protocol_for_role(role: &str, phase: &str) -> &'static str {
         _ => {}
     }
 
-    match role {
-        "lead_dev" => {
+    // Normalize free-form role to canonical key
+    let normalized = crate::tools::normalize_role(role);
+
+    match normalized {
+        "lead_dev" | "lead_frontend" | "lead_backend" => {
             if phase == "design" { DECOMPOSE_PROTOCOL } else { REVIEW_PROTOCOL }
         }
         "developer" => EXEC_PROTOCOL,
-        "qa" => QA_PROTOCOL,
+        "qa" | "qa_lead" => QA_PROTOCOL,
         "product_owner" => PO_CHECKPOINT_PROTOCOL,
-        "rte" => RESEARCH_PROTOCOL,
+        "rte" | "scrum_master" => RESEARCH_PROTOCOL,
+        "ux_designer" => RESEARCH_PROTOCOL,
+        "security" => REVIEW_PROTOCOL,
+        "devops" | "cloud_architect" => EXEC_PROTOCOL,
         _ => EXEC_PROTOCOL,
     }
 }

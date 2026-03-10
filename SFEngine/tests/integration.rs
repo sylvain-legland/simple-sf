@@ -422,6 +422,41 @@ async fn wf_08_tool_schemas_rte() {
     assert!(names.contains(&"memory_search".to_string()), "RTE should have memory_search: {:?}", names);
 }
 
+#[tokio::test]
+async fn wf_09_normalize_role() {
+    // Free-form role strings from the catalog → normalized ROLE_TOOLS keys
+    assert_eq!(tools::normalize_role("QA Engineer"), "qa_lead");
+    assert_eq!(tools::normalize_role("QA Lead"), "qa_lead");
+    assert_eq!(tools::normalize_role("Test Manager"), "qa_lead");
+    assert_eq!(tools::normalize_role("Test Automation Engineer"), "qa_lead");
+    assert_eq!(tools::normalize_role("Frontend Developer"), "lead_frontend");
+    assert_eq!(tools::normalize_role("Backend Developer"), "lead_backend");
+    assert_eq!(tools::normalize_role("Lead Développeur"), "lead_backend"); // contains "dév" + "lead"
+    assert_eq!(tools::normalize_role("DevOps / SRE"), "devops");
+    assert_eq!(tools::normalize_role("Product Manager"), "product_owner");
+    assert_eq!(tools::normalize_role("Scrum Master"), "scrum_master");
+    assert_eq!(tools::normalize_role("UX Designer"), "ux_designer");
+    assert_eq!(tools::normalize_role("Security Engineer"), "security");
+    assert_eq!(tools::normalize_role("CISO — Chief Information Security Officer"), "security");
+    assert_eq!(tools::normalize_role("developer"), "developer");
+
+    // Free-form QA roles should get build + test tools
+    let qa_tools = tools::tool_schemas_for_role("QA Engineer");
+    let qa_names: Vec<String> = qa_tools.iter()
+        .filter_map(|t| t["function"]["name"].as_str().map(String::from))
+        .collect();
+    assert!(qa_names.contains(&"build".to_string()), "QA should have build: {:?}", qa_names);
+    assert!(qa_names.contains(&"test".to_string()), "QA should have test: {:?}", qa_names);
+
+    // Free-form developer roles should get code_write
+    let dev_tools = tools::tool_schemas_for_role("Frontend Developer");
+    let dev_names: Vec<String> = dev_tools.iter()
+        .filter_map(|t| t["function"]["name"].as_str().map(String::from))
+        .collect();
+    assert!(dev_names.contains(&"code_write".to_string()), "Dev should have code_write: {:?}", dev_names);
+    assert!(dev_names.contains(&"build".to_string()), "Dev should have build: {:?}", dev_names);
+}
+
 // ══════════════════════════════════════════════════════════════
 // 4. JARVIS / INTAKE TESTS (synchronous DB-only, no LLM)
 // ══════════════════════════════════════════════════════════════
