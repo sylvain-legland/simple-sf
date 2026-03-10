@@ -641,6 +641,9 @@ final class SFBridge: ObservableObject {
         let output: String?
         let started_at: String?
         let completed_at: String?
+        let phase_type: String?
+        let iteration: Int?
+        let max_iterations: Int?
     }
     struct MessageInfo: Codable, Identifiable {
         var id: String { "\(agent_name)-\(created_at)" }

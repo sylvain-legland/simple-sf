@@ -207,7 +207,7 @@ pub extern "C" fn sf_mission_status(mission_id: *const c_char) -> *mut c_char {
         ).unwrap_or(serde_json::json!(null));
 
         let mut stmt = conn.prepare(
-            "SELECT id, phase_name, pattern, status, agent_ids, output, started_at, completed_at FROM mission_phases WHERE mission_id = ?1 ORDER BY rowid"
+            "SELECT id, phase_name, pattern, status, agent_ids, output, started_at, completed_at, phase_type, iteration, max_iterations FROM mission_phases WHERE mission_id = ?1 ORDER BY rowid"
         ).unwrap();
         let phases: Vec<serde_json::Value> = stmt.query_map(rusqlite::params![&mid], |row| {
             Ok(serde_json::json!({
@@ -219,6 +219,9 @@ pub extern "C" fn sf_mission_status(mission_id: *const c_char) -> *mut c_char {
                 "output": row.get::<_, String>(5).unwrap_or_default(),
                 "started_at": row.get::<_, Option<String>>(6)?,
                 "completed_at": row.get::<_, Option<String>>(7)?,
+                "phase_type": row.get::<_, String>(8).unwrap_or_else(|_| "once".into()),
+                "iteration": row.get::<_, i64>(9).unwrap_or(1),
+                "max_iterations": row.get::<_, i64>(10).unwrap_or(1),
             }))
         }).unwrap().filter_map(|r| r.ok()).collect();
 
