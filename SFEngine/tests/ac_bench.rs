@@ -847,18 +847,66 @@ fn ac_l9_sandbox() {
 fn ac_00_full_report() {
     // This test just prints the structure — actual validation is in each layer
     eprintln!("\n══════════════════════════════════════");
-    eprintln!("  AC BENCH — 9-Layer Quality Report");
+    eprintln!("  AC BENCH — 12-Layer Quality Report");
     eprintln!("══════════════════════════════════════");
-    eprintln!("  L1 LLM       7 cases  — config, hot-swap, strip, backoff");
-    eprintln!("  L2 Tools    10 cases  — dispatch, schemas, security");
-    eprintln!("  L3 Agents    8 cases  — catalog, roles, personas");
-    eprintln!("  L4 Guard    10 cases  — SLOP, MOCK, FAKE, HALLUCINATION");
-    eprintln!("  L5 Memory   10 cases  — scope, upsert, compact, inject");
-    eprintln!("  L6 Workflows 8 cases  — phases, gates, agent mapping");
-    eprintln!("  L7 Patterns  6 cases  — sequential, parallel, network");
-    eprintln!("  L8 Engine   12 cases  — lifecycle, YOLO, retry, fallback");
-    eprintln!("  L9 Sandbox  10 cases  — detection, allowlist, profiles");
+    eprintln!("  L1  LLM        7 cases  — config, hot-swap, strip, backoff");
+    eprintln!("  L2  Tools     10 cases  — dispatch, schemas, security");
+    eprintln!("  L3  Agents     8 cases  — catalog, roles, personas");
+    eprintln!("  L4  Guard     10 cases  — SLOP, MOCK, FAKE, HALLUCINATION");
+    eprintln!("  L5  Memory    10 cases  — scope, upsert, compact, inject");
+    eprintln!("  L6  Workflows  8 cases  — phases, gates, agent mapping");
+    eprintln!("  L7  Patterns   6 cases  — sequential, parallel, network");
+    eprintln!("  L8  Engine    12 cases  — lifecycle, YOLO, retry, fallback");
+    eprintln!("  L9  Sandbox   10 cases  — detection, allowlist, profiles");
+    eprintln!("  L10 Skills    10 cases  — quality, actionability, SBD, domains");
+    eprintln!("  L11 Agents    12 cases  — tools, skills, roles, coherence");
+    eprintln!("  L12 Patterns  10 cases  — types, workflows, org, SAFe");
     eprintln!("  ─────────────────────────────────────");
-    eprintln!("  TOTAL       81 cases");
+    eprintln!("  TOTAL        113 cases");
     eprintln!("══════════════════════════════════════\n");
+}
+
+// ── L10: Skill Quality Eval ──
+
+#[test]
+fn ac_l10_skills() {
+    ensure_db();
+    let r = sf_engine::eval::eval_all_skills();
+    eprintln!("{}", r.summary());
+    let fail_count = r.total() - r.passed();
+    assert!(fail_count <= 2, "L10-Skills: {} failures (max 2)\n{}", fail_count,
+        r.cases.iter().filter(|c| !c.passed).map(|c| format!("  ✗ {}: {}", c.id, c.detail)).collect::<Vec<_>>().join("\n"));
+}
+
+// ── L11: Agent Configuration Eval ──
+
+#[test]
+fn ac_l11_agents() {
+    ensure_db();
+    let r = sf_engine::eval::eval_all_agents();
+    eprintln!("{}", r.summary());
+    let fail_count = r.total() - r.passed();
+    assert!(fail_count <= 1, "L11-Agents: {} failures (max 1)\n{}", fail_count,
+        r.cases.iter().filter(|c| !c.passed).map(|c| format!("  ✗ {}: {}", c.id, c.detail)).collect::<Vec<_>>().join("\n"));
+}
+
+// ── L12: Pattern & Org Eval ──
+
+#[test]
+fn ac_l12_patterns() {
+    ensure_db();
+    let r = sf_engine::eval::eval_all_patterns();
+    eprintln!("{}", r.summary());
+    let fail_count = r.total() - r.passed();
+    assert!(fail_count <= 1, "L12-Patterns: {} failures (max 1)\n{}", fail_count,
+        r.cases.iter().filter(|c| !c.passed).map(|c| format!("  ✗ {}: {}", c.id, c.detail)).collect::<Vec<_>>().join("\n"));
+}
+
+// ── Full eval report ──
+
+#[test]
+fn ac_eval_full_report() {
+    ensure_db();
+    let report = sf_engine::eval::full_eval_report();
+    eprintln!("\n{}", report);
 }

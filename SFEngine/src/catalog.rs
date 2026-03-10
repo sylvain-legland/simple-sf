@@ -305,9 +305,11 @@ pub fn get_workflow_phases(id: &str) -> Option<Vec<(String, String, Vec<String>)
             let phases: Vec<Value> = serde_json::from_str(&pj).ok()?;
             let result: Vec<(String, String, Vec<String>)> = phases.iter().filter_map(|p| {
                 let name = p.get("name").or_else(|| p.get("phase_name"))?.as_str()?.to_string();
-                let pattern = p.get("pattern").and_then(|v| v.as_str()).unwrap_or("sequential").to_string();
+                let pattern = p.get("pattern").or_else(|| p.get("pattern_id"))
+                    .and_then(|v| v.as_str()).unwrap_or("sequential").to_string();
                 let agent_ids: Vec<String> = p.get("agent_ids")
                     .or_else(|| p.get("agents"))
+                    .or_else(|| p.get("config").and_then(|c| c.get("agents")))
                     .and_then(|v| v.as_array())
                     .map(|arr| arr.iter().filter_map(|a| {
                         a.as_str().map(|s| s.to_string())

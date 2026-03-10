@@ -316,11 +316,11 @@ const ROLE_TOOLS: &[(&str, &[&str])] = &[
     ("qa",             &["code_read", "code_search", "list_files", "build", "test", "lint", "git_status", "git_log", "git_diff", "deep_search"]),
     ("qa_lead",        &["code_read", "code_search", "list_files", "build", "test", "lint", "git_status", "git_log", "git_diff", "deep_search", "memory_search", "memory_store"]),
     ("devops",         &["code_read", "code_write", "code_edit", "code_search", "list_files", "build", "test", "git_status", "git_log", "git_diff", "git_commit", "git_push", "git_create_branch", "memory_search", "memory_store"]),
-    ("security",       &["code_read", "code_search", "list_files", "deep_search", "git_status", "git_log", "git_diff"]),
-    ("ux_designer",    &["code_read", "code_search", "list_files", "memory_search"]),
-    ("data_engineer",  &["code_read", "code_write", "code_edit", "code_search", "list_files", "build", "test", "git_commit", "git_status"]),
-    ("tech_writer",    &["code_read", "code_write", "code_search", "list_files", "git_status", "git_diff"]),
-    ("cloud_architect",&["code_read", "code_write", "code_edit", "code_search", "list_files", "build", "git_commit", "git_status"]),
+    ("security",       &["code_read", "code_search", "list_files", "deep_search", "git_status", "git_log", "git_diff", "memory_search", "memory_store"]),
+    ("ux_designer",    &["code_read", "code_search", "list_files", "memory_search", "memory_store"]),
+    ("data_engineer",  &["code_read", "code_write", "code_edit", "code_search", "list_files", "build", "test", "git_commit", "git_status", "memory_search", "memory_store"]),
+    ("tech_writer",    &["code_read", "code_write", "code_search", "list_files", "git_status", "git_diff", "memory_search", "memory_store"]),
+    ("cloud_architect",&["code_read", "code_write", "code_edit", "code_search", "list_files", "build", "git_commit", "git_status", "memory_search", "memory_store"]),
 ];
 
 /// Normalize free-form role strings (from catalog) to ROLE_TOOLS keys.

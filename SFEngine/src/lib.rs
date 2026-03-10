@@ -11,6 +11,7 @@ pub mod catalog;
 pub mod bench;
 pub mod sandbox;
 pub mod indexer;
+pub mod eval;
 mod ffi;
 
 pub use ffi::*;
