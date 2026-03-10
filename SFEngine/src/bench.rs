@@ -40,10 +40,10 @@ pub async fn run_all() -> String {
     results.push(run_case("ac-3", "LLM Tool Calling", ac_llm_tool_calling().await));
 
     // AC-4: Tool execution works (code_write + code_read)
-    results.push(run_case("ac-4", "Tool Execution", ac_tool_execution()));
+    results.push(run_case("ac-4", "Tool Execution", ac_tool_execution().await));
 
     // AC-5: code_edit works
-    results.push(run_case("ac-5", "Code Edit Tool", ac_code_edit()));
+    results.push(run_case("ac-5", "Code Edit Tool", ac_code_edit().await));
 
     // AC-6: Adversarial guard catches SLOP
     results.push(run_case("ac-6", "Guard Catches SLOP", ac_guard_slop()));
@@ -173,17 +173,17 @@ async fn ac_llm_tool_calling() -> BenchResult {
 }
 
 /// AC-4: Do code_write and code_read tools work correctly?
-fn ac_tool_execution() -> BenchResult {
+async fn ac_tool_execution() -> BenchResult {
     let workspace = "/tmp/sf_bench_test";
     std::fs::create_dir_all(workspace).ok();
 
     // Write
     let write_args = json!({"path": "test_file.txt", "content": "Hello from bench!"});
-    let write_result = tools::execute_tool("code_write", &write_args, workspace);
+    let write_result = tools::execute_tool("code_write", &write_args, workspace).await;
 
     // Read back
     let read_args = json!({"path": "test_file.txt"});
-    let read_result = tools::execute_tool("code_read", &read_args, workspace);
+    let read_result = tools::execute_tool("code_read", &read_args, workspace).await;
 
     // Cleanup
     std::fs::remove_dir_all(workspace).ok();
@@ -203,21 +203,21 @@ fn ac_tool_execution() -> BenchResult {
 }
 
 /// AC-5: Does code_edit (find & replace) work?
-fn ac_code_edit() -> BenchResult {
+async fn ac_code_edit() -> BenchResult {
     let workspace = "/tmp/sf_bench_edit";
     std::fs::create_dir_all(workspace).ok();
 
     // Write initial file
     let write_args = json!({"path": "edit_test.py", "content": "def hello():\n    return 'hello'\n"});
-    tools::execute_tool("code_write", &write_args, workspace);
+    tools::execute_tool("code_write", &write_args, workspace).await;
 
     // Edit it
     let edit_args = json!({"path": "edit_test.py", "old_str": "return 'hello'", "new_str": "return 'world'"});
-    let edit_result = tools::execute_tool("code_edit", &edit_args, workspace);
+    let edit_result = tools::execute_tool("code_edit", &edit_args, workspace).await;
 
     // Read back
     let read_args = json!({"path": "edit_test.py"});
-    let read_result = tools::execute_tool("code_read", &read_args, workspace);
+    let read_result = tools::execute_tool("code_read", &read_args, workspace).await;
 
     // Cleanup
     std::fs::remove_dir_all(workspace).ok();

@@ -9,7 +9,7 @@ use std::fs;
 // ══════════════════════════════════════════════════════════════
 
 /// Execute a tool call. Returns the result as a string.
-pub fn execute_tool(name: &str, args: &Value, workspace: &str) -> String {
+pub async fn execute_tool(name: &str, args: &Value, workspace: &str) -> String {
     // Extract project_id from workspace path (last segment)
     let project_id = std::path::Path::new(workspace)
         .file_name()
@@ -22,7 +22,7 @@ pub fn execute_tool(name: &str, args: &Value, workspace: &str) -> String {
         "code_write"  => tool_code_write(args, workspace),
         "code_read"   => tool_code_read(args, workspace),
         "code_edit"   => tool_code_edit(args, workspace),
-        "code_search" => tool_code_search(args, workspace),
+        "code_search" => tool_code_search(args, workspace).await,
         "list_files"  => tool_list_files(args, workspace),
         "deep_search" => tool_deep_search(args, workspace),
         // Build tools
@@ -101,14 +101,15 @@ fn all_tool_schemas() -> HashMap<&'static str, Value> {
         "type": "function",
         "function": {
             "name": "code_search",
-            "description": "Search for a regex pattern in the workspace using grep.",
+            "description": "Semantic code search: finds relevant functions, classes, and code blocks by meaning (AST-indexed). Also supports regex patterns. Uses tree-sitter + embeddings for intelligent results.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "pattern": {"type": "string", "description": "Search pattern (regex)"},
-                    "path": {"type": "string", "description": "Directory to search in (default: workspace root)"}
+                    "query": {"type": "string", "description": "Natural language query or code snippet to search for"},
+                    "pattern": {"type": "string", "description": "Regex pattern for exact text matching (optional, uses grep-style search)"},
+                    "limit": {"type": "integer", "description": "Maximum number of results (default: 10)"}
                 },
-                "required": ["pattern"]
+                "required": ["query"]
             }
         }
     }));
@@ -430,13 +431,44 @@ fn tool_code_edit(args: &Value, workspace: &str) -> String {
     }
 }
 
-fn tool_code_search(args: &Value, workspace: &str) -> String {
-    let pattern = args["pattern"].as_str().unwrap_or("");
-    let dir = args["path"].as_str().unwrap_or(".");
-    let full_dir = Path::new(workspace).join(dir);
+async fn tool_code_search(args: &Value, workspace: &str) -> String {
+    let query = args["query"].as_str()
+        .or_else(|| args["pattern"].as_str()) // backward compat
+        .unwrap_or("");
+    let limit = args["limit"].as_u64().unwrap_or(10) as usize;
+
+    // If "pattern" is provided (regex), also do grep-style search on indexed chunks
+    if let Some(pattern) = args["pattern"].as_str() {
+        if args["query"].is_null() {
+            // Pure regex mode — grep over indexed chunks (or fall back to system grep)
+            let results = crate::indexer::grep_search(pattern, workspace, limit);
+            if !results.is_empty() {
+                return crate::indexer::format_results(&results);
+            }
+            // Fallback to system grep if not indexed yet
+            return grep_fallback(pattern, workspace);
+        }
+    }
+
+    // Semantic search (AST + embeddings + FTS5)
+    match crate::indexer::search(query, workspace, limit).await {
+        Ok(results) if !results.is_empty() => crate::indexer::format_results(&results),
+        Ok(_) => {
+            // No semantic results — fall back to grep
+            grep_fallback(query, workspace)
+        }
+        Err(e) => {
+            // Indexing/search failed — fall back to grep
+            eprintln!("[indexer] Search error: {}", e);
+            grep_fallback(query, workspace)
+        }
+    }
+}
+
+fn grep_fallback(pattern: &str, workspace: &str) -> String {
     let output = Command::new("grep")
         .args(["-rn", "--include=*.*", pattern])
-        .arg(&full_dir)
+        .arg(workspace)
         .output();
     match output {
         Ok(o) => {

@@ -126,7 +126,7 @@ pub async fn run_agent(
                 });
 
                 let args: Value = serde_json::from_str(&tc.arguments).unwrap_or(Value::Null);
-                let result = tools::execute_tool(&tc.name, &args, workspace);
+                let result = tools::execute_tool(&tc.name, &args, workspace).await;
 
                 on_event(agent_id, AgentEvent::ToolResult {
                     tool: tc.name.clone(),

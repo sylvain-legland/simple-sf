@@ -203,6 +203,30 @@ CREATE TABLE IF NOT EXISTS discussion_messages (
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (session_id) REFERENCES discussion_sessions(id)
 );
+
+-- AST-based code index for semantic search
+CREATE TABLE IF NOT EXISTS code_chunks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    language TEXT NOT NULL,
+    chunk_type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    content TEXT NOT NULL,
+    start_line INTEGER NOT NULL,
+    end_line INTEGER NOT NULL,
+    embedding BLOB,
+    file_mtime INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_code_chunks_workspace ON code_chunks(workspace);
+CREATE INDEX IF NOT EXISTS idx_code_chunks_file ON code_chunks(workspace, file_path);
+
+-- FTS5 full-text search over code chunks
+CREATE VIRTUAL TABLE IF NOT EXISTS code_chunks_fts USING fts5(
+    name, content
+);
 ";
 
 /// Seed all SF platform data from bundled JSON files
