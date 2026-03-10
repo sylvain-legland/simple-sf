@@ -1,4 +1,5 @@
 use crate::agents::{self, Agent};
+use crate::catalog;
 use crate::executor::{self, AgentEvent, EventCallback};
 use crate::guard;
 
@@ -22,7 +23,7 @@ pub static YOLO_MODE: AtomicBool = AtomicBool::new(false);
 
 /// Phase execution semantics
 #[derive(Clone, Debug)]
-enum PhaseType {
+pub enum PhaseType {
     /// Execute once (ideation, architecture, deploy)
     Once,
     /// Iterative development loop — PM checkpoint after each sprint
@@ -35,17 +36,17 @@ enum PhaseType {
 
 /// A single phase in the workflow plan
 #[derive(Clone, Debug)]
-struct PhaseDef {
-    name: String,
-    phase_type: PhaseType,
-    pattern: String,
-    agents: Vec<String>,
+pub struct PhaseDef {
+    pub name: String,
+    pub phase_type: PhaseType,
+    pub pattern: String,
+    pub agents: Vec<String>,
 }
 
 /// The full workflow plan produced by the PM
 #[derive(Clone, Debug)]
-struct WorkflowPlan {
-    phases: Vec<PhaseDef>,
+pub struct WorkflowPlan {
+    pub phases: Vec<PhaseDef>,
 }
 
 /// Default 14-phase SAFe plan (fallback if PM fails to produce a plan)
@@ -510,7 +511,7 @@ async fn pm_create_plan(brief: &str, on_event: &EventCallback) -> Result<Workflo
 
 /// Parse a JSON workflow plan — accepts both `{"phases": [...]}` and bare `[...]` arrays.
 /// Agent lists can use `"agents"` or `"agent_ids"` keys.
-fn parse_workflow_plan(text: &str) -> Result<WorkflowPlan, String> {
+pub fn parse_workflow_plan(text: &str) -> Result<WorkflowPlan, String> {
     let trimmed = text.trim();
 
     // Try parsing the text directly first (for DB-stored JSON)
@@ -581,23 +582,43 @@ fn parse_workflow_plan(text: &str) -> Result<WorkflowPlan, String> {
 
         // DB format has "gate" field (always/no_veto/all_approved) — map to PhaseType
         let gate_str = p["gate"].as_str().unwrap_or("");
+        let max_iter = p["max_iterations"].as_u64()
+            .or_else(|| p["config"]["max_iterations"].as_u64());
+        let has_iterations = max_iter.is_some() && max_iter.unwrap_or(0) > 1;
+
         let phase_type = match phase_type_str {
             "sprint" => PhaseType::Sprint {
-                max_iterations: p["max_iterations"].as_u64()
-                    .or_else(|| p["config"]["max_iterations"].as_u64())
-                    .unwrap_or(5) as usize,
+                max_iterations: max_iter.unwrap_or(5) as usize,
             },
             "gate" => PhaseType::Gate {
                 on_veto: p["on_veto"].as_str().map(String::from),
             },
             "feedback_loop" => PhaseType::FeedbackLoop {
-                max_iterations: p["max_iterations"].as_u64().unwrap_or(3) as usize,
+                max_iterations: max_iter.unwrap_or(3) as usize,
             },
-            // DB format: "once" + gate field
-            _ => match gate_str {
-                "no_veto" | "all_approved" => PhaseType::Gate { on_veto: None },
-                _ => PhaseType::Once,
-            },
+            // DB format: infer from pattern + gate + max_iterations
+            _ => {
+                // loop pattern with iterations → FeedbackLoop (QA cycle with veto→fix→re-QA)
+                if pattern == "loop" && has_iterations {
+                    PhaseType::FeedbackLoop {
+                        max_iterations: max_iter.unwrap_or(3) as usize,
+                    }
+                }
+                // hierarchical/parallel/sequential with iterations → Sprint (multi-sprint dev)
+                else if has_iterations {
+                    PhaseType::Sprint {
+                        max_iterations: max_iter.unwrap_or(5) as usize,
+                    }
+                }
+                // gate field → Gate (go/nogo checkpoint)
+                else if matches!(gate_str, "no_veto" | "all_approved") {
+                    PhaseType::Gate { on_veto: p["on_veto"].as_str().map(String::from) }
+                }
+                // default → Once
+                else {
+                    PhaseType::Once
+                }
+            }
         };
 
         // Use description from DB if available
@@ -716,7 +737,8 @@ async fn execute_workflow_plan(
                             // PM checkpoint — ask if another sprint is needed
                             if sprint_num < max {
                                 let continue_decision = pm_sprint_checkpoint(
-                                    brief, &phase_def.name, sprint_num, &output, on_event
+                                    brief, &phase_def.name, sprint_num, &output,
+                                    workspace, mission_id, on_event
                                 ).await;
                                 if !continue_decision {
                                     on_event("engine", AgentEvent::Response {
@@ -1170,7 +1192,7 @@ async fn execute_single_phase(
 }
 
 // ──────────────────────────────────────────
-// PM Sprint Checkpoint — asks PM if another sprint is needed
+// PM Sprint Checkpoint — real agent with tools, checks workspace + memory
 // ──────────────────────────────────────────
 
 async fn pm_sprint_checkpoint(
@@ -1178,34 +1200,64 @@ async fn pm_sprint_checkpoint(
     phase_name: &str,
     sprint_num: usize,
     sprint_output: &str,
+    workspace: &str,
+    mission_id: &str,
     on_event: &EventCallback,
 ) -> bool {
     on_event("po-lucas", AgentEvent::Thinking);
 
-    let system = format!(
-        "Tu es le Product Owner. Tu decides si un sprint supplementaire est necessaire.\n\
-         Reponds UNIQUEMENT par 'CONTINUE' ou 'DONE' suivi d'une justification courte.\n\n{}",
-        STYLE_RULES
+    // Try to load real PM agent from catalog, fallback to defaults
+    let (pm_name, pm_persona, pm_role) = catalog::get_agent_info("po-lucas")
+        .map(|a| (a.name.clone(), a.persona.clone(), a.role.clone()))
+        .unwrap_or_else(|| (
+            "PO Lucas".into(),
+            "Product Owner pragmatique, orienté livraison".into(),
+            "product_owner".into(),
+        ));
+
+    let task = format!(
+        "## Checkpoint sprint {sprint_num} — {phase_name}\n\n\
+         Brief projet: {brief}\n\n\
+         Résultat du sprint {sprint_num}:\n{output}\n\n\
+         ## TA MISSION (Product Owner):\n\
+         1. Utilise `list_files` pour voir les fichiers produits dans le workspace\n\
+         2. Utilise `code_read` pour lire les fichiers critiques (Package.swift, main sources)\n\
+         3. Utilise `build` pour compiler le projet et vérifier qu'il compile\n\
+         4. Utilise `memory_search` pour voir le contexte des phases précédentes\n\
+         5. Compare le résultat avec le brief : les acceptance criteria sont-ils couverts ?\n\n\
+         ## DECISION FINALE:\n\
+         - Réponds **CONTINUE** si le code est incomplet, ne compile pas, ou ne couvre pas le brief\n\
+         - Réponds **DONE** si tout est implémenté et compilé avec succès\n\
+         Commence par tes observations (tools), puis termine par CONTINUE ou DONE.",
+        sprint_num = sprint_num,
+        phase_name = phase_name,
+        brief = truncate_ctx(brief, 1500),
+        output = truncate_ctx(sprint_output, 1500),
     );
 
-    let prompt = format!(
-        "Brief projet: {}\n\nPhase: {}\nSprint {} termine. Voici le résultat:\n{}\n\n\
-         Le code est-il complet et fonctionnel ? Faut-il un sprint supplementaire ?\n\
-         Reponds 'CONTINUE' si un sprint est encore necessaire, 'DONE' si c'est suffisant.",
-        brief, phase_name, sprint_num, truncate_ctx(sprint_output, 2000)
-    );
-
-    match llm::chat_completion(
-        &[LLMMessage { role: "user".into(), content: prompt }],
-        Some(&system),
-        None,
+    let phase_id = Uuid::new_v4().to_string();
+    match executor::run_agent(
+        "po-lucas", &pm_name, &pm_persona, &pm_role,
+        &task, workspace, mission_id, &phase_id,
+        Some(protocols::protocol_for_role("product_owner", phase_name)),
+        on_event,
     ).await {
-        Ok(resp) => {
-            let content = resp.content.unwrap_or_default();
+        Ok(content) => {
             on_event("po-lucas", AgentEvent::Response { content: content.clone() });
-            content.to_uppercase().contains("CONTINUE")
+            let upper = content.to_uppercase();
+            // CONTINUE unless explicitly DONE
+            if upper.contains("DONE") && !upper.contains("CONTINUE") {
+                false
+            } else {
+                true // default: continue if unclear
+            }
         }
-        Err(_) => false, // On error, stop sprinting
+        Err(e) => {
+            on_event("po-lucas", AgentEvent::Error {
+                message: format!("PM checkpoint failed: {}", e),
+            });
+            true // On error, assume more work needed
+        }
     }
 }
 

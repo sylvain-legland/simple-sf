@@ -305,8 +305,8 @@ fn all_tool_schemas() -> HashMap<&'static str, Value> {
 
 /// ROLE_TOOL_MAP — which tools each role gets access to
 const ROLE_TOOLS: &[(&str, &[&str])] = &[
-    ("rte",            &["code_read", "list_files", "memory_search", "deep_search", "git_status", "git_log"]),
-    ("product_owner",  &["code_read", "code_search", "list_files", "memory_search", "memory_store", "deep_search"]),
+    ("rte",            &["code_read", "list_files", "memory_search", "deep_search", "git_status", "git_log", "build"]),
+    ("product_owner",  &["code_read", "code_search", "list_files", "memory_search", "memory_store", "deep_search", "build", "test"]),
     ("scrum_master",   &["code_read", "list_files", "memory_search", "git_status", "git_log"]),
     ("architect",      &["code_read", "code_search", "list_files", "deep_search", "memory_search", "memory_store", "git_status", "git_log", "git_diff"]),
     ("lead_dev",       &["code_read", "code_write", "code_edit", "code_search", "list_files", "deep_search", "build", "test", "lint", "git_status", "git_log", "git_diff", "git_commit", "memory_search", "memory_store"]),

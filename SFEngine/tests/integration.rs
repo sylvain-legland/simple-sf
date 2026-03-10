@@ -344,6 +344,50 @@ async fn wf_06_fallback_workflow_phases() {
 }
 
 #[tokio::test]
+async fn wf_06b_db_workflow_phasetype_mapping() {
+    ensure_db();
+    // Simulate the product-lifecycle workflow phases as they come from DB JSON
+    let db_phases = serde_json::json!([
+        {"id": "dev-sprints", "name": "Sprints de Développement", "pattern_id": "hierarchical", "gate": "always", "max_iterations": 3, "config": {"agents": ["dev-emma"]}},
+        {"id": "build", "name": "Build & Verify", "pattern_id": "sequential", "gate": "no_veto", "config": {"agents": ["lead-thomas"]}},
+        {"id": "qa-review", "name": "Revue UX", "pattern_id": "loop", "gate": "no_veto", "max_iterations": 2, "config": {"agents": ["po-lucas", "ux-designer"]}},
+        {"id": "qa-campaign", "name": "Campagne QA", "pattern_id": "loop", "gate": "all_approved", "max_iterations": 5, "config": {"agents": ["qa-sophie", "lead-thomas"]}},
+        {"id": "deploy", "name": "Deploy", "pattern_id": "sequential", "gate": "always", "config": {"agents": ["devops-alex"]}},
+        {"id": "tma", "name": "Correctif TMA", "pattern_id": "loop", "gate": "no_veto", "max_iterations": 3, "config": {"agents": ["lead-thomas", "qa-sophie"]}}
+    ]);
+    // Build a PM-style JSON that parse_workflow_plan can read
+    let wf_json = serde_json::json!({ "phases": db_phases });
+    let plan = sf_engine::engine::parse_workflow_plan(&wf_json.to_string())
+        .expect("Should parse DB-style workflow");
+
+    assert_eq!(plan.phases.len(), 6);
+
+    // Phase 1: hierarchical + max_iterations=3 → Sprint
+    assert!(matches!(plan.phases[0].phase_type, sf_engine::engine::PhaseType::Sprint { max_iterations: 3 }),
+        "Dev sprints should be Sprint(3), got: {:?}", plan.phases[0].phase_type);
+
+    // Phase 2: sequential + gate=no_veto, NO max_iterations → Gate
+    assert!(matches!(plan.phases[1].phase_type, sf_engine::engine::PhaseType::Gate { .. }),
+        "Build should be Gate, got: {:?}", plan.phases[1].phase_type);
+
+    // Phase 3: loop + max_iterations=2 → FeedbackLoop
+    assert!(matches!(plan.phases[2].phase_type, sf_engine::engine::PhaseType::FeedbackLoop { max_iterations: 2 }),
+        "UX review (loop+iter) should be FeedbackLoop(2), got: {:?}", plan.phases[2].phase_type);
+
+    // Phase 4: loop + max_iterations=5 → FeedbackLoop
+    assert!(matches!(plan.phases[3].phase_type, sf_engine::engine::PhaseType::FeedbackLoop { max_iterations: 5 }),
+        "QA campaign (loop+iter) should be FeedbackLoop(5), got: {:?}", plan.phases[3].phase_type);
+
+    // Phase 5: sequential + gate=always → Once
+    assert!(matches!(plan.phases[4].phase_type, sf_engine::engine::PhaseType::Once),
+        "Deploy should be Once, got: {:?}", plan.phases[4].phase_type);
+
+    // Phase 6: loop + max_iterations=3 → FeedbackLoop
+    assert!(matches!(plan.phases[5].phase_type, sf_engine::engine::PhaseType::FeedbackLoop { max_iterations: 3 }),
+        "TMA correctif (loop+iter) should be FeedbackLoop(3), got: {:?}", plan.phases[5].phase_type);
+}
+
+#[tokio::test]
 async fn wf_07_tool_schemas_by_role() {
     ensure_db();
     let dev_tools = tools::tool_schemas_for_role("developer");
