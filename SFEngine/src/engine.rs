@@ -17,12 +17,21 @@ pub static YOLO_MODE: AtomicBool = AtomicBool::new(false);
 
 /// Fallback SAFe workflow phases (used if workflow not found in catalog)
 const SAFE_PHASES: &[(&str, &str, &[&str])] = &[
-    ("vision",  "network",     &["rte-marie", "po-lucas"]),
-    ("design",  "sequential",  &["archi-pierre", "lead-thomas"]),
-    ("dev",     "parallel",    &["dev-emma", "dev-karim"]),
-    ("qa",      "sequential",  &["qa-sophie"]),
-    ("build",   "sequential",  &["lead-thomas"]),
-    ("deploy",  "sequential",  &["rte-marie"]),
+    // 14-phase SAFe product lifecycle — aligned with IHM timeline
+    ("ideation",           "network",     &["rte-marie", "po-lucas"]),
+    ("comite-strategique", "sequential",  &["rte-marie", "po-lucas"]),
+    ("constitution",       "sequential",  &["rte-marie", "po-lucas"]),
+    ("architecture",       "sequential",  &["archi-pierre", "lead-thomas"]),
+    ("design-system",      "sequential",  &["archi-pierre", "po-lucas"]),
+    ("dev",                "parallel",    &["dev-emma", "dev-karim"]),
+    ("build",              "sequential",  &["lead-thomas"]),
+    ("pipeline-ci",        "sequential",  &["lead-thomas", "dev-karim"]),
+    ("revue-ux",           "sequential",  &["po-lucas", "archi-pierre"]),
+    ("qa",                 "sequential",  &["qa-sophie", "lead-thomas"]),
+    ("tests",              "parallel",    &["qa-sophie", "dev-emma"]),
+    ("deploy",             "sequential",  &["lead-thomas", "rte-marie"]),
+    ("routage-tma",        "sequential",  &["rte-marie"]),
+    ("correctif-tma",      "sequential",  &["lead-thomas", "qa-sophie"]),
 ];
 
 const MAX_NETWORK_ROUNDS: usize = 10;
@@ -938,7 +947,7 @@ fn auto_assign_agents(phase_name: &str) -> Vec<String> {
         &["rte-marie", "po-lucas"]
     } else if lower.contains("architect") || lower.contains("design") && !lower.contains("system") {
         &["archi-pierre", "lead-thomas"]
-    } else if lower.contains("design sys") || lower.contains("token") || lower.contains("ui") {
+    } else if lower.contains("design sys") || lower.contains("design-sys") || lower.contains("token") || lower.contains("ui") {
         &["archi-pierre", "po-lucas"]
     } else if lower.contains("sprint") || lower.contains("dev") || lower.contains("développement") {
         &["dev-emma", "dev-karim"]
@@ -1058,7 +1067,7 @@ fn build_phase_task(phase: &str, brief: &str, previous: &[String]) -> String {
              Output concrete file paths and task assignments.{}",
             brief, context
         )
-    } else if lower.contains("design sys") || lower.contains("token") {
+    } else if lower.contains("design sys") || lower.contains("design-sys") || lower.contains("token") {
         format!(
             "BRIEF: {}\n\n\
              Design system and UI tokens:\n\
