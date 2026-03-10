@@ -10,6 +10,7 @@ pub mod guard;
 pub mod catalog;
 pub mod bench;
 pub mod sandbox;
+pub mod indexer;
 mod ffi;
 
 pub use ffi::*;

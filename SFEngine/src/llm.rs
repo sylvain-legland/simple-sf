@@ -423,3 +423,61 @@ pub fn strip_thinking(s: &str) -> String {
     }
     out.trim().to_string()
 }
+
+// ─── Embeddings API ──────────────────────────────────────────
+
+/// Compute embeddings for a batch of texts using the configured LLM provider's
+/// /embeddings endpoint (OpenAI-compatible).
+pub async fn embed(texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+    // Extract config before await (don't hold RwLockReadGuard across await)
+    let (api_key, base_url, provider) = {
+        let guard = config_lock().read().map_err(|e| e.to_string())?;
+        let config = guard.as_ref().ok_or("LLM not configured")?;
+        (config.api_key.clone(), config.base_url.clone(), config.provider.clone())
+    };
+
+    let emb_model = match provider.as_str() {
+        "openai" | "azure" | "azure-openai" => "text-embedding-3-small",
+        "ollama" => "nomic-embed-text",
+        _ => "text-embedding-3-small",
+    };
+
+    let url = format!("{}/embeddings", base_url.trim_end_matches('/'));
+
+    let body = serde_json::json!({
+        "model": emb_model,
+        "input": texts,
+    });
+
+    let resp = client()
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Embedding request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Embedding API error {}: {}", status, body));
+    }
+
+    let data: serde_json::Value = resp.json().await
+        .map_err(|e| format!("Failed to parse embedding response: {}", e))?;
+
+    let embeddings = data["data"].as_array()
+        .ok_or("Invalid embedding response: missing 'data' array")?
+        .iter()
+        .map(|item| {
+            item["embedding"].as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .map(|v| v.as_f64().unwrap_or(0.0) as f32)
+                .collect()
+        })
+        .collect();
+
+    Ok(embeddings)
+}
