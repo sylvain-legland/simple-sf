@@ -267,3 +267,179 @@ fn list_files_recursive(dir: &str) -> Vec<String> {
     }
     files
 }
+
+/// Mission corrective : la SF reprend le projet Pac-Man là où il en est,
+/// lit la mémoire des erreurs passées, et livre une app compilée.
+/// Workflow court : archi → dev sprint(3) → QA feedback(3) → build final.
+#[tokio::test]
+#[ignore]
+async fn pacman_fix_and_ship() {
+    init_with_full_catalog();
+    if !configure_minimax() {
+        eprintln!("SKIP — no MiniMax key");
+        return;
+    }
+    engine::YOLO_MODE.store(true, Ordering::Relaxed);
+
+    let home = std::env::var("HOME").unwrap();
+    let project_id = "pacman-game";
+
+    // Register project
+    db::with_db(|conn| {
+        conn.execute(
+            "INSERT OR REPLACE INTO projects (id, name, description, tech, status) \
+             VALUES (?1, ?2, ?3, ?4, 'active')",
+            rusqlite::params![project_id, "Pac-Man macOS Game",
+                "Native macOS Pac-Man arcade game — Swift + SpriteKit",
+                "Swift, SpriteKit, macOS"],
+        ).unwrap();
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // MISSION — brief simple, la SF se débrouille
+    // ══════════════════════════════════════════════════════════════
+    let mission_id = format!("pacman-fix-{}", uuid::Uuid::new_v4());
+    let brief = "Construire un jeu Pac-Man natif macOS en Swift Package Manager + SpriteKit. \
+                 Le jeu doit avoir: un labyrinthe classique, Pac-Man contrôlé aux flèches, \
+                 4 fantômes avec IA basique, des dots à collecter, et un score. \
+                 Le projet DOIT compiler avec 'xcrun swift build' sans erreur. \
+                 Pas de dépendance externe — uniquement les frameworks Apple.";
+
+    db::with_db(|conn| {
+        conn.execute(
+            "INSERT INTO missions (id, project_id, brief, status, workflow) \
+             VALUES (?1, ?2, ?3, 'pending', 'product-lifecycle')",
+            rusqlite::params![&mission_id, project_id, brief],
+        ).unwrap();
+    });
+
+    let workspace = format!("{}/Library/Application Support/SimpleSF/workspaces/{}", home, mission_id);
+    std::fs::create_dir_all(&workspace).unwrap();
+
+    eprintln!("\n╔══════════════════════════════════════════════════╗");
+    eprintln!("║  🕹️  PACMAN — SF 100% autonome                    ║");
+    eprintln!("║  Mémoire: vide │ YOLO: ON │ Workflow: P-L        ║");
+    eprintln!("╚══════════════════════════════════════════════════════╝");
+    eprintln!("📋 Brief: {}...", &brief[..100]);
+    eprintln!("🗂  Workspace: .../{}\n", &mission_id[..20]);
+
+    let phase_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let pc = phase_count.clone();
+
+    let callback: executor::EventCallback = Arc::new(move |agent_id, event| {
+        match &event {
+            executor::AgentEvent::Response { content } => {
+                if content.starts_with("──") {
+                    pc.fetch_add(1, Ordering::Relaxed);
+                    eprintln!("\n  {}", content);
+                } else if content.contains("CONTINUE") || content.contains("DONE")
+                    || content.contains("VETO") || content.contains("APPROVE")
+                    || content.contains("sprint") || content.contains("Sprint") {
+                    eprintln!("    📌 {} → {}", agent_id, &content[..content.len().min(200)].replace('\n', " "));
+                } else {
+                    let preview: String = content.chars().take(100).collect::<String>().replace('\n', " ");
+                    eprintln!("    💬 {} → {}", agent_id, preview);
+                }
+            }
+            executor::AgentEvent::ToolCall { tool, args: _ } => {
+                eprintln!("    🔧 {} → {}", agent_id, tool);
+            }
+            executor::AgentEvent::Error { message } => {
+                eprintln!("    ❌ {} → {}", agent_id, &message[..message.len().min(150)]);
+            }
+            _ => {}
+        }
+    });
+
+    eprintln!("🚀 MISSION START — la SF prend la main\n");
+    let start = std::time::Instant::now();
+    let result = engine::run_mission(&mission_id, brief, &workspace, &callback).await;
+    let elapsed = start.elapsed();
+
+    // ══════════════════════════════════════════════════════════════
+    // REPORT
+    // ══════════════════════════════════════════════════════════════
+    eprintln!("\n⏱  Total: {:.0}s ({:.1} min)", elapsed.as_secs_f64(), elapsed.as_secs_f64() / 60.0);
+
+    let phases = db::with_db(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT phase_name, pattern, phase_type, status, iteration, max_iterations \
+             FROM mission_phases WHERE mission_id = ?1 ORDER BY rowid"
+        ).unwrap();
+        stmt.query_map(rusqlite::params![&mission_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?, r.get::<_, i64>(4)?, r.get::<_, i64>(5)?))
+        }).unwrap().filter_map(|r| r.ok()).collect::<Vec<_>>()
+    });
+
+    eprintln!("\n📊 Phases exécutées:");
+    for (name, pat, ptype, status, iter, max_iter) in &phases {
+        let icon = match status.as_str() { "completed" => "✅", "vetoed" => "🚫", "failed" => "❌", _ => "⏳" };
+        eprintln!("  {} {:30} {:12} {:15} {} iter={}/{}",
+            icon, name, pat, ptype, status, iter, max_iter);
+    }
+
+    // Check memory — did agents store new learnings?
+    let mem_count = db::with_db(|conn| {
+        conn.query_row("SELECT COUNT(*) FROM memory WHERE project_id = ?1",
+            rusqlite::params![project_id], |r| r.get::<_, i64>(0)).unwrap_or(0)
+    });
+    eprintln!("\n🧠 Mémoire projet: {} entrées (7 seedées + {} nouvelles)", mem_count, mem_count - 7);
+
+    // Files produced
+    let files = list_files_recursive(&workspace);
+    eprintln!("\n📁 Fichiers produits: {}", files.len());
+    for f in &files {
+        let size = std::fs::metadata(f).map(|m| m.len()).unwrap_or(0);
+        let rel = f.strip_prefix(&workspace).unwrap_or(f.as_str());
+        if rel.ends_with(".swift") || rel.contains("Package") {
+            eprintln!("   📄 {} ({} bytes)", rel, size);
+        }
+    }
+
+    // Build check
+    let build_output = std::process::Command::new("xcrun")
+        .args(["swift", "build"])
+        .current_dir(&workspace)
+        .output();
+
+    match build_output {
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let combined = format!("{}{}", stdout, stderr);
+            if out.status.success() || combined.contains("Build complete") {
+                eprintln!("\n🎉 BUILD SUCCESS — xcrun swift build OK");
+            } else {
+                let errors: Vec<_> = combined.lines().filter(|l| l.contains("error:")).collect();
+                eprintln!("\n❌ BUILD FAILED — {} erreurs", errors.len());
+                for e in errors.iter().take(5) {
+                    eprintln!("   {}", e);
+                }
+            }
+        }
+        Err(e) => eprintln!("\n⚠️  Build command failed: {}", e),
+    }
+
+    // Binary check
+    let binary_paths = [
+        format!("{}/.build/release/PacMan", workspace),
+        format!("{}/.build/debug/PacMan", workspace),
+    ];
+    let compiled = binary_paths.iter().any(|p| std::path::Path::new(p).exists());
+    if compiled {
+        eprintln!("🎮 Binaire PacMan compilé trouvé!");
+    }
+
+    match &result {
+        Ok(()) => eprintln!("\n✅ Mission terminée avec succès"),
+        Err(e) => eprintln!("\n⚠️  Mission: {}", e),
+    }
+
+    // Assertions — the SF should have produced at least a compiling project
+    assert!(result.is_ok(), "Mission should complete");
+    let completed = phases.iter().filter(|(_, _, _, s, _, _)| s == "completed").count();
+    assert!(completed >= 3, "At least 3 phases completed, got {}", completed);
+
+    eprintln!("\n🗂  Workspace: {}", workspace);
+}

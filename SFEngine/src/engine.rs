@@ -71,7 +71,7 @@ fn default_plan() -> WorkflowPlan {
     }
 }
 
-const MAX_NETWORK_ROUNDS: usize = 10;
+const MAX_NETWORK_ROUNDS: usize = 3;
 const CONTEXT_BUDGET: usize = 12000;
 
 /// Instruction appended to every system prompt — enforce no emoji
@@ -819,12 +819,27 @@ async fn execute_workflow_plan(
                         content: format!("  Feedback cycle {}/{} — {}", cycle, max, phase_def.name),
                     });
 
-                    // Inject tickets from previous QA cycle
+                    // ── Auto-build before QA: give reviewers real build status ──
+                    let build_report = auto_build_check(workspace).await;
+                    let build_context = if !build_report.is_empty() {
+                        format!("BUILD STATUS (auto-check):\n{}\n\nIf the build FAILED, you MUST [VETO].", build_report)
+                    } else {
+                        String::new()
+                    };
+
+                    // Inject tickets from previous QA cycle + build report
+                    let mut injection = Vec::new();
                     if !tickets.is_empty() {
-                        veto_conditions = Some(format!(
+                        injection.push(format!(
                             "TICKETS DU CYCLE PRECEDENT (cycle {}):\n{}",
                             cycle - 1, tickets.join("\n")
                         ));
+                    }
+                    if !build_context.is_empty() {
+                        injection.push(build_context);
+                    }
+                    if !injection.is_empty() {
+                        veto_conditions = Some(injection.join("\n\n"));
                     }
 
                     let result = execute_single_phase(
@@ -926,6 +941,46 @@ async fn execute_workflow_plan(
     }
 
     Ok(())
+}
+
+// ──────────────────────────────────────────
+// Auto-build check — run before QA so reviewers see real build status
+// ──────────────────────────────────────────
+
+async fn auto_build_check(workspace: &str) -> String {
+    use std::path::Path;
+
+    let ws = Path::new(workspace);
+    let build_cmd = if ws.join("Package.swift").exists() {
+        "xcrun swift build 2>&1"
+    } else if ws.join("Cargo.toml").exists() {
+        "cargo build 2>&1"
+    } else if ws.join("package.json").exists() {
+        "npm install --silent 2>&1 && npm run build --silent 2>&1"
+    } else if ws.join("Makefile").exists() {
+        "make 2>&1"
+    } else if ws.join("go.mod").exists() {
+        "go build ./... 2>&1"
+    } else {
+        return String::new(); // no recognized project — skip
+    };
+
+    let output = crate::tools::execute_tool(
+        "build",
+        &serde_json::json!({ "command": build_cmd }),
+        workspace,
+    ).await;
+
+    let success = output.contains("Build complete") || output.contains("Finished")
+        || (!output.contains("error:") && !output.contains("FAILED"));
+
+    if success {
+        "BUILD OK — compilation succeeded.".into()
+    } else {
+        // Return first 2000 chars of error output
+        let preview: String = output.chars().take(2000).collect();
+        format!("BUILD FAILED:\n{}", preview)
+    }
 }
 
 // ──────────────────────────────────────────
