@@ -323,6 +323,38 @@ const ROLE_TOOLS: &[(&str, &[&str])] = &[
     ("cloud_architect",&["code_read", "code_write", "code_edit", "code_search", "list_files", "build", "git_commit", "git_status"]),
 ];
 
+/// Normalize free-form role strings (from catalog) to ROLE_TOOLS keys.
+/// e.g. "QA Lead" → "qa_lead", "Frontend Developer" → "lead_frontend"
+pub fn normalize_role(role: &str) -> &'static str {
+    let lower = role.to_lowercase();
+
+    // Exact ID matches first (when agent.id is passed instead of role)
+    for (key, _) in ROLE_TOOLS {
+        if lower == *key { return key; }
+    }
+
+    // Keyword-based matching (order matters — more specific first)
+    if lower.contains("scrum master") { return "scrum_master"; }
+    if lower.contains("product owner") || lower.contains("product manager") || lower == "po" { return "product_owner"; }
+    if lower.contains("rte") || lower.contains("release train") { return "rte"; }
+    if lower.contains("qa") || lower.contains("test") || lower.contains("quality") { return "qa_lead"; }
+    if lower.contains("lead") && lower.contains("front") { return "lead_frontend"; }
+    if lower.contains("lead") && (lower.contains("back") || lower.contains("dév") || lower.contains("dev")) { return "lead_backend"; }
+    if lower.contains("lead dev") || lower.contains("lead dév") || lower.contains("tech lead") { return "lead_dev"; }
+    if lower.contains("devops") || lower.contains("sre") || lower.contains("pipeline") { return "devops"; }
+    if lower.contains("security") || lower.contains("ciso") || lower.contains("pentest") || lower.contains("secops") { return "security"; }
+    if lower.contains("ux") || lower.contains("design") { return "ux_designer"; }
+    if lower.contains("data engineer") { return "data_engineer"; }
+    if lower.contains("cloud") || lower.contains("architect") { return "cloud_architect"; }
+    if lower.contains("tech writ") || lower.contains("documentation") { return "tech_writer"; }
+    if lower.contains("front") { return "lead_frontend"; }
+    if lower.contains("back") { return "lead_backend"; }
+    if lower.contains("develop") || lower.contains("dével") || lower.contains("programmer") { return "developer"; }
+
+    // Fallback: developer (has code_write + build)
+    "developer"
+}
+
 /// Get tool schemas for a given agent role + any extra tools from the agent definition.
 pub fn tool_schemas_for_role(role: &str) -> Vec<Value> {
     tool_schemas_for_role_with_extras(role, &[])
@@ -331,12 +363,13 @@ pub fn tool_schemas_for_role(role: &str) -> Vec<Value> {
 /// Get tool schemas for a role, plus additional tool names from the agent definition.
 pub fn tool_schemas_for_role_with_extras(role: &str, extra_tools: &[&str]) -> Vec<Value> {
     let all = all_tool_schemas();
+    let normalized = normalize_role(role);
 
     // Find the role's tool list (fallback to developer set)
     let role_tools = ROLE_TOOLS.iter()
-        .find(|(r, _)| *r == role)
+        .find(|(r, _)| *r == normalized)
         .map(|(_, tools)| *tools)
-        .unwrap_or(&["code_read", "code_search", "list_files"]);
+        .unwrap_or(&["code_read", "code_write", "code_edit", "code_search", "list_files", "build", "test"]);
 
     let mut seen = std::collections::HashSet::new();
     let mut schemas = Vec::new();
