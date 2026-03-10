@@ -156,7 +156,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.1,
     "max_tokens": 4096,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_veto\": true, \"veto_level\": \"absolute\"}",
@@ -191,7 +191,8 @@
       "threat_intel",
       "gh-sickn33__antigravity-awesome-skills-api-security-best-practices",
       "gh-sickn33__antigravity-awesome-skills-xss-html-injection",
-      "gh-sickn33__antigravity-awesome-skills-sql-injection-testing"
+      "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
+      "securebydesign"
     ]
   },
   {
@@ -322,7 +323,7 @@
     "updated_at": "2026-03-01T09:38:47.857069",
     "avatar": "LV",
     "tagline": "Value over features",
-    "persona": "",
+    "persona": "Expert Product Owner with deep expertise in Product Owner.",
     "motivation": "",
     "hierarchy_rank": 50,
     "project_id": null,
@@ -363,7 +364,7 @@
     "updated_at": "2026-03-01T09:38:47.858167",
     "avatar": "EF",
     "tagline": "If it's not tested, it's broken",
-    "persona": "",
+    "persona": "Expert QA Engineer with deep expertise in QA Engineer.",
     "motivation": "",
     "hierarchy_rank": 50,
     "project_id": null,
@@ -403,7 +404,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.3,
     "max_tokens": 8000,
-    "skills_json": "[\"tdd\", \"code-review\", \"e2e_api\", \"e2e_ihm\", \"webapp-testing\", \"smoke_ihm\", \"gh-sickn33__antigravity-awesome-skills-tdd-orchestrator\", \"gh-sickn33__antigravity-awesome-skills-tdd-workflow\", \"gh-sickn33__antigravity-awesome-skills-tdd-workflows-tdd-cycle\", \"pentester-lead\", \"gh-sickn33__antigravity-awesome-skills-aws-penetration-testing\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"green_it\", \"ethique_ia\"]",
+    "skills_json": "[\"tdd\", \"code-review\", \"e2e_api\", \"e2e_ihm\", \"webapp-testing\", \"smoke_ihm\", \"gh-sickn33__antigravity-awesome-skills-tdd-orchestrator\", \"gh-sickn33__antigravity-awesome-skills-tdd-workflow\", \"gh-sickn33__antigravity-awesome-skills-tdd-workflows-tdd-cycle\", \"pentester-lead\", \"gh-sickn33__antigravity-awesome-skills-aws-penetration-testing\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"green_it\", \"ethique_ia\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"build\", \"test\", \"lint\", \"git_status\", \"git_log\", \"git_diff\", \"deep_search\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_veto\": true, \"can_delegate\": true}",
@@ -447,7 +448,8 @@
       "gh-sickn33__antigravity-awesome-skills-aws-penetration-testing",
       "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
       "green_it",
-      "ethique_ia"
+      "ethique_ia",
+      "securebydesign"
     ]
   },
   {
@@ -460,7 +462,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.2,
     "max_tokens": 8000,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"security-researcher\", \"gh-sickn33__antigravity-awesome-skills-swiftui-expert-skill\", \"gh-sickn33__antigravity-awesome-skills-ios-developer\", \"gh-sickn33__antigravity-awesome-skills-mobile-design\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"security-researcher\", \"gh-sickn33__antigravity-awesome-skills-swiftui-expert-skill\", \"gh-sickn33__antigravity-awesome-skills-ios-developer\", \"gh-sickn33__antigravity-awesome-skills-mobile-design\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{}",
@@ -499,7 +501,8 @@
       "security-researcher",
       "gh-sickn33__antigravity-awesome-skills-swiftui-expert-skill",
       "gh-sickn33__antigravity-awesome-skills-ios-developer",
-      "gh-sickn33__antigravity-awesome-skills-mobile-design"
+      "gh-sickn33__antigravity-awesome-skills-mobile-design",
+      "securebydesign"
     ]
   },
   {
@@ -512,7 +515,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.3,
     "max_tokens": 8000,
-    "skills_json": "[\"code-review\", \"tdd\", \"gh-sickn33__antigravity-awesome-skills-code-review-excellence\", \"gh-sickn33__antigravity-awesome-skills-code-refactoring-refactor-clean\", \"gh-sickn33__antigravity-awesome-skills-code-refactoring-tech-debt\", \"gh-sickn33__antigravity-awesome-skills-debugging-strategies\", \"gh-sickn33__antigravity-awesome-skills-git-pr-workflows-git-workflow\", \"gh-sickn33__antigravity-awesome-skills-error-handling-patterns\", \"exploit-dev\", \"gh-sickn33__antigravity-awesome-skills-aws-penetration-testing\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"green_it\", \"ethique_ia\"]",
+    "skills_json": "[\"code-review\", \"tdd\", \"gh-sickn33__antigravity-awesome-skills-code-review-excellence\", \"gh-sickn33__antigravity-awesome-skills-code-refactoring-refactor-clean\", \"gh-sickn33__antigravity-awesome-skills-code-refactoring-tech-debt\", \"gh-sickn33__antigravity-awesome-skills-debugging-strategies\", \"gh-sickn33__antigravity-awesome-skills-git-pr-workflows-git-workflow\", \"gh-sickn33__antigravity-awesome-skills-error-handling-patterns\", \"exploit-dev\", \"gh-sickn33__antigravity-awesome-skills-aws-penetration-testing\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"green_it\", \"ethique_ia\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_write\", \"code_edit\", \"code_search\", \"list_files\", \"deep_search\", \"build\", \"test\", \"lint\", \"git_init\", \"git_commit\", \"git_status\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{}",
@@ -557,7 +560,8 @@
       "gh-sickn33__antigravity-awesome-skills-aws-penetration-testing",
       "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
       "green_it",
-      "ethique_ia"
+      "ethique_ia",
+      "securebydesign"
     ]
   },
   {
@@ -570,7 +574,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.3,
     "max_tokens": 8000,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"security-architect\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"security-architect\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_veto\": true, \"can_approve\": true, \"veto_keywords\": [\"skip security review\", \"bypass auth\", \"hardcode secret\", \"no encryption\"]}",
@@ -606,7 +610,8 @@
       "gh-sickn33__antigravity-awesome-skills-api-security-best-practices",
       "gh-sickn33__antigravity-awesome-skills-xss-html-injection",
       "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
-      "security-architect"
+      "security-architect",
+      "securebydesign"
     ]
   },
   {
@@ -619,7 +624,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.2,
     "max_tokens": 6000,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"secops-engineer\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"secops-engineer\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_approve\": true}",
@@ -655,7 +660,8 @@
       "gh-sickn33__antigravity-awesome-skills-api-security-best-practices",
       "gh-sickn33__antigravity-awesome-skills-xss-html-injection",
       "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
-      "secops-engineer"
+      "secops-engineer",
+      "securebydesign"
     ]
   },
   {
@@ -668,7 +674,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.2,
     "max_tokens": 8000,
-    "skills_json": "[\"code-review\", \"tdd\", \"gh-sickn33__antigravity-awesome-skills-code-review-excellence\", \"gh-sickn33__antigravity-awesome-skills-code-refactoring-refactor-clean\", \"gh-sickn33__antigravity-awesome-skills-code-refactoring-tech-debt\", \"gh-sickn33__antigravity-awesome-skills-debugging-strategies\", \"gh-sickn33__antigravity-awesome-skills-git-pr-workflows-git-workflow\", \"gh-sickn33__antigravity-awesome-skills-error-handling-patterns\", \"threat-analyst\", \"gh-sickn33__antigravity-awesome-skills-aws-penetration-testing\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\"]",
+    "skills_json": "[\"code-review\", \"tdd\", \"gh-sickn33__antigravity-awesome-skills-code-review-excellence\", \"gh-sickn33__antigravity-awesome-skills-code-refactoring-refactor-clean\", \"gh-sickn33__antigravity-awesome-skills-code-refactoring-tech-debt\", \"gh-sickn33__antigravity-awesome-skills-debugging-strategies\", \"gh-sickn33__antigravity-awesome-skills-git-pr-workflows-git-workflow\", \"gh-sickn33__antigravity-awesome-skills-error-handling-patterns\", \"threat-analyst\", \"gh-sickn33__antigravity-awesome-skills-aws-penetration-testing\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_write\", \"code_edit\", \"code_search\", \"list_files\", \"deep_search\", \"build\", \"test\", \"lint\", \"git_init\", \"git_commit\", \"git_status\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_veto\": true, \"can_approve\": true}",
@@ -711,7 +717,8 @@
       "gh-sickn33__antigravity-awesome-skills-error-handling-patterns",
       "threat-analyst",
       "gh-sickn33__antigravity-awesome-skills-aws-penetration-testing",
-      "gh-sickn33__antigravity-awesome-skills-sql-injection-testing"
+      "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
+      "securebydesign"
     ]
   },
   {
@@ -724,7 +731,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.2,
     "max_tokens": 8000,
-    "skills_json": "[\"code-review\", \"tdd\", \"architecture-review\", \"gh-sickn33__antigravity-awesome-skills-architecture\", \"gh-sickn33__antigravity-awesome-skills-architecture-patterns\", \"gh-sickn33__antigravity-awesome-skills-code-review-excellence\", \"gh-sickn33__antigravity-awesome-skills-api-design-principles\", \"gh-sickn33__antigravity-awesome-skills-database-design\", \"gh-sickn33__antigravity-awesome-skills-nodejs-best-practices\", \"gh-sickn33__antigravity-awesome-skills-performance-profiling\", \"security-dev-lead\"]",
+    "skills_json": "[\"code-review\", \"tdd\", \"architecture-review\", \"gh-sickn33__antigravity-awesome-skills-architecture\", \"gh-sickn33__antigravity-awesome-skills-architecture-patterns\", \"gh-sickn33__antigravity-awesome-skills-code-review-excellence\", \"gh-sickn33__antigravity-awesome-skills-api-design-principles\", \"gh-sickn33__antigravity-awesome-skills-database-design\", \"gh-sickn33__antigravity-awesome-skills-nodejs-best-practices\", \"gh-sickn33__antigravity-awesome-skills-performance-profiling\", \"security-dev-lead\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_write\", \"code_edit\", \"code_search\", \"list_files\", \"deep_search\", \"build\", \"test\", \"lint\", \"git_status\", \"git_log\", \"git_diff\", \"git_commit\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_approve\": true, \"can_delegate\": true}",
@@ -768,7 +775,8 @@
       "gh-sickn33__antigravity-awesome-skills-database-design",
       "gh-sickn33__antigravity-awesome-skills-nodejs-best-practices",
       "gh-sickn33__antigravity-awesome-skills-performance-profiling",
-      "security-dev-lead"
+      "security-dev-lead",
+      "securebydesign"
     ]
   },
   {
@@ -781,7 +789,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.2,
     "max_tokens": 6000,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"security-backend-dev\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"security-backend-dev\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{}",
@@ -817,7 +825,8 @@
       "gh-sickn33__antigravity-awesome-skills-api-security-best-practices",
       "gh-sickn33__antigravity-awesome-skills-xss-html-injection",
       "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
-      "security-backend-dev"
+      "security-backend-dev",
+      "securebydesign"
     ]
   },
   {
@@ -830,7 +839,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.2,
     "max_tokens": 6000,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"security-frontend-dev\", \"a11y-check\", \"wcag-report\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"security-frontend-dev\", \"a11y-check\", \"wcag-report\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{}",
@@ -868,7 +877,8 @@
       "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
       "security-frontend-dev",
       "a11y-check",
-      "wcag-report"
+      "wcag-report",
+      "securebydesign"
     ]
   },
   {
@@ -881,7 +891,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.1,
     "max_tokens": 6000,
-    "skills_json": "[\"tdd\", \"code-review\", \"e2e_api\", \"e2e_ihm\", \"webapp-testing\", \"smoke_ihm\", \"gh-sickn33__antigravity-awesome-skills-tdd-orchestrator\", \"gh-sickn33__antigravity-awesome-skills-tdd-workflow\", \"gh-sickn33__antigravity-awesome-skills-tdd-workflows-tdd-cycle\", \"qa-security\", \"gh-sickn33__antigravity-awesome-skills-aws-penetration-testing\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\"]",
+    "skills_json": "[\"tdd\", \"code-review\", \"e2e_api\", \"e2e_ihm\", \"webapp-testing\", \"smoke_ihm\", \"gh-sickn33__antigravity-awesome-skills-tdd-orchestrator\", \"gh-sickn33__antigravity-awesome-skills-tdd-workflow\", \"gh-sickn33__antigravity-awesome-skills-tdd-workflows-tdd-cycle\", \"qa-security\", \"gh-sickn33__antigravity-awesome-skills-aws-penetration-testing\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"build\", \"test\", \"lint\", \"git_status\", \"git_log\", \"git_diff\", \"deep_search\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_veto\": true, \"can_approve\": true}",
@@ -923,7 +933,8 @@
       "gh-sickn33__antigravity-awesome-skills-tdd-workflows-tdd-cycle",
       "qa-security",
       "gh-sickn33__antigravity-awesome-skills-aws-penetration-testing",
-      "gh-sickn33__antigravity-awesome-skills-sql-injection-testing"
+      "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
+      "securebydesign"
     ]
   },
   {
@@ -936,7 +947,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.3,
     "max_tokens": 8000,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"ciso\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"ciso\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_veto\": true, \"can_approve\": true, \"can_delegate\": true, \"veto_keywords\": [\"skip security review\", \"disable security\", \"bypass auth\", \"remove rate limit\", \"skip security scan\", \"disable encryption\", \"bypass firewall\"]}",
@@ -970,7 +981,8 @@
       "pentest_infra",
       "threat_intel",
       "gh-sickn33__antigravity-awesome-skills-api-security-best-practices",
-      "ciso"
+      "ciso",
+      "securebydesign"
     ]
   },
   {
@@ -2294,7 +2306,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.3,
     "max_tokens": 4096,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_veto\": true, \"veto_level\": \"strong\"}",
@@ -2329,7 +2341,8 @@
       "threat_intel",
       "gh-sickn33__antigravity-awesome-skills-api-security-best-practices",
       "gh-sickn33__antigravity-awesome-skills-xss-html-injection",
-      "gh-sickn33__antigravity-awesome-skills-sql-injection-testing"
+      "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
+      "securebydesign"
     ]
   },
   {
@@ -4264,7 +4277,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.3,
     "max_tokens": 8000,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"devsecops\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"devsecops\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_veto\": true, \"can_approve\": true}",
@@ -4300,7 +4313,8 @@
       "gh-sickn33__antigravity-awesome-skills-api-security-best-practices",
       "gh-sickn33__antigravity-awesome-skills-xss-html-injection",
       "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
-      "devsecops"
+      "devsecops",
+      "securebydesign"
     ]
   },
   {
@@ -6774,7 +6788,7 @@
     "model": "MiniMax-M2.5",
     "temperature": 0.2,
     "max_tokens": 6000,
-    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"securite\"]",
+    "skills_json": "[\"security-audit\", \"security_remediation\", \"pentest_web\", \"pentest_infra\", \"threat_intel\", \"gh-sickn33__antigravity-awesome-skills-api-security-best-practices\", \"gh-sickn33__antigravity-awesome-skills-xss-html-injection\", \"gh-sickn33__antigravity-awesome-skills-sql-injection-testing\", \"securite\", \"securebydesign\"]",
     "tools_json": "[\"code_read\", \"code_search\", \"list_files\", \"deep_search\", \"git_status\", \"git_log\", \"git_diff\", \"memory_search\", \"memory_store\"]",
     "mcps_json": "[]",
     "permissions_json": "{\"can_veto\": true, \"can_approve\": true}",
@@ -6810,7 +6824,8 @@
       "gh-sickn33__antigravity-awesome-skills-api-security-best-practices",
       "gh-sickn33__antigravity-awesome-skills-xss-html-injection",
       "gh-sickn33__antigravity-awesome-skills-sql-injection-testing",
-      "securite"
+      "securite",
+      "securebydesign"
     ]
   },
   {
