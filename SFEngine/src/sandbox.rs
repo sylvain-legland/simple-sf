@@ -100,6 +100,20 @@ fn is_macos_sandbox_available() -> bool {
 
 // ── Command Allowlist ──────────────────────────────────────
 
+/// macOS-native commands that require Xcode toolchain (can't run in Linux Docker)
+const MACOS_NATIVE_PREFIXES: &[&str] = &[
+    "swift", "swiftc", "xcrun", "xcodebuild", "xcode-select",
+    "xctest", "simctl", "instruments", "actool",
+];
+
+fn is_macos_native_cmd(cmd: &str) -> bool {
+    let first_cmd = cmd.split('|').next().unwrap_or(cmd).trim();
+    let first_word = first_cmd.split_whitespace().next().unwrap_or("");
+    // Strip path prefix (e.g. /usr/bin/swift -> swift)
+    let binary = first_word.rsplit('/').next().unwrap_or(first_word);
+    MACOS_NATIVE_PREFIXES.iter().any(|p| binary.starts_with(p))
+}
+
 /// Allowed command prefixes for build/test/lint tools.
 /// Commands not matching any prefix are blocked.
 const ALLOWED_PREFIXES: &[&str] = &[
@@ -247,7 +261,18 @@ pub fn sandboxed_exec(
 
     let mode = detect();
 
-    match mode {
+    // macOS-only toolchains can't run in Docker (no Swift/Xcode in Linux containers)
+    let effective_mode = if mode == SandboxMode::Docker && is_macos_native_cmd(cmd) {
+        if is_macos_sandbox_available() {
+            SandboxMode::MacOS
+        } else {
+            SandboxMode::Direct
+        }
+    } else {
+        mode
+    };
+
+    match effective_mode {
         SandboxMode::Docker => exec_docker(cmd, workspace, timeout_secs),
         SandboxMode::MacOS => exec_macos_sandbox(cmd, workspace, timeout_secs),
         SandboxMode::Direct => exec_direct(cmd, workspace, timeout_secs),

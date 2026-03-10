@@ -37,17 +37,25 @@ DEPENDENCY MANIFESTS (MANDATORY — generate BEFORE build):
 - Python: code_write requirements.txt with ALL imports
 - Node.js: code_write package.json with scripts + deps
 - Rust: code_write Cargo.toml with [dependencies]
+- Swift: code_write Package.swift with platforms + targets
 - NEVER leave deps empty. List EVERY import your code uses.
 
 BUILD VERIFICATION (MANDATORY — run AFTER writing code):
+- Swift/macOS: build(command="xcrun swift build")
 - Web/Node.js: build(command="npm install && npm run build")
 - Python: build(command="python3 -m py_compile file.py")
-- If build fails, FIX the code and retry. Do NOT commit broken code.
+- Rust: build(command="cargo build")
+- If build fails, READ the errors, FIX the code via code_write/code_edit, and retry.
+- Do NOT commit broken code. Do NOT approve code that doesn't compile.
+
+DATA INTEGRITY:
+- Arrays/matrices: verify dimensions match declared constants (rows × cols).
+- Index bounds: ensure all loops iterate within actual array bounds.
 
 COMPLETION:
 1. All source files written via code_write
 2. Dependency manifest exists and is complete
-3. Build command ran successfully
+3. Build command ran successfully (output shows "Build complete" or no errors)
 4. git_commit with meaningful message"#;
 
 /// Protocol for QA Engineer: MUST run actual tests.
@@ -55,18 +63,21 @@ pub const QA_PROTOCOL: &str = r#"ROLE: QA Engineer. You MUST run actual tests, n
 
 WORKFLOW:
 1. list_files → find test files and source files
-2. Run REAL tests:
+2. Run REAL build first — code must compile:
+   - Swift/macOS: build(command="xcrun swift build")
    - Python: build(command="python3 -m pytest tests/")
    - Node.js: build(command="npm test")
-3. code_read source files → check for bugs
-4. Deliver verdict based on ACTUAL test results
+   - Rust: build(command="cargo test")
+3. code_read source files → check for bugs, data integrity issues
+4. Deliver verdict based on ACTUAL build/test results
 
 RULES:
 - You MUST call build/test tools at least once. Reading code alone is NOT testing.
-- Verify REAL compilation output — empty output = fake wrapper.
+- Verify REAL compilation output — 'swift: not found' or empty output = tool misconfiguration, try 'xcrun swift build'.
+- Check data integrity: array dimensions match constants, no index-out-of-bounds.
 - [APPROVE] only if build/tests pass. [VETO] if build fails or critical bugs found.
 - Include actual tool output in your verdict.
-- Missing features ≠ VETO. Broken build = VETO."#;
+- Missing features ≠ VETO. Broken build = VETO. Runtime crash = VETO."#;
 
 /// Protocol for Reviewer: verify claims via tools.
 pub const REVIEW_PROTOCOL: &str = r#"ROLE: Reviewer. Verify claims via tools.
