@@ -1287,7 +1287,10 @@ struct ProjectAccordion: View {
                 agent_ids: "[]",
                 output: nil,
                 started_at: nil,
-                completed_at: nil
+                completed_at: nil,
+                phase_type: "once",
+                iteration: 1,
+                max_iterations: 1
             )
         }
     }
@@ -1552,6 +1555,9 @@ struct ClickablePhaseTimeline: View {
         let isRunning = phase.status == "running"
         let isFailed = phase.status == "failed" || phase.status == "vetoed"
         let isSelected = selectedIndex == index
+        let phaseType = phase.phase_type ?? "once"
+        let iteration = phase.iteration ?? 1
+        let maxIter = phase.max_iterations ?? 1
 
         return Button(action: {
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -1589,18 +1595,46 @@ struct ClickablePhaseTimeline: View {
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(isSelected ? .white : SF.Colors.textMuted)
                     }
+
+                    // Phase type badge (top-right)
+                    if phaseType == "sprint" || phaseType == "feedback_loop" {
+                        Image(systemName: phaseType == "sprint" ? "arrow.2.squarepath" : "arrow.triangle.2.circlepath")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(2)
+                            .background(SF.Colors.purple.opacity(0.9))
+                            .clipShape(Circle())
+                            .offset(x: 8, y: -8)
+                    } else if phaseType == "gate" {
+                        Image(systemName: "lock.shield")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(2)
+                            .background(SF.Colors.warning.opacity(0.9))
+                            .clipShape(Circle())
+                            .offset(x: 8, y: -8)
+                    }
                 }
 
-                Text(safePhases[safe: index]?.short ?? phase.phase_name)
-                    .font(.system(size: 8, weight: isSelected ? .bold : .medium))
-                    .foregroundColor(
-                        isSelected ? SF.Colors.purple :
-                        (isCompleted || projectDone) ? SF.Colors.textSecondary :
-                        isRunning ? SF.Colors.purple :
-                        SF.Colors.textMuted.opacity(0.5)
-                    )
-                    .lineLimit(1)
-                    .frame(width: labelWidth)
+                VStack(spacing: 0) {
+                    Text(safePhases[safe: index]?.short ?? phase.phase_name)
+                        .font(.system(size: 8, weight: isSelected ? .bold : .medium))
+                        .foregroundColor(
+                            isSelected ? SF.Colors.purple :
+                            (isCompleted || projectDone) ? SF.Colors.textSecondary :
+                            isRunning ? SF.Colors.purple :
+                            SF.Colors.textMuted.opacity(0.5)
+                        )
+                        .lineLimit(1)
+                        .frame(width: labelWidth)
+
+                    // Sprint/iteration counter
+                    if maxIter > 1 && isRunning {
+                        Text("\(iteration)/\(maxIter)")
+                            .font(.system(size: 7, weight: .semibold))
+                            .foregroundColor(SF.Colors.purple.opacity(0.8))
+                    }
+                }
             }
         }
         .buttonStyle(.plain)
