@@ -538,11 +538,23 @@ async fn run_phase_with_retry(
 
             // LLM health probe — quick check before burning a retry
             if let Err(probe_err) = llm_health_probe().await {
-                eprintln!("[engine] LLM health probe failed: {} — waiting 10s more", probe_err);
+                eprintln!("[engine] LLM health probe failed: {} — attempting auto-restart", probe_err);
                 on_event("engine", AgentEvent::Response {
-                    content: format!("LLM unreachable ({}), waiting 10s before retry...", probe_err),
+                    content: format!("LLM down ({}), attempting auto-restart...", probe_err),
                 });
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+                // Try to restart the LLM server
+                if let Err(restart_err) = restart_llm_server().await {
+                    eprintln!("[engine] LLM restart failed: {}", restart_err);
+                    on_event("engine", AgentEvent::Response {
+                        content: format!("LLM restart failed: {} — waiting 15s...", restart_err),
+                    });
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                } else {
+                    on_event("engine", AgentEvent::Response {
+                        content: "LLM server restarted successfully".to_string(),
+                    });
+                }
             }
 
             // Inject previous error feedback
@@ -597,6 +609,73 @@ async fn llm_health_probe() -> Result<(), String> {
     } else {
         Err(format!("HTTP {}", resp.status()))
     }
+}
+
+/// Restart the LLM server (MLX or compatible) when it crashes
+/// Kills any existing process on the port, relaunches, waits for readiness
+async fn restart_llm_server() -> Result<(), String> {
+    let config = crate::llm::get_config().ok_or("LLM not configured")?;
+
+    // Parse port from base_url
+    let port = config.base_url
+        .split(':').last()
+        .and_then(|p| p.trim_matches('/').split('/').next())
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(8800);
+
+    eprintln!("[engine] Restarting LLM server on port {}...", port);
+
+    // Kill existing process on port
+    let kill_output = tokio::process::Command::new("sh")
+        .args(["-c", &format!("lsof -ti:{} | xargs kill -9 2>/dev/null; true", port)])
+        .output()
+        .await
+        .map_err(|e| format!("kill failed: {}", e))?;
+    eprintln!("[engine] Kill result: {}", String::from_utf8_lossy(&kill_output.stderr));
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    // Relaunch MLX server
+    let model = &config.model;
+    let cmd = format!(
+        "nohup mlx_lm.server --model {} --port {} > /tmp/mlx-server.log 2>&1 &",
+        model, port
+    );
+    eprintln!("[engine] Launching: {}", cmd);
+
+    let _ = tokio::process::Command::new("sh")
+        .args(["-c", &cmd])
+        .output()
+        .await
+        .map_err(|e| format!("launch failed: {}", e))?;
+
+    // Wait for server to become ready (up to 60s)
+    let base = config.base_url.trim_end_matches('/');
+    let models_url = if base.ends_with("/v1") {
+        format!("{}/models", base)
+    } else {
+        format!("{}/v1/models", base)
+    };
+
+    for i in 0..12 {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        match client.get(&models_url).send().await {
+            Ok(r) if r.status().is_success() => {
+                eprintln!("[engine] LLM server ready after {}s", (i + 1) * 5);
+                return Ok(());
+            }
+            _ => {
+                eprintln!("[engine] LLM not ready yet (attempt {}/12)...", i + 1);
+            }
+        }
+    }
+
+    Err("LLM server did not become ready within 60s".to_string())
 }
 
 /// Dispatch to the correct pattern implementation
