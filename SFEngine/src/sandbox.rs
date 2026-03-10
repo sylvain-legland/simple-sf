@@ -260,7 +260,7 @@ fn exec_docker(cmd: &str, workspace: &str, timeout_secs: u64) -> Result<String, 
         .map_err(|e| format!("Invalid workspace path: {}", e))?;
     let ws = workspace_abs.to_string_lossy();
 
-    let mut child = Command::new("docker")
+    let child = Command::new("docker")
         .args([
             "run", "--rm",
             "--network", "none",       // No network
@@ -291,7 +291,7 @@ fn exec_macos_sandbox(cmd: &str, workspace: &str, timeout_secs: u64) -> Result<S
     std::fs::write(&profile_path, &profile)
         .map_err(|e| format!("Failed to write sandbox profile: {}", e))?;
 
-    let mut child = Command::new("sandbox-exec")
+    let child = Command::new("sandbox-exec")
         .args(["-f", &profile_path, "sh", "-c", cmd])
         .current_dir(workspace)
         .stdout(Stdio::piped())
@@ -312,7 +312,7 @@ fn exec_macos_sandbox(cmd: &str, workspace: &str, timeout_secs: u64) -> Result<S
 
 /// Execute directly (no sandbox, allowlist only)
 fn exec_direct(cmd: &str, workspace: &str, timeout_secs: u64) -> Result<String, String> {
-    let mut child = Command::new("sh")
+    let child = Command::new("sh")
         .args(["-c", cmd])
         .current_dir(workspace)
         .stdout(Stdio::piped())

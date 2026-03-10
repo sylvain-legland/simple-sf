@@ -189,6 +189,7 @@ fn get_phase_statuses(mission_id: &str) -> Vec<(String, String)> {
     })
 }
 
+#[allow(dead_code)]
 fn get_phase_count(mission_id: &str) -> usize {
     db::with_db(|conn| {
         conn.query_row(
@@ -776,4 +777,78 @@ async fn e2e_12_network_pattern_completes() {
     assert!(result.is_ok(), "Network pattern should complete: {:?}", result);
     assert_eq!(get_mission_status("e2e-m-12"), "completed");
     assert!(mock.call_count() >= 3, "Network should have multiple LLM calls");
+}
+
+/// Real MLX mission test — only runs when MLX_REAL=1 
+#[tokio::test]
+async fn real_mlx_pacman_mission() {
+    if std::env::var("MLX_REAL").unwrap_or_default() != "1" {
+        eprintln!("Skipping real MLX test (set MLX_REAL=1)");
+        return;
+    }
+    // Use own fresh DB (bypass Once::call_once)
+    let tmp = std::env::temp_dir().join("sf_mlx_real_test.db");
+    let _ = std::fs::remove_file(&tmp);
+    db::init_db(tmp.to_str().unwrap());
+    catalog::seed_from_json("/nonexistent");
+    llm::configure_llm("mlx", "no-key", "http://127.0.0.1:8800/v1", "mlx-community/Qwen3.5-35B-A3B-4bit");
+    
+    let workspace = "/tmp/pacman-workspace-real";
+    let _ = std::fs::create_dir_all(workspace);
+    
+    // Create a project first (missions requires project_id FK)
+    let project_id = "pacman-real-test";
+    db::with_db(|conn| {
+        conn.execute(
+            "INSERT OR IGNORE INTO projects (id, name, description, tech) VALUES (?1, ?2, ?3, ?4)",
+            params![project_id, "Pac-Man macOS", "Jeu Pac-Man en Swift/SpriteKit pour macOS natif", "swift,spritekit"],
+        ).unwrap();
+    });
+    
+    let mission_id = uuid::Uuid::new_v4().to_string();
+    db::with_db(|conn| {
+        conn.execute(
+            "INSERT INTO missions (id, project_id, brief, status, workflow) VALUES (?1, ?2, ?3, 'pending', 'safe-standard')",
+            params![&mission_id, project_id, "Jeu Pac-Man en Swift/SpriteKit pour macOS natif avec labyrinthe, fantomes IA, power pellets et scoring. Creer tous les fichiers Swift necessaires."],
+        ).unwrap();
+    });
+    
+    let events = Arc::new(Mutex::new(Vec::<String>::new()));
+    let events_clone = events.clone();
+    let cb: Arc<dyn Fn(&str, AgentEvent) + Send + Sync> = Arc::new(move |agent, event| {
+        match event {
+            AgentEvent::Response { content } => {
+                let msg = format!("[{}] {}", agent, &content[..content.len().min(300)]);
+                println!("{}", msg);
+                events_clone.lock().unwrap().push(msg);
+            }
+            AgentEvent::Thinking => println!("[{}] thinking...", agent),
+            AgentEvent::Error { message } => eprintln!("[{}] ERROR: {}", agent, message),
+            _ => {}
+        }
+    });
+    
+    let result = engine::run_mission(
+        &mission_id,
+        "Jeu Pac-Man en Swift/SpriteKit pour macOS natif avec labyrinthe, fantomes IA, power pellets et scoring. Creer tous les fichiers Swift necessaires.",
+        workspace,
+        &cb,
+    ).await;
+    
+    println!("MISSION RESULT: {:?}", result);
+    
+    let ev = events.lock().unwrap();
+    println!("Total events: {}", ev.len());
+    for e in ev.iter() {
+        println!("  {}", &e[..e.len().min(120)]);
+    }
+    
+    assert!(result.is_ok(), "Mission should complete: {:?}", result);
+    
+    // Check workspace has files
+    let files: Vec<_> = std::fs::read_dir(workspace).unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    println!("Workspace files: {:?}", files);
 }

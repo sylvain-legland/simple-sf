@@ -48,7 +48,7 @@ pub async fn run_agent(
     let tool_schemas = tools::tool_schemas_for_role_with_extras(agent_role, &extra_refs);
 
     // Use agent's max_tokens from catalog, fallback to unlimited (#15)
-    let max_tokens = agent_info.as_ref()
+    let _max_tokens = agent_info.as_ref()
         .and_then(|a| if a.max_tokens > 0 { Some(a.max_tokens as u32) } else { None })
         .unwrap_or(128_000);
 
