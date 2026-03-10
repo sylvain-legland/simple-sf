@@ -62,27 +62,35 @@ async fn pacman_full_safe_mission() {
     assert!(agent_count >= 50, "Need full catalog, got {}", agent_count);
 
     // Create project
-    let project_id = "pacman-test";
+    let project_id = "pacman-game";
     db::with_db(|conn| {
         conn.execute(
             "INSERT OR REPLACE INTO projects (id, name, description, tech, status) \
              VALUES (?1, ?2, ?3, ?4, 'active')",
             rusqlite::params![
                 project_id,
-                "Pacman Dashboard",
-                "A real-time analytics dashboard for monitoring game metrics",
-                "React, TypeScript, Node.js, PostgreSQL"
+                "Pac-Man macOS Game",
+                "A native macOS Pac-Man arcade game built with Swift and SpriteKit",
+                "Swift, SpriteKit, macOS"
             ],
         ).unwrap();
     });
 
     // Use product-lifecycle (14 phases)
     let mission_id = format!("pacman-{}", uuid::Uuid::new_v4());
-    let brief = "Build a real-time analytics dashboard for a gaming platform. \
-                 Features: live player count chart, revenue metrics cards, \
-                 server health status panel, and a leaderboard table. \
-                 Stack: React + TypeScript frontend, Node.js API, PostgreSQL database. \
-                 Must include responsive CSS with a dark theme.";
+    let brief = "Build a native macOS Pac-Man arcade game as a Swift Package (Package.swift). \
+                 Tech stack: Swift 5.9, SpriteKit, macOS 13+. \
+                 Requirements: \
+                 1) Package.swift with executable target named 'PacMan' \
+                 2) Sources/PacMan/main.swift — app entry with NSApplication \
+                 3) Sources/PacMan/GameScene.swift — SpriteKit scene with: \
+                    - 28x31 tile-based maze (SKTileMapNode) \
+                    - Pac-Man sprite (yellow circle, mouth animation) \
+                    - 4 ghost sprites (red, pink, cyan, orange) with basic AI \
+                    - Dot/pellet collection with score counter \
+                    - Arrow key input handling \
+                 4) Sources/PacMan/GameWindow.swift — NSWindow with SKView \
+                 The project MUST compile with 'swift build'. No external dependencies.";
 
     db::with_db(|conn| {
         conn.execute(
@@ -206,6 +214,35 @@ async fn pacman_full_safe_mission() {
 
     let completed = phases.iter().filter(|(_, _, s, _)| s == "completed").count();
     assert!(completed >= 3, "At least 3 phases should complete, got {}/{}", completed, phases.len());
+
+    // Check build phase result
+    let build_status = db::with_db(|conn| {
+        conn.query_row(
+            "SELECT status FROM mission_phases WHERE mission_id = ?1 AND phase_name = 'finalize-build'",
+            rusqlite::params![&mission_id],
+            |r| r.get::<_, String>(0),
+        ).unwrap_or_default()
+    });
+    eprintln!("\n🔨 Build status: {}", build_status);
+
+    // Check for Package.swift (minimum: agents wrote a Swift project)
+    let has_package = std::path::Path::new(&workspace).join("Package.swift").exists()
+        || std::path::Path::new(&workspace).join("Sources/PacMan/main.swift").exists();
+    if has_package {
+        eprintln!("📦 Package.swift found — Swift project structure created");
+    }
+
+    // Check for compiled binary
+    let binary_candidates = [
+        format!("{}/.build/release/PacMan", workspace),
+        format!("{}/.build/debug/PacMan", workspace),
+    ];
+    let compiled = binary_candidates.iter().any(|p| std::path::Path::new(p).exists());
+    if compiled {
+        eprintln!("🎮 Compiled PacMan binary found!");
+    } else {
+        eprintln!("⚠️  No compiled binary — build step may have failed");
+    }
 
     // Cleanup
     let db_path = format!("{}/Library/Application Support/SimpleSF/sf_pacman_test.db", home);
