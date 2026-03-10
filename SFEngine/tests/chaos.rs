@@ -8,7 +8,7 @@
 
 use sf_engine::{db, llm, tools, catalog, guard, engine};
 use serde_json::{json, Value};
-use std::sync::{Arc, Once};
+use std::sync::Once;
 
 static INIT: Once = Once::new();
 

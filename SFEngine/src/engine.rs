@@ -1,7 +1,7 @@
 use crate::agents::{self, Agent};
 use crate::executor::{self, AgentEvent, EventCallback};
 use crate::guard;
-use crate::catalog;
+
 use crate::db;
 use crate::llm::{self, LLMMessage};
 use crate::protocols;
@@ -370,7 +370,7 @@ pub async fn run_mission(
     on_event: &EventCallback,
 ) -> Result<(), String> {
     // Look up workflow from mission DB record
-    let _workflow_id = db::with_db(|conn| {
+    let workflow_id = db::with_db(|conn| {
         if let Err(e) = conn.execute("UPDATE missions SET status = 'running' WHERE id = ?1", params![mission_id]) {
             eprintln!("[db] Failed to update mission status: {}", e);
         }
@@ -389,11 +389,41 @@ pub async fn run_mission(
         tools::load_project_files(workspace, project_id);
     }
 
-    // ── Phase 0: PM creates the workflow plan ──
+    // ── Try to load pre-defined workflow phases from DB ──
+    let predefined_plan = db::with_db(|conn| {
+        conn.query_row(
+            "SELECT phases_json FROM workflows WHERE id = ?1", params![&workflow_id],
+            |row| row.get::<_, String>(0),
+        ).ok()
+    });
+
+    let plan = if let Some(ref phases_json) = predefined_plan {
+        match parse_workflow_plan(phases_json) {
+            Ok(p) => {
+                on_event("engine", AgentEvent::Response {
+                    content: format!("── Workflow pre-defini charge: {} phases ──", p.phases.len()),
+                });
+                p
+            }
+            Err(_) => {
+                // Pre-defined workflow exists but phases_json is not a valid plan — fall through to PM
+                plan_via_pm(brief, on_event).await
+            }
+        }
+    } else {
+        plan_via_pm(brief, on_event).await
+    };
+
+    // ── Execute the plan with the state machine ──
+    execute_workflow_plan(mission_id, brief, workspace, &plan, on_event).await
+}
+
+/// Ask the PM (LLM) to create a plan, fallback to default 14-phase plan
+async fn plan_via_pm(brief: &str, on_event: &EventCallback) -> WorkflowPlan {
     on_event("engine", AgentEvent::Response {
         content: "── PM PLANNING ── Le PM analyse le brief et construit le plan de phases...".into(),
     });
-    let plan = match pm_create_plan(brief, on_event).await {
+    match pm_create_plan(brief, on_event).await {
         Ok(p) => {
             on_event("engine", AgentEvent::Response {
                 content: format!("── Plan PM accepte: {} phases ──", p.phases.len()),
@@ -406,10 +436,7 @@ pub async fn run_mission(
             });
             default_plan()
         }
-    };
-
-    // ── Execute the plan with the state machine ──
-    execute_workflow_plan(mission_id, brief, workspace, &plan, on_event).await
+    }
 }
 
 /// PM planning phase — RTE+PO analyze the brief and produce a WorkflowPlan
@@ -480,38 +507,66 @@ async fn pm_create_plan(brief: &str, on_event: &EventCallback) -> Result<Workflo
     parse_workflow_plan(&content)
 }
 
-/// Parse a JSON workflow plan from the PM's response
+/// Parse a JSON workflow plan — accepts both `{"phases": [...]}` and bare `[...]` arrays.
+/// Agent lists can use `"agents"` or `"agent_ids"` keys.
 fn parse_workflow_plan(text: &str) -> Result<WorkflowPlan, String> {
-    // Extract JSON from the response (might be wrapped in ```json ... ```)
-    let json_str = if let Some(start) = text.find('{') {
-        let depth_start = start;
-        let mut depth = 0i32;
-        let mut end = start;
-        for (i, c) in text[depth_start..].char_indices() {
-            match c {
-                '{' => depth += 1,
-                '}' => { depth -= 1; if depth == 0 { end = depth_start + i + 1; break; } }
-                _ => {}
-            }
-        }
-        &text[depth_start..end]
+    let trimmed = text.trim();
+
+    // Try parsing the text directly first (for DB-stored JSON)
+    let parsed: serde_json::Value = if trimmed.starts_with('[') || trimmed.starts_with('{') {
+        serde_json::from_str(trimmed)
+            .map_err(|e| format!("Invalid JSON: {}", e))?
     } else {
-        return Err("No JSON found in PM response".into());
+        // Extract JSON from free-text LLM response (might be wrapped in ```json ... ```)
+        let json_str = if let Some(start) = text.find('{') {
+            let depth_start = start;
+            let mut depth = 0i32;
+            let mut end = start;
+            for (i, c) in text[depth_start..].char_indices() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => { depth -= 1; if depth == 0 { end = depth_start + i + 1; break; } }
+                    _ => {}
+                }
+            }
+            &text[depth_start..end]
+        } else if let Some(start) = text.find('[') {
+            let depth_start = start;
+            let mut depth = 0i32;
+            let mut end = start;
+            for (i, c) in text[depth_start..].char_indices() {
+                match c {
+                    '[' => depth += 1,
+                    ']' => { depth -= 1; if depth == 0 { end = depth_start + i + 1; break; } }
+                    _ => {}
+                }
+            }
+            &text[depth_start..end]
+        } else {
+            return Err("No JSON found in PM response".into());
+        };
+        serde_json::from_str(json_str)
+            .map_err(|e| format!("Invalid JSON from PM: {}", e))?
     };
 
-    let parsed: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| format!("Invalid JSON from PM: {}", e))?;
-
-    let phases_arr = parsed["phases"].as_array()
-        .ok_or("Missing 'phases' array in PM plan")?;
+    // Accept both {"phases": [...]} and bare [...]
+    let phases_arr = if let Some(arr) = parsed.as_array() {
+        arr.clone()
+    } else if let Some(arr) = parsed["phases"].as_array() {
+        arr.clone()
+    } else {
+        return Err("Missing 'phases' array in PM plan".into());
+    };
 
     let mut phases = Vec::new();
-    for p in phases_arr {
+    for p in &phases_arr {
         let name = p["name"].as_str().unwrap_or("unknown").to_string();
         let pattern = p["pattern"].as_str().unwrap_or("sequential").to_string();
         let phase_type_str = p["type"].as_str().unwrap_or("once");
 
+        // Accept both "agents" and "agent_ids"
         let agents: Vec<String> = p["agents"].as_array()
+            .or_else(|| p["agent_ids"].as_array())
             .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
             .unwrap_or_else(|| auto_assign_agents(&name));
 
@@ -557,6 +612,7 @@ async fn execute_workflow_plan(
 
     let mut phase_outputs: Vec<String> = Vec::new();
     let mut veto_conditions: Option<String> = None;
+    let mut mission_vetoed = false;
 
     let mut phase_idx: usize = 0;
 
@@ -589,6 +645,22 @@ async fn execute_workflow_plan(
                 ).await;
                 match result {
                     PhaseResult::Completed(output) => phase_outputs.push(format!("[{}] {}", phase_def.name, output)),
+                    PhaseResult::Vetoed(output) => {
+                        let yolo = YOLO_MODE.load(Ordering::Relaxed);
+                        if yolo {
+                            on_event("engine", AgentEvent::Response {
+                                content: "  YOLO — VETO overridé, conditions injectees".into(),
+                            });
+                            veto_conditions = Some(truncate_ctx(&output, 1500).to_string());
+                            phase_outputs.push(format!("[{} YOLO-VETO] {}", phase_def.name, output));
+                        } else {
+                            on_event("engine", AgentEvent::Response {
+                                content: format!("  Phase {} — VETO detecte, mission arretee", phase_def.name),
+                            });
+                            phase_outputs.push(format!("[{} VETO] {}", phase_def.name, output));
+                            mission_vetoed = true;
+                        }
+                    }
                     PhaseResult::Failed(e) => phase_outputs.push(format!("[{} FAILED] {}", phase_def.name, e)),
                     _ => {}
                 }
@@ -654,11 +726,10 @@ async fn execute_workflow_plan(
                 ).await;
 
                 match result {
-                    PhaseResult::Completed(output) => {
-                        let raw_gate = check_gate_raw(&output);
+                    PhaseResult::Vetoed(output) => {
                         let yolo = YOLO_MODE.load(Ordering::Relaxed);
 
-                        if raw_gate == "vetoed" && !yolo {
+                        if !yolo {
                             // Loop back to the on_veto phase
                             if let Some(target) = on_veto {
                                 if let Some(target_idx) = plan.phases.iter().position(|p| p.name == *target) {
@@ -676,16 +747,17 @@ async fn execute_workflow_plan(
                                 content: format!("  GATE VETO — mission arretee (pas de phase de retour)"),
                             });
                             phase_outputs.push(format!("[{} VETO] {}", phase_def.name, output));
-                            break;
-                        } else if raw_gate == "vetoed" && yolo {
+                            mission_vetoed = true;
+                        } else {
                             on_event("engine", AgentEvent::Response {
                                 content: format!("  YOLO — VETO overridé, conditions injectees dans la phase suivante"),
                             });
                             veto_conditions = Some(truncate_ctx(&output, 1500).to_string());
                             phase_outputs.push(format!("[{} YOLO-VETO] {}", phase_def.name, output));
-                        } else {
-                            phase_outputs.push(format!("[{} APPROVED] {}", phase_def.name, output));
                         }
+                    }
+                    PhaseResult::Completed(output) => {
+                        phase_outputs.push(format!("[{} APPROVED] {}", phase_def.name, output));
                     }
                     PhaseResult::Failed(e) => {
                         phase_outputs.push(format!("[{} FAILED] {}", phase_def.name, e));
@@ -716,76 +788,84 @@ async fn execute_workflow_plan(
                         &phase_outputs, &mut veto_conditions, cycle, max, on_event,
                     ).await;
 
-                    match result {
-                        PhaseResult::Completed(output) => {
-                            let raw_gate = check_gate_raw(&output);
-
-                            if raw_gate == "vetoed" || raw_gate == "completed" {
-                                // Extract tickets from the QA output
-                                let new_tickets = extract_tickets(&output);
-                                if new_tickets.is_empty() || raw_gate != "vetoed" {
-                                    // QA approved or no tickets — done
-                                    on_event("engine", AgentEvent::Response {
-                                        content: format!("  QA OK — feedback loop terminee au cycle {}", cycle),
-                                    });
-                                    phase_outputs.push(format!("[{} cycle-{} OK] {}", phase_def.name, cycle, output));
-                                    break;
-                                }
-
-                                // QA failed with tickets — run dev fix sprint
-                                on_event("engine", AgentEvent::Response {
-                                    content: format!("  QA: {} tickets trouves — lancement sprint correctif", new_tickets.len()),
-                                });
-                                tickets = new_tickets;
-
-                                // Run a dev fix sprint with the tickets
-                                if cycle < max {
-                                    let dev_agents = vec!["dev-emma".to_string(), "dev-karim".to_string()];
-                                    let dev_phase = PhaseDef {
-                                        name: format!("{}-fix", phase_def.name),
-                                        phase_type: PhaseType::Once,
-                                        pattern: "parallel".into(),
-                                        agents: dev_agents.clone(),
-                                    };
-                                    veto_conditions = Some(format!(
-                                        "SPRINT CORRECTIF — Corrige ces tickets QA:\n{}", tickets.join("\n")
-                                    ));
-                                    let dev_ids: Vec<String> = dev_agents;
-                                    let _ = execute_single_phase(
-                                        mission_id, brief, workspace, &dev_phase, &dev_ids,
-                                        &phase_outputs, &mut veto_conditions, cycle, max, on_event,
-                                    ).await;
-                                    phase_outputs.push(format!("[{}-fix cycle-{}] corrections appliquees", phase_def.name, cycle));
-                                }
-                            } else {
-                                // Approved
-                                phase_outputs.push(format!("[{} cycle-{} APPROVED] {}", phase_def.name, cycle, output));
-                                break;
-                            }
-                        }
+                    let (is_vetoed, output) = match result {
+                        PhaseResult::Vetoed(o) => (true, o),
+                        PhaseResult::Completed(o) => (false, o),
                         PhaseResult::Failed(e) => {
                             phase_outputs.push(format!("[{} cycle-{} FAILED] {}", phase_def.name, cycle, e));
                             if cycle == max { break; }
+                            continue;
                         }
                         _ => break,
+                    };
+
+                    if is_vetoed {
+                        // Extract tickets from the QA output
+                        let new_tickets = extract_tickets(&output);
+                        if new_tickets.is_empty() {
+                            // Vetoed but no extractable tickets — done
+                            on_event("engine", AgentEvent::Response {
+                                content: format!("  QA VETO — feedback loop terminee au cycle {}", cycle),
+                            });
+                            phase_outputs.push(format!("[{} cycle-{} VETO] {}", phase_def.name, cycle, output));
+                            break;
+                        }
+
+                        // QA failed with tickets — run dev fix sprint
+                        on_event("engine", AgentEvent::Response {
+                            content: format!("  QA: {} tickets trouves — lancement sprint correctif", new_tickets.len()),
+                        });
+                        tickets = new_tickets;
+
+                        // Run a dev fix sprint with the tickets
+                        if cycle < max {
+                            let dev_agents = vec!["dev-emma".to_string(), "dev-karim".to_string()];
+                            let dev_phase = PhaseDef {
+                                name: format!("{}-fix", phase_def.name),
+                                phase_type: PhaseType::Once,
+                                pattern: "parallel".into(),
+                                agents: dev_agents.clone(),
+                            };
+                            veto_conditions = Some(format!(
+                                "SPRINT CORRECTIF — Corrige ces tickets QA:\n{}", tickets.join("\n")
+                            ));
+                            let dev_ids: Vec<String> = dev_agents;
+                            let _ = execute_single_phase(
+                                mission_id, brief, workspace, &dev_phase, &dev_ids,
+                                &phase_outputs, &mut veto_conditions, cycle, max, on_event,
+                            ).await;
+                            phase_outputs.push(format!("[{}-fix cycle-{}] corrections appliquees", phase_def.name, cycle));
+                        }
+                    } else {
+                        // Approved
+                        on_event("engine", AgentEvent::Response {
+                            content: format!("  QA OK — feedback loop terminee au cycle {}", cycle),
+                        });
+                        phase_outputs.push(format!("[{} cycle-{} APPROVED] {}", phase_def.name, cycle, output));
+                        break;
                     }
                 }
             }
+        }
+
+        if mission_vetoed {
+            break;
         }
 
         phase_idx += 1;
     }
 
     // ── Mission complete ──
+    let final_status = if mission_vetoed { "vetoed" } else { "completed" };
     let completed_count = phase_outputs.len();
     let total_count = plan.phases.len();
     on_event("engine", AgentEvent::Response {
-        content: format!("── Mission TERMINEE ── {}/{} phases completees ──", completed_count, total_count),
+        content: format!("── Mission TERMINEE ({}) ── {}/{} phases completees ──", final_status, completed_count, total_count),
     });
     if let Err(e) = db::with_db(|conn| {
         conn.execute(
-            "UPDATE missions SET status = 'completed', updated_at = datetime('now') WHERE id = ?1",
-            params![mission_id],
+            "UPDATE missions SET status = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![final_status, mission_id],
         )
     }) {
         eprintln!("[db] Failed to update mission final status: {}", e);
@@ -805,7 +885,9 @@ async fn execute_workflow_plan(
 
 enum PhaseResult {
     Completed(String),
+    Vetoed(String),
     Failed(String),
+    #[allow(dead_code)]
     Skipped,
 }
 
@@ -906,7 +988,11 @@ async fn execute_single_phase(
                 eprintln!("[db] Failed to update mission phase: {}", e);
             }
 
-            PhaseResult::Completed(output)
+            if gate == "vetoed" {
+                PhaseResult::Vetoed(output)
+            } else {
+                PhaseResult::Completed(output)
+            }
         }
         Err(e) => {
             if let Err(db_err) = db::with_db(|conn| {

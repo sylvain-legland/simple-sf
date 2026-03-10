@@ -266,7 +266,6 @@ pub extern "C" fn sf_jarvis_discuss(
 
     let msg_clone = msg.clone();
     let ctx_clone = ctx.clone();
-    let sid_clone = sid.clone();
 
     runtime().spawn(async move {
         let callback: EventCallback = std::sync::Arc::new(|agent_id: &str, event: AgentEvent| {

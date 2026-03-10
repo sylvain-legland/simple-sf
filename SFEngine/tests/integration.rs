@@ -6,9 +6,9 @@
 // Tests run sequentially (single global DB singleton).
 // Each test uses its own project_id to avoid cross-contamination.
 
-use sf_engine::{db, tools, agents, catalog, guard, engine};
+use sf_engine::{db, tools, agents, catalog, guard};
 use serde_json::json;
-use std::sync::{Arc, Once};
+use std::sync::Once;
 
 static INIT: Once = Once::new();
 
@@ -652,7 +652,7 @@ fn res_14_db_initialized() {
 fn res_15_concurrent_db_access() {
     ensure_db();
     // Simulate concurrent reads — should not deadlock
-    let handles: Vec<_> = (0..5).map(|i| {
+    let handles: Vec<_> = (0..5).map(|_| {
         std::thread::spawn(move || {
             db::with_db(|conn| {
                 conn.query_row("SELECT COUNT(*) FROM agents", [],
