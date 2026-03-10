@@ -303,7 +303,14 @@ struct ProjectAccordion: View {
     }
 
     private var activePhase: Int {
-        simulatedActivePhase(for: project.status, progress: project.progress)
+        // Use real phase data when available
+        if let real = missionStatus?.phases, !real.isEmpty {
+            // Count completed + 1 running phase
+            let completed = real.filter { $0.status == "completed" || $0.status == "approved" }.count
+            let hasRunning = real.contains { $0.status == "running" }
+            return hasRunning ? completed : completed
+        }
+        return simulatedActivePhase(for: project.status, progress: project.progress)
     }
     private var isActive: Bool { project.status == .active }
     private var isPaused: Bool { project.status == .paused }
@@ -406,7 +413,7 @@ struct ProjectAccordion: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(SF.Colors.textSecondary)
                         Spacer()
-                        Text("\(activePhase)/14 phases")
+                        Text("\(activePhase)/\(displayPhases.count) phases")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(SF.Colors.textSecondary)
                     }
@@ -417,7 +424,7 @@ struct ProjectAccordion: View {
                                 .frame(height: 6)
                             RoundedRectangle(cornerRadius: 3)
                                 .fill(isDone ? SF.Colors.success : SF.Colors.purple)
-                                .frame(width: geo.size.width * CGFloat(activePhase) / 14.0, height: 6)
+                                .frame(width: geo.size.width * CGFloat(activePhase) / CGFloat(max(displayPhases.count, 1)), height: 6)
                         }
                     }
                     .frame(height: 6)
