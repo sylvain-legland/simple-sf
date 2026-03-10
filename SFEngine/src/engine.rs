@@ -997,19 +997,22 @@ pub fn check_gate_raw(output: &str) -> String {
 // ──────────────────────────────────────────
 
 fn build_phase_task(phase: &str, brief: &str, previous: &[String]) -> String {
-    // Limit context to last 3 phases, 600 chars each — avoid LLM context overflow
+    let lower = phase.to_lowercase();
+
+    // Context from previous phases — more generous for DEV/BUILD that need architecture details
     let context = if previous.is_empty() {
         String::new()
     } else {
-        let recent: Vec<_> = previous.iter().rev().take(3).rev().collect();
+        let is_exec_phase = lower.contains("dev") || lower.contains("sprint")
+            || lower.contains("build") || lower.contains("deploy");
+        let (max_phases, max_chars) = if is_exec_phase { (4, 2000) } else { (3, 600) };
+        let recent: Vec<_> = previous.iter().rev().take(max_phases).rev().collect();
         let ctx: String = recent.iter()
-            .map(|p| truncate_ctx(p, 600))
+            .map(|p| truncate_ctx(p, max_chars))
             .collect::<Vec<_>>()
             .join("\n\n");
         format!("\n\n## Contexte des phases precedentes:\n{}", ctx)
     };
-
-    let lower = phase.to_lowercase();
 
     // Match known phase names (exact or keyword-based)
     if lower.contains("vision") || lower.contains("idéation") || lower.contains("ideation") {
@@ -1068,30 +1071,49 @@ fn build_phase_task(phase: &str, brief: &str, previous: &[String]) -> String {
     } else if lower.contains("sprint") || lower.contains("dev") || lower.contains("développement") {
         format!(
             "BRIEF: {}\n\n\
-             IMPLEMENT the COMPLETE project:\n\
-             1. Read the architecture/subtasks from previous phases\n\
-             2. Use code_write to create EVERY file with COMPLETE production code\n\
-             3. Create dependency manifests (Package.swift, Cargo.toml, package.json etc.)\n\
-             4. Write ALL source files -- models, views, game logic, assets, everything\n\
-             5. Each file must be COMPLETE -- no stubs, no TODOs, no placeholder comments\n\
-             6. Use code_read to verify files you've written are correct\n\
-             7. Use build tool to verify compilation after writing code\n\
-             8. If build fails, use code_edit to fix errors and rebuild\n\
-             YOU ARE THE DEVELOPER. Write real production code. Every single file the app needs.{}",
+             IMPLEMENT the COMPLETE project. Follow this EXACT sequence:\n\n\
+             STEP 1 — PLAN: Use list_files and memory_search to see what exists.\n\
+             Read the architecture from previous phases. Make a COMPLETE file list.\n\n\
+             STEP 2 — DEPENDENCY MANIFEST: Use code_write to create the build manifest FIRST:\n\
+             - Swift: Package.swift (NO test targets if no tests exist)\n\
+             - Rust: Cargo.toml\n\
+             - JS/TS: package.json\n\n\
+             STEP 3 — WRITE EVERY FILE: Use code_write for EACH source file.\n\
+             Each file must be COMPLETE — no stubs, no TODOs, no placeholders.\n\
+             If a type is referenced, its file MUST be created.\n\
+             If a protocol/trait/interface is used, its file MUST exist.\n\n\
+             STEP 4 — VERIFY: Use list_files to confirm ALL files exist.\n\
+             Use code_read to spot-check key files.\n\n\
+             STEP 5 — BUILD: Use build tool to compile (e.g. 'swift build').\n\
+             If build fails, read errors, use code_edit to fix, rebuild.\n\n\
+             CRITICAL RULES:\n\
+             - Every type/class/struct you reference MUST have its own source file\n\
+             - Do NOT create test targets for nonexistent test files\n\
+             - Save architecture decisions with memory_store\n\
+             - Write REAL code, not summaries or descriptions{}",
             brief, context
         )
     } else if lower.contains("build") || lower.contains("verify") {
         format!(
             "BRIEF: {}\n\n\
-             BUILD AND COMPILE:\n\
-             1. Use list_files to see what code exists in the workspace\n\
-             2. Use code_read to verify the source files are complete (no stubs, no TODOs)\n\
-             3. If ANY file is incomplete or has placeholder code, use code_write to fix it with REAL implementation\n\
-             4. Use the build tool to compile: swift build (for Swift), cargo build (for Rust), npm run build (for JS)\n\
-             5. If build fails, read the errors, use code_edit to fix them, then build again\n\
-             6. Repeat until the build succeeds with zero errors\n\
-             7. Use the test tool to run tests if any exist\n\
-             YOU MUST achieve a CLEAN BUILD. Do NOT stop until the project compiles without errors.{}",
+             BUILD AND COMPILE — you MUST achieve a clean build. Follow this sequence:\n\n\
+             STEP 1 — INVENTORY: Use list_files to see ALL source files.\n\n\
+             STEP 2 — COMPLETENESS CHECK: Use code_read on EVERY source file.\n\
+             Check for: stubs, TODOs, missing implementations, placeholder code.\n\
+             If ANY file is incomplete, use code_write to replace it with COMPLETE code.\n\n\
+             STEP 3 — MISSING FILES: If any type/class/struct is referenced but has no file,\n\
+             create the missing file with code_write.\n\n\
+             STEP 4 — BUILD: Run the build tool.\n\
+             - Swift project: build(command='swift build')\n\
+             - Rust project: build(command='cargo build')\n\
+             - Node project: build(command='npm run build')\n\n\
+             STEP 5 — FIX AND REBUILD: If build fails:\n\
+             a) Read the compiler errors carefully\n\
+             b) Use code_edit to fix each error\n\
+             c) Run build again\n\
+             d) Repeat until build succeeds\n\n\
+             YOU ARE NOT DONE until the build command returns SUCCESS with zero errors.\n\
+             Do NOT just read files and report — you must actually BUILD.{}",
             brief, context
         )
     } else if lower.contains("pipeline") || lower.contains("ci") {
