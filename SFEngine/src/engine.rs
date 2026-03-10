@@ -560,19 +560,31 @@ fn parse_workflow_plan(text: &str) -> Result<WorkflowPlan, String> {
 
     let mut phases = Vec::new();
     for p in &phases_arr {
-        let name = p["name"].as_str().unwrap_or("unknown").to_string();
-        let pattern = p["pattern"].as_str().unwrap_or("sequential").to_string();
-        let phase_type_str = p["type"].as_str().unwrap_or("once");
+        let name = p["name"].as_str()
+            .or_else(|| p["id"].as_str())
+            .unwrap_or("unknown").to_string();
+        // Accept both "pattern" (PM format) and "pattern_id" (DB format)
+        let pattern = p["pattern"].as_str()
+            .or_else(|| p["pattern_id"].as_str())
+            .unwrap_or("sequential").to_string();
+        let phase_type_str = p["type"].as_str()
+            .or_else(|| p["phase_type"].as_str())
+            .unwrap_or("once");
 
-        // Accept both "agents" and "agent_ids"
+        // Accept "agents", "agent_ids", or "config.agents" (DB format)
         let agents: Vec<String> = p["agents"].as_array()
             .or_else(|| p["agent_ids"].as_array())
+            .or_else(|| p["config"]["agents"].as_array())
             .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
             .unwrap_or_else(|| auto_assign_agents(&name));
 
+        // DB format has "gate" field (always/no_veto/all_approved) — map to PhaseType
+        let gate_str = p["gate"].as_str().unwrap_or("");
         let phase_type = match phase_type_str {
             "sprint" => PhaseType::Sprint {
-                max_iterations: p["max_iterations"].as_u64().unwrap_or(5) as usize,
+                max_iterations: p["max_iterations"].as_u64()
+                    .or_else(|| p["config"]["max_iterations"].as_u64())
+                    .unwrap_or(5) as usize,
             },
             "gate" => PhaseType::Gate {
                 on_veto: p["on_veto"].as_str().map(String::from),
@@ -580,8 +592,17 @@ fn parse_workflow_plan(text: &str) -> Result<WorkflowPlan, String> {
             "feedback_loop" => PhaseType::FeedbackLoop {
                 max_iterations: p["max_iterations"].as_u64().unwrap_or(3) as usize,
             },
-            _ => PhaseType::Once,
+            // DB format: "once" + gate field
+            _ => match gate_str {
+                "no_veto" | "all_approved" => PhaseType::Gate { on_veto: None },
+                _ => PhaseType::Once,
+            },
         };
+
+        // Use description from DB if available
+        let _description = p["description"].as_str().unwrap_or("");
+        // Use leader from config if available
+        let _leader = p["config"]["leader"].as_str().unwrap_or("");
 
         phases.push(PhaseDef { name, phase_type, pattern, agents });
     }
@@ -1197,10 +1218,18 @@ async fn llm_health_probe() -> Result<(), String> {
     }
 }
 
-/// Restart the LLM server (MLX or compatible) when it crashes
-/// Kills any existing process on the port, relaunches, waits for readiness
+/// Restart the LLM server (MLX or compatible) when it crashes.
+/// Only applicable for local servers — skips for cloud providers.
 async fn restart_llm_server() -> Result<(), String> {
     let config = crate::llm::get_config().ok_or("LLM not configured")?;
+
+    // Cloud providers can't be restarted locally
+    let base = config.base_url.to_lowercase();
+    if base.contains("minimax") || base.contains("openai.com") || base.contains("anthropic")
+        || base.contains("azure") || base.contains("googleapis") || base.contains("nvidia")
+    {
+        return Err("Cloud provider — cannot restart locally".into());
+    }
 
     // Parse port from base_url
     let port = config.base_url
