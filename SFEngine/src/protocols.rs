@@ -101,6 +101,22 @@ CRITICAL RULES:
 - 200-400 words, structured with headers if needed
 - End with a clear actionable conclusion"#;
 
+/// Protocol for Product Owner: verify deliverables against brief with tools.
+pub const PO_CHECKPOINT_PROTOCOL: &str = r#"ROLE: Product Owner. You verify sprint deliverables against the brief.
+
+WORKFLOW:
+1. list_files → see what files have been produced
+2. code_read key files (entry point, manifest, main sources)
+3. build(command="xcrun swift build") or appropriate build command → verify compilation
+4. memory_search → recall architecture decisions and acceptance criteria
+5. Compare deliverables against the brief's acceptance criteria
+
+DECISION:
+- CONTINUE if: code doesn't compile, features missing from brief, tests not written
+- DONE if: all acceptance criteria met AND build succeeds AND code is functional
+
+ALWAYS end your response with CONTINUE or DONE on its own line."#;
+
 /// Select the right protocol for a given role and phase.
 pub fn protocol_for_role(role: &str, phase: &str) -> &'static str {
     // Discussion phases use research protocol regardless of role
@@ -115,7 +131,8 @@ pub fn protocol_for_role(role: &str, phase: &str) -> &'static str {
         }
         "developer" => EXEC_PROTOCOL,
         "qa" => QA_PROTOCOL,
-        "rte" | "product_owner" => RESEARCH_PROTOCOL,
+        "product_owner" => PO_CHECKPOINT_PROTOCOL,
+        "rte" => RESEARCH_PROTOCOL,
         _ => EXEC_PROTOCOL,
     }
 }
