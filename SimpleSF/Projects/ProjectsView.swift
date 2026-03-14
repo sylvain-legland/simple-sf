@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Ref: FT-SSF-003
+// Ref: FT-SSF-003, FT-SSF-015
 
 // MARK: - Projects View (accordion: card + inline discussion)
 
@@ -8,6 +8,7 @@ import SwiftUI
 struct ProjectsView: View {
     @ObservedObject private var store = ProjectStore.shared
     @ObservedObject private var bridge = SFBridge.shared
+    @ObservedObject private var l10n = L10n.shared
     @State private var searchText = ""
     @State private var expandedProjectId: String?
 
@@ -26,11 +27,11 @@ struct ProjectsView: View {
                 Image(systemName: "folder.fill")
                     .font(.system(size: 20))
                     .foregroundColor(SF.Colors.purple)
-                Text("Projects")
+                Text(l10n.t(.projectsTitle))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(SF.Colors.textPrimary)
                 Spacer()
-                Text("\(store.projects.count) projects")
+                Text(l10n.plural(.pluralProjects, count: store.projects.count))
                     .font(.system(size: 12))
                     .foregroundColor(SF.Colors.textSecondary)
                     .padding(.horizontal, 10)
@@ -98,10 +99,10 @@ struct ProjectsView: View {
                 Image(systemName: "flag.fill")
                     .font(.system(size: 14))
                     .foregroundColor(SF.Colors.accent)
-                Text("Projets Pilotes")
+                Text(l10n.t(.projectsPilot))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(SF.Colors.textPrimary)
-                Text("AC validation")
+                Text(l10n.t(.projectsACValidation))
                     .font(.system(size: 11))
                     .foregroundColor(SF.Colors.textMuted)
                     .padding(.horizontal, 8)
@@ -112,7 +113,7 @@ struct ProjectsView: View {
                 Button {
                     loadPilotProjects()
                 } label: {
-                    Label("Charger", systemImage: "plus.circle.fill")
+                    Label(l10n.t(.projectsLoadPilot), systemImage: "plus.circle.fill")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(SF.Colors.purple)
                 }
@@ -121,7 +122,7 @@ struct ProjectsView: View {
                 Button {
                     resetPilotProjects()
                 } label: {
-                    Label("Réinitialiser", systemImage: "arrow.counterclockwise")
+                    Label(l10n.t(.projectsReset), systemImage: "arrow.counterclockwise")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(SF.Colors.error)
                 }
@@ -147,7 +148,7 @@ struct ProjectsView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle")
                         .foregroundColor(SF.Colors.textMuted)
-                    Text("Cliquez \"Charger\" pour importer les 8 projets pilotes")
+                    Text(l10n.t(.projectsLoadPilotHint))
                         .font(.system(size: 12))
                         .foregroundColor(SF.Colors.textMuted)
                 }
@@ -215,10 +216,10 @@ struct ProjectsView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 48))
                 .foregroundColor(SF.Colors.purple.opacity(0.4))
-            Text("No projects yet")
+            Text(l10n.t(.projectsEmpty))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(SF.Colors.textSecondary)
-            Text("Ask Jarvis to create a project for you.\n\"Create a project called MyApp using Swift\"")
+            Text(l10n.t(.projectsEmptyHint))
                 .font(.system(size: 13))
                 .foregroundColor(SF.Colors.textMuted)
                 .multilineTextAlignment(.center)

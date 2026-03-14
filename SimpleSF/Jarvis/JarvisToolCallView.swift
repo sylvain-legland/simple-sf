@@ -139,7 +139,7 @@ extension JarvisView {
                         .foregroundColor(SF.Colors.purple)
                 }
                 .buttonStyle(.plain)
-                .help("Nouvelle conversation")
+                .help(L10n.shared.t(.jarvisNewConversation))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)

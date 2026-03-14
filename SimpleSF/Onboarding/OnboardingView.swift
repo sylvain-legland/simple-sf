@@ -97,10 +97,10 @@ struct OnboardingView: View {
                             .font(.system(size: 15, weight: .bold, design: .monospaced))
                             .foregroundColor(SF.Colors.textPrimary)
                     } else {
-                        Text("No model active")
+                        Text(l10n.t(.settingsNoModelActive))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(SF.Colors.textSecondary)
-                        Text("Select a provider below")
+                        Text(l10n.t(.settingsSelectProvider))
                             .font(.system(size: 15, weight: .bold))
                             .foregroundColor(.orange)
                     }
@@ -110,18 +110,18 @@ struct OnboardingView: View {
 
                 if isSelected != nil {
                     Button(action: { appState.clearActiveProvider() }) {
-                        Label("Auto", systemImage: "arrow.counterclockwise")
+                        Label(l10n.t(.sidebarAutoDetect), systemImage: "arrow.counterclockwise")
                             .font(.caption)
                     }
                     .buttonStyle(.bordered)
                     .tint(SF.Colors.textMuted)
                     .controlSize(.small)
-                    .help("Switch back to auto-detect")
+                    .help(l10n.t(.sidebarAutoDetectHelp))
                 }
             }
 
             if llm.activeProvider == nil {
-                Text("Configure a local or cloud provider below, then click \"Use\" to activate it.")
+                Text(l10n.t(.settingsConfigureHint))
                     .font(.caption)
                     .foregroundColor(SF.Colors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -166,30 +166,7 @@ struct OnboardingView: View {
     ]
 
     private var languageSection: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "globe")
-                .foregroundColor(SF.Colors.purple)
-            Text("Language")
-                .font(.headline)
-                .foregroundColor(SF.Colors.textPrimary)
-            Picker("", selection: $appState.selectedLang) {
-                ForEach(Self.languages, id: \.code) { lang in
-                    Text(lang.name).tag(lang.code)
-                }
-            }
-            .labelsHidden()
-            .frame(maxWidth: 200)
-            .onChange(of: appState.selectedLang) { newValue in
-                appState.setLanguage(newValue)
-            }
-            Spacer()
-            Text("Jarvis responds in this language")
-                .font(.caption2)
-                .foregroundColor(SF.Colors.textSecondary)
-        }
-        .padding()
-        .background(SF.Colors.bgSecondary)
-        .cornerRadius(12)
+        LanguagePickerView()
     }
 
     // MARK: - Active provider badge (header)
@@ -204,7 +181,7 @@ struct OnboardingView: View {
             }
             .foregroundColor(.green)
         } else {
-            Label("No provider", systemImage: "exclamationmark.triangle.fill")
+            Label(l10n.t(.settingsNoProvider), systemImage: "exclamationmark.triangle.fill")
                 .font(.caption)
                 .foregroundColor(.orange)
         }
@@ -219,11 +196,11 @@ struct OnboardingView: View {
             HStack {
                 Image(systemName: "cloud.fill")
                     .foregroundColor(.blue)
-                Text("Cloud Providers")
+                Text(l10n.t(.settingsCloudProviders))
                     .font(.headline)
                     .foregroundColor(SF.Colors.textPrimary)
                 Spacer()
-                Text("Requires API key")
+                Text(l10n.t(.settingsCloudHint))
                     .font(.caption2)
                     .foregroundColor(SF.Colors.textSecondary)
             }
@@ -260,12 +237,12 @@ struct OnboardingView: View {
     @ViewBuilder
     func useButton(_ provider: LLMProvider, available: Bool) -> some View {
         if isSelected == provider {
-            Label("Active", systemImage: "checkmark.circle.fill")
+            Label(l10n.t(.statusActive), systemImage: "checkmark.circle.fill")
                 .font(.caption.bold())
                 .foregroundColor(.green)
         } else if available {
             Button(action: { activate(provider) }) {
-                Text("Use")
+                Text(l10n.t(.actionUse))
                     .font(.caption.bold())
             }
             .buttonStyle(.borderedProminent)

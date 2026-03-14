@@ -131,7 +131,7 @@ struct JarvisView: View {
                     Image(systemName: "sparkles")
                         .foregroundColor(SF.Colors.purple)
                         .font(.system(size: 20))
-                    Text("Jarvis")
+                    Text(L10n.shared.t(.jarvisTitle))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(SF.Colors.textPrimary)
                     Spacer()
@@ -182,7 +182,7 @@ struct JarvisView: View {
                                 if bridge.isReasoning {
                                     HStack(spacing: 12) {
                                         ProgressView().controlSize(.small)
-                                        Text("Réflexion en cours…")
+                                        Text(L10n.shared.t(.jarvisThinking))
                                             .font(.system(size: 13, weight: .medium))
                                             .foregroundColor(SF.Colors.purple)
                                     }
@@ -198,7 +198,7 @@ struct JarvisView: View {
                             if isProcessing && messages.last?.role == "user" && bridge.discussionEvents.isEmpty {
                                 HStack(spacing: 12) {
                                     ProgressView().controlSize(.small)
-                                    Text("L'equipe se reunit...")
+                                    Text(L10n.shared.t(.jarvisTeamMeeting))
                                         .font(.system(size: 14))
                                         .foregroundColor(SF.Colors.textMuted)
                                 }

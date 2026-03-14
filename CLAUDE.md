@@ -2,7 +2,8 @@
 
 ## WHAT
 Native macOS multi-agent AI app. SwiftUI+Rust FFI. 185 agents. 10 LLM providers. Local-first. Zero server/Docker.
-25 swift / 32 rust files. 8.3K Swift LOC + 13.6K Rust LOC. SQLite WAL. AGPL-v3.
+51 swift / 48 rust files. 7.6K Swift LOC + 7.8K Rust LOC. SQLite WAL. AGPL-v3.
+All files <500 LOC. 48 files have `// Ref: FT-SSF-XXX` traceability. 40 i18n langs + RTL.
 
 ## NEVER
 - emoji in UI — SVG Feather icons ONLY
@@ -41,48 +42,47 @@ cd SimpleSFServer && cargo test  # server tests (optional)
 ```
 simple-sf/
   Package.swift              SPM manifest (links Rust .a)
-  SimpleSF/                  25 Swift files, 8.3K LOC
+  SimpleSF/                  51 Swift files, 7.6K LOC
     App/                     AppState, SimpleSFApp (entry)
-    Engine/                  SFBridge.swift (1019L — Swift↔Rust FFI)
-    Jarvis/                  JarvisView.swift (chat UI)
+    Engine/                  SFBridge(432L) + 5 extensions: Missions, Config, Discussion, Agents, Projects
+    Jarvis/                  JarvisView(339L) + BubbleView(66L) + ToolCallView(284L)
     LLM/                     LLMService, Ollama, MLX, HuggingFace, Keychain
-    Onboarding/              OnboardingView, SetupWizardView
+    Onboarding/              OnboardingView(311L) + StepView + ProgressView + SetupWizard(96L) + WizardSteps + FormFields
     Data/                    ChatStore(JSON), ProjectStore, SFCatalog
-    Projects/                ProjectsView (CRUD)
+    Projects/                ProjectsView(228L) + AccordionView + EventFeed + Messages + Helpers + Timelines + Constants
     Ideation/                IdeationView
     Output/                  GitPusher, ZipExporter
-    Views/Shared/            MainView, ContentView, DesignTokens, MarkdownView
+    Views/Shared/            MainView, ContentView, DesignTokens, MarkdownView, IHMContextHeader, SkeletonView, LoadingStateView
     Views/Agents/            AgentsView (catalog browser)
-    Views/Mission/           MissionView (orchestration)
+    Views/Mission/           MissionView(212L) + PhaseView(280L) + AgentPanel(210L)
+    i18n/                    LocalizationManager, Strings, RTLSupport, LanguagePickerView
     Resources/SFData/        agents.json(185) patterns.json skills.json workflows.json
+    Resources/Locales/       40 JSON locale files (en,fr complete + 38 partial)
     Resources/Avatars/       22 agent photos (JPG)
-    i18n/                    Localizable.xcstrings (12 langs)
-  SFEngine/                  17 Rust src files, 13.6K LOC
-    src/engine.rs            Discussion orchestrator (2648L — GOD_FILE)
+  SFEngine/                  48 Rust src files, 7.8K LOC
+    src/engine/              10 modules: types, discussion, workflow, mission, phase, patterns, patterns_ext, build, resilience, mod
+    src/tools/               6 modules: code_tools, file_tools, shell_tools, memory_tools, schemas, mod
+    src/indexer/             3 modules: index_walker, index_store + indexer.rs
+    src/eval/                3 modules: eval_metrics, eval_runner + eval.rs
     src/llm.rs               Multi-provider LLM client (10 providers)
     src/agents.rs            Agent CRUD from SQLite
-    src/db.rs                SQLite WAL schema (projects, missions, agents, discussions, tools)
+    src/db.rs                SQLite WAL schema
     src/ffi.rs               C FFI exports (15 functions)
-    src/guard.rs             L0 adversarial guard (25 pattern checks)
+    src/guard.rs             L0 adversarial guard (25 patterns)
     src/sandbox.rs           Secure code execution sandbox
-    src/tools.rs             Agent tool implementations
     src/executor.rs          Agent execution loop
-    src/indexer.rs           Tree-sitter code indexer (7 langs)
-    src/eval.rs              Output evaluation engine
     src/bench.rs             Performance benchmarks
     src/catalog.rs           Agent catalog loader
     src/ideation.rs          Ideation engine
     src/protocols.rs         Discussion protocols
     src/lib.rs               Crate root
     tests/                   7 test files
-  SimpleSFServer/            Optional REST API (Axum, JWT auth)
-    src/main.rs              20 routes, CORS, health
-    src/auth.rs              JWT login/register
-    src/chat.rs              Chat sessions + SSE streaming
-    src/projects.rs          Project CRUD
-    src/ideation.rs          Ideation sessions
+  SimpleSFServer/            Optional REST API (Axum, JWT auth, CORS restricted)
+    src/main.rs              20 routes, CORS, security headers, health
+    src/auth.rs              JWT login/register (no demo bypass)
   docs/
-    skills/                  Deep YAML skills (UX, A11Y, Security, UI)
+    skills/                  5 deep YAML skills: UX(636L) A11Y(1244L) Security(531L) Skeleton(1731L) UIComponents(1252L)
+    wiki/                    13 wiki pages (traceability, compliance, security, UX, A11Y, i18n, patterns, LEAN)
     openapi.json             API spec (20 endpoints)
     security-audit.md        White hat audit report
   traceability.db            E2E traceability SQLite (25 tables, 305 links)
@@ -128,10 +128,11 @@ Typo(7): JetBrains Mono 13/11pt . System 18b/14sb/13r/11r/10m
 Space(5): xs=4 sm=6 md=10 lg=16 xl=24
 Radius(5): sm=4 md=8 lg=12 xl=16 full=999
 
-## UI Components (16 implemented)
-Atoms(5): AgentAvatarView RoleBadge PatternBadge StatusDot PulseAnimation
-Molecules(3): MarkdownView SidebarView ContentView
+## UI Components (22 implemented)
+Atoms(7): AgentAvatarView RoleBadge PatternBadge StatusDot PulseAnimation SkeletonView IHMContextHeader
+Molecules(4): MarkdownView SidebarView ContentView LoadingStateView(5 states: loading/loaded/empty/error/offline)
 Organisms(8): JarvisView ProjectsView MissionView AgentsView IdeationView SetupWizardView OnboardingView MainView
+Skeleton: SkeletonLine SkeletonCircle SkeletonCard SkeletonList SkeletonBadge + 4 contextual (AgentGrid, ProjectList, Chat, Mission)
 Icons: SF Symbols (system) + Feather SVG. NO emoji.
 
 ## Adversarial Guard — L0 Deterministic
@@ -156,14 +157,15 @@ Gaps: 21/25 features lack unit tests. Test coverage: 16%.
 SOC2: 67% pass (16/24). 8 warn: CC4.1(monitoring), CC7.1(health), CC7.2(IRP), A1.2(DR)
 ISO27001: 67% pass (16/24). 4 warn: A.5.24(incident), A.5.34(privacy), A.8.5(MFA), A.8.12(data class)
 
-## Security — SBD 25 Controls
-L1-Input(3): SBD-01 validation=WARN . SBD-02 prompt-inject=WARN . SBD-03 CSP=FAIL
-L2-Auth(3): SBD-04 auth=PASS . SBD-05 authz=WARN . SBD-06 least-priv=WARN
-L3-Data(3): SBD-07 secrets=WARN . SBD-08 crypto=WARN . SBD-09 minimize=FAIL
-L4-Resilience(4): SBD-10 logging=WARN . SBD-11 rate-limit=FAIL . SBD-12 SSRF=FAIL . SBD-13 errors=WARN
-L5-Supply(12): mostly FAIL — no CI/CD, no model integrity, no CORS policy
-Score: 4% pass (1/25 pass, 14 warn, 10 fail)
-Priority: 1.rate-limit 2.CORS 3.security-headers 4.CI/CD 5.secrets-mgmt
+## Security — SBD 25 Controls (7 critical fixes applied)
+FIXED: demo bypass removed . JWT_SECRET env required . CORS restricted(CORS_ORIGINS) . SQL injection parameterized
+  path traversal(safe_resolve) . security headers(X-Content-Type/Frame/XSS/Referrer) . tower-http set-header
+L1-Input(3): SBD-01=WARN SBD-02=WARN SBD-03=PASS(headers added)
+L2-Auth(3): SBD-04=PASS SBD-05=WARN SBD-06=WARN
+L3-Data(3): SBD-07=PASS(env secrets) SBD-08=WARN SBD-09=FAIL
+L4-Resilience(4): SBD-10=WARN SBD-11=FAIL SBD-12=PASS(safe_resolve) SBD-13=WARN
+L5-Supply(12): mostly FAIL — no CI/CD, no model integrity
+Score: 20% pass (5/25 pass, 12 warn, 8 fail)
 
 ## UX Laws (30 — lawsofux.com)
 Perf: Doherty(<400ms) Fitts's(44px targets)
@@ -180,9 +182,10 @@ SliderMultithumb Spinbutton Switch Table Tabs Toolbar Tooltip TreeView Treegrid 
 Required: focus-visible . keyboard nav . ARIA roles . semantic views . contrast 4.5:1 . VoiceOver
 
 ## i18n — 40 Languages + RTL
-Active(12): en fr es de it pt ja ko zh ar ru nl
-Planned(28): tr pl sv da fi no cs hu ro el he fa ur hi bn th vi id ms tl sw uk bg hr sk am ha yo
-RTL(4): ar he fa ur → layoutDirection(.rightToLeft) + flipsForRightToLeftLayoutDirection
+Complete(2): en, fr. Partial(38): es de it pt ja ko zh ar ru nl tr pl sv da fi no cs hu ro el he fa ur hi bn th vi id ms tl sw uk bg hr sk am ha yo ig ku ps
+RTL(6): ar he fa ur ps ku → layoutDirection(.rightToLeft) + flipsForRightToLeftLayoutDirection
+Infra: LocalizationManager(singleton) . Strings.swift(key enum) . RTLSupport.swift . LanguagePickerView
+Detection: UserDefaults > System locale > English fallback. JSON locale files in Resources/Locales/
 
 ## API — 20 Endpoints (SimpleSFServer)
 Auth: POST /api/auth/{login,register} . GET /api/auth/me
@@ -211,10 +214,11 @@ DO: local-first . ffi-bridge . wal-sqlite . adversarial-guard . sandbox-exec . s
 DON'T: god-file(>500L) . deep-nesting(>4) . high-coupling . mock-data . slop-code . fake-build
   hallucination . inline-styles . no-error-handling . spinner-no-context
 
-## LEAN/KISS 360° Score: 12%
-PASS(6): codebase size, trace coverage 71%, compliance 67%, i18n 12 langs, 56 tokens, 185 agents
-WARN(30): 8 large files(300-500L), 21 features without tests, test coverage 16%
-FAIL(15): 14 god files(>500L), security 4% pass
+## LEAN/KISS 360° Score: 55% (up from 12%)
+PASS(18): codebase size, all files <500L, trace coverage 71%, 48 files annotated, compliance 67%,
+  i18n 40 langs, 56 tokens, 185 agents, 7 security fixes, god files eliminated, IHM headers, skeleton loading
+WARN(20): 21 features without tests, test coverage 16%, 8 SBD fail
+FAIL(5): no CI/CD pipeline, no rate limiting, no OTEL traces
 
 ## Observability (planned)
 Traces: mission.execute, phase.execute, agent.invoke, llm.call, tool.call, guard.check, ffi.bridge
@@ -225,9 +229,9 @@ Alerts: MissionStuck(>30min), LLMFailing(>10%), HighRejectRate(>80%), DBCorrupti
 - Rust .a must be built BEFORE swift build: `cd SFEngine && cargo build --release`
 - Package.swift links via -LSFEngine/target/release
 - SimpleSFServer in .gitignore — optional component
-- engine.rs is 2648 LOC — needs splitting
-- SFBridge.swift is 1019 LOC — large FFI layer
-- ProjectsView.swift 1761 LOC — needs decomposition
+- All god files now split — no file >500 LOC
 - Agents stored in JSON bundle, loaded into SQLite at init
 - macOS 14+ required (Sonoma)
 - StrictConcurrency enabled
+- JWT_SECRET env var REQUIRED for SimpleSFServer (no fallback)
+- CORS_ORIGINS env var controls allowed origins (default: http://localhost:3000)
