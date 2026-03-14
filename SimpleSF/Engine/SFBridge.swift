@@ -1,8 +1,6 @@
 import Foundation
-import Security
-import SQLite3
 
-// MARK: - C FFI declarations (mirrors sf_engine.h)
+// MARK: - C FFI declarations (core engine lifecycle)
 
 // We declare the C functions directly since SPM doesn't easily support bridging headers.
 // These match the extern "C" functions in SFEngine/src/ffi.rs.
@@ -15,42 +13,6 @@ func _sf_init(_ dbPath: UnsafePointer<CChar>?, _ dataDir: UnsafePointer<CChar>?)
 
 @_silgen_name("sf_set_callback")
 func _sf_set_callback(_ cb: SFEventCallback)
-
-@_silgen_name("sf_configure_llm")
-func _sf_configure_llm(_ provider: UnsafePointer<CChar>?, _ apiKey: UnsafePointer<CChar>?, _ baseUrl: UnsafePointer<CChar>?, _ model: UnsafePointer<CChar>?)
-
-@_silgen_name("sf_set_yolo")
-func _sf_set_yolo(_ enabled: Bool)
-
-@_silgen_name("sf_create_project")
-func _sf_create_project(_ name: UnsafePointer<CChar>?, _ desc: UnsafePointer<CChar>?, _ tech: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("sf_list_projects")
-func _sf_list_projects() -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("sf_delete_project")
-func _sf_delete_project(_ id: UnsafePointer<CChar>?)
-
-@_silgen_name("sf_start_mission")
-func _sf_start_mission(_ projectId: UnsafePointer<CChar>?, _ brief: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("sf_mission_status")
-func _sf_mission_status(_ missionId: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("sf_list_agents")
-func _sf_list_agents() -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("sf_list_workflows")
-func _sf_list_workflows() -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("sf_run_bench")
-func _sf_run_bench() -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("sf_start_ideation")
-func _sf_start_ideation(_ idea: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("sf_jarvis_discuss")
-func _sf_jarvis_discuss(_ message: UnsafePointer<CChar>?, _ projectContext: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 
 @_silgen_name("sf_load_discussion_history")
 func _sf_load_discussion_history() -> UnsafeMutablePointer<CChar>?
@@ -80,8 +42,17 @@ final class SFBridge: ObservableObject {
         didSet { _persistMissionIds() }
     }
 
+    // Discussion state
+    @Published var discussionEvents: [AgentEvent] = []
+    @Published var discussionRunning = false
+    @Published var discussionSynthesis: String?
+    @Published var isReasoning = false
+
     /// Path to the Rust engine SQLite DB (set during initialize)
-    private var dbPath: String = ""
+    var dbPath: String = ""
+
+    /// Agent metadata cache (populated after first listAgents call)
+    var _agentCache: [String: SFAgent] = [:]
 
     private static let missionIdsKey = "sf_project_mission_ids"
 
@@ -100,6 +71,8 @@ final class SFBridge: ObservableObject {
         _loadProjectEvents()
         // Note: _loadDiscussionHistory() is called later in initialize() after DB is ready
     }
+
+    // MARK: - Persistence
 
     private func _persistMissionIds() {
         UserDefaults.standard.set(projectMissionIds, forKey: Self.missionIdsKey)
@@ -165,6 +138,8 @@ final class SFBridge: ObservableObject {
         _persistProjectEvents()
     }
 
+    // MARK: - Discussion History (from DB)
+
     /// Restore the most recent discussion from the Rust DB into discussionEvents
     private func _loadDiscussionHistory() {
         guard let rawPtr = _sf_load_discussion_history() else { return }
@@ -203,6 +178,8 @@ final class SFBridge: ObservableObject {
             .replacingOccurrences(of: "\t", with: "\\t")
         return "\"\(escaped)\""
     }
+
+    // MARK: - AgentEvent
 
     struct AgentEvent: Identifiable, Codable {
         let id: UUID
@@ -251,6 +228,8 @@ final class SFBridge: ObservableObject {
             return e
         }
     }
+
+    // MARK: - Initialize
 
     func initialize() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -307,376 +286,7 @@ final class SFBridge: ObservableObject {
         bootstrapActiveProject()
     }
 
-    /// Discover mission ID for active projects and restore their conversation from DB.
-    private func bootstrapActiveProject() {
-        let activeProjects = ProjectStore.shared.projects.filter { $0.status == .active }
-        guard !activeProjects.isEmpty else { return }
-
-        for project in activeProjects {
-            if currentProjectId == nil {
-                currentProjectId = project.id
-            }
-            // Try to recover existing mission ID
-            if project.missionId == nil && projectMissionIds[project.id] == nil {
-                let rustProjects = listProjects()
-                if let rustProject = rustProjects.first(where: { $0.name == project.name }),
-                   let _ = missionStatusById(rustProject.id) {
-                    projectMissionIds[project.id] = rustProject.id
-                    ProjectStore.shared.setMissionId(project.id, missionId: rustProject.id)
-                    print("[SFBridge] Bootstrapped mission \(rustProject.id) for project \(project.name)")
-                }
-            }
-
-            // Restore conversation from DB if we don't have events in memory/disk cache
-            _restoreConversationFromDB(projectId: project.id)
-        }
-
-        // Auto-resume: restart the first active project (preserving existing conversation)
-        if !isRunning, let project = activeProjects.first {
-            print("[SFBridge] Auto-resuming project: \(project.name)")
-            currentProjectId = project.id
-            Task {
-                await KeychainService.shared.scanIfNeeded()
-                await syncLLMConfigAsync()
-                resumeMissionAsync(projectId: project.id, brief: project.description)
-            }
-        }
-    }
-
-    /// Load conversation messages from the Rust DB into projectEvents (if not already populated)
-    private func _restoreConversationFromDB(projectId: String) {
-        // Skip if we already have events from disk cache or live session
-        if let existing = projectEvents[projectId], !existing.isEmpty { return }
-
-        guard let status = missionStatusForProject(projectId),
-              !status.messages.isEmpty else { return }
-
-        var restored: [AgentEvent] = []
-        // Messages come in reverse order (DESC) from DB — reverse to chronological
-        for msg in status.messages.reversed() {
-            guard msg.role == "assistant", !msg.content.isEmpty else { continue }
-            var event = AgentEvent(agentId: msg.agent_name, eventType: "response", data: msg.content)
-            event.agentName = msg.agent_name
-            event.role = msg.role
-            restored.append(event)
-        }
-
-        if !restored.isEmpty {
-            projectEvents[projectId] = restored
-            print("[SFBridge] Restored \(restored.count) messages from DB for project \(projectId)")
-        }
-    }
-
-    /// Sync YOLO mode to the Rust engine
-    func syncYoloMode() {
-        _sf_set_yolo(AppState.shared.yoloMode)
-    }
-
-    /// Synchronous config sync — used after user-initiated provider changes.
-    /// NOTE: calls SecItemCopyMatching which may block if keychain is locked.
-    func syncLLMConfig() {
-        let state = AppState.shared
-        if let provider = state.selectedProvider {
-            let model = state.selectedModel.isEmpty ? provider.defaultModel : state.selectedModel
-            switch provider {
-            case .mlx:
-                // Trust user selection — configure MLX even if not confirmed running yet.
-                // If server is down, Rust fails fast with connection-refused.
-                configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
-                             model: MLXService.shared.activeModel?.name ?? model)
-                return
-            case .ollama:
-                if OllamaService.shared.isRunning, let m = OllamaService.shared.activeModel {
-                    configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: OllamaService.shared.openaiBaseURL,
-                                 model: m.name)
-                    return
-                }
-            default:
-                if let apiKey = KeychainService.shared.key(for: provider) {
-                    configureLLM(provider: provider.rawValue, apiKey: apiKey,
-                                 baseUrl: provider.baseURL, model: model)
-                    return
-                }
-            }
-        }
-        if MLXService.shared.isRunning {
-            configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
-                         model: MLXService.shared.activeModel?.name ?? "mlx-local")
-            return
-        }
-        if OllamaService.shared.isRunning, let m = OllamaService.shared.activeModel {
-            configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: OllamaService.shared.openaiBaseURL,
-                         model: m.name)
-            return
-        }
-        let keychain = KeychainService.shared
-        guard let provider = LLMProvider.cloudProviders.first(where: { keychain.storedProviders.contains($0) }),
-              let apiKey = keychain.key(for: provider) else { return }
-        configureLLM(provider: provider.rawValue, apiKey: apiKey,
-                     baseUrl: provider.baseURL, model: provider.defaultModel)
-    }
-
-    /// Async variant — runs keychain access on background thread.
-    func syncLLMConfigAsync() async {
-        let state = AppState.shared
-        let keychain = KeychainService.shared
-
-        // 1. Explicit user selection takes priority
-        if let provider = state.selectedProvider {
-            let model = state.selectedModel.isEmpty ? provider.defaultModel : state.selectedModel
-            switch provider {
-            case .mlx:
-                let svc = MLXService.shared
-                configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: svc.baseURL,
-                             model: svc.activeModel?.name ?? model)
-                return
-            case .ollama:
-                let svc = OllamaService.shared
-                if svc.isRunning, let m = svc.activeModel {
-                    configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: svc.openaiBaseURL,
-                                 model: m.name)
-                    return
-                }
-            default:
-                if keychain.storedProviders.contains(provider) {
-                    let svc = keychain.service
-                    let raw = provider.rawValue
-                    let apiKey: String? = await Task.detached(operation: {
-                        Self.keychainLookup(service: svc, account: raw)
-                    }).value
-                    if let apiKey {
-                        configureLLM(provider: provider.rawValue, apiKey: apiKey,
-                                     baseUrl: provider.baseURL, model: model)
-                        return
-                    }
-                }
-            }
-        }
-
-        // 2. Local providers
-        let preferred = state.preferredLocalProvider
-        if preferred == "mlx", MLXService.shared.isRunning {
-            configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
-                         model: MLXService.shared.activeModel?.name ?? "mlx-local")
-            return
-        }
-        if preferred == "ollama", OllamaService.shared.isRunning, let m = OllamaService.shared.activeModel {
-            configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: OllamaService.shared.openaiBaseURL,
-                         model: m.name)
-            return
-        }
-        if MLXService.shared.isRunning {
-            configureLLM(provider: "mlx", apiKey: "no-key", baseUrl: MLXService.shared.baseURL,
-                         model: MLXService.shared.activeModel?.name ?? "mlx-local")
-            return
-        }
-        if OllamaService.shared.isRunning, let m = OllamaService.shared.activeModel {
-            configureLLM(provider: "ollama", apiKey: "no-key", baseUrl: OllamaService.shared.openaiBaseURL,
-                         model: m.name)
-            return
-        }
-
-        // 3. First cloud with key
-        guard let provider = LLMProvider.cloudProviders.first(where: { keychain.storedProviders.contains($0) }) else { return }
-        let svc = keychain.service
-        let raw = provider.rawValue
-        let apiKey: String? = await Task.detached(operation: {
-            Self.keychainLookup(service: svc, account: raw)
-        }).value
-        guard let apiKey else { return }
-        configureLLM(provider: provider.rawValue, apiKey: apiKey,
-                     baseUrl: provider.baseURL, model: provider.defaultModel)
-    }
-
-    /// Thread-safe keychain lookup (no @MainActor)
-    private nonisolated static func keychainLookup(service: String, account: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data,
-              let str = String(data: data, encoding: .utf8), !str.isEmpty
-        else { return nil }
-        return str
-    }
-
-    func configureLLM(provider: String, apiKey: String, baseUrl: String, model: String) {
-        provider.withCString { p in
-            apiKey.withCString { k in
-                baseUrl.withCString { u in
-                    model.withCString { m in
-                        _sf_configure_llm(p, k, u, m)
-                    }
-                }
-            }
-        }
-    }
-
-    func createProject(name: String, description: String, tech: String) -> String? {
-        var result: String?
-        name.withCString { n in
-            description.withCString { d in
-                tech.withCString { t in
-                    if let ptr = _sf_create_project(n, d, t) {
-                        result = String(cString: ptr)
-                        _sf_free_string(ptr)
-                    }
-                }
-            }
-        }
-        return result
-    }
-
-    struct SFProject: Codable, Identifiable, Hashable {
-        let id: String
-        let name: String
-        let description: String
-        let tech: String
-        let status: String
-        let created_at: String
-    }
-
-    func listProjects() -> [SFProject] {
-        guard let ptr = _sf_list_projects() else { return [] }
-        let json = String(cString: ptr)
-        _sf_free_string(ptr)
-        guard let data = json.data(using: .utf8) else { return [] }
-        return (try? JSONDecoder().decode([SFProject].self, from: data)) ?? []
-    }
-
-    func deleteProject(id: String) {
-        id.withCString { ptr in
-            _sf_delete_project(ptr)
-        }
-    }
-
-    func startMission(projectId: String, brief: String) -> String? {
-        events.removeAll()
-        isRunning = true
-        currentProjectId = projectId
-        projectEvents[projectId] = []
-        var result: String?
-        projectId.withCString { p in
-            brief.withCString { b in
-                if let ptr = _sf_start_mission(p, b) {
-                    result = String(cString: ptr)
-                    _sf_free_string(ptr)
-                }
-            }
-        }
-        currentMissionId = result
-        if let mid = result {
-            projectMissionIds[projectId] = mid
-            ProjectStore.shared.setMissionId(projectId, missionId: mid)
-        }
-        return result
-    }
-
-    /// Non-blocking mission start — runs FFI call on background thread.
-    func startMissionAsync(projectId: String, brief: String) {
-        events.removeAll()
-        isRunning = true
-        currentProjectId = projectId
-        projectEvents[projectId] = []   // fresh events for this project
-        _launchMission(projectId: projectId, brief: brief)
-    }
-
-    /// Resume a mission without clearing existing conversation events.
-    func resumeMissionAsync(projectId: String, brief: String) {
-        events.removeAll()
-        isRunning = true
-        currentProjectId = projectId
-        // Add a separator event so user knows where the resume starts
-        let sep = AgentEvent(agentId: "engine", eventType: "response", data: "── Reprise de la mission ──")
-        projectEvents[projectId, default: []].append(sep)
-        _launchMission(projectId: projectId, brief: brief)
-    }
-
-    /// Shared mission launch logic.
-    private func _launchMission(projectId: String, brief: String) {
-        let pid = projectId
-        let b = brief
-        Task.detached {
-            var missionId: String?
-            pid.withCString { p in
-                b.withCString { bb in
-                    if let ptr = _sf_start_mission(p, bb) {
-                        missionId = String(cString: ptr)
-                        _sf_free_string(ptr)
-                    }
-                }
-            }
-            await MainActor.run {
-                SFBridge.shared.currentMissionId = missionId
-                if let mid = missionId {
-                    SFBridge.shared.projectMissionIds[pid] = mid
-                    ProjectStore.shared.setMissionId(pid, missionId: mid)
-                }
-            }
-        }
-    }
-
-    struct MissionStatus: Codable {
-        let mission: MissionInfo?
-        let phases: [PhaseInfo]
-        let messages: [MessageInfo]
-    }
-    struct MissionInfo: Codable {
-        let id: String
-        let project_id: String
-        let brief: String
-        let status: String
-        let created_at: String
-    }
-    struct PhaseInfo: Codable, Identifiable {
-        let id: String
-        let phase_name: String
-        let pattern: String
-        let status: String
-        let agent_ids: String
-        let output: String?
-        let started_at: String?
-        let completed_at: String?
-        let phase_type: String?
-        let iteration: Int?
-        let max_iterations: Int?
-    }
-    struct MessageInfo: Codable, Identifiable {
-        var id: String { "\(agent_name)-\(created_at)" }
-        let agent_name: String
-        let role: String
-        let content: String
-        let tool_calls: String?
-        let created_at: String
-    }
-
-    func missionStatus() -> MissionStatus? {
-        guard let mid = currentMissionId else { return nil }
-        return missionStatusById(mid)
-    }
-
-    /// Get mission status for a specific project (uses stored mission ID mapping)
-    func missionStatusForProject(_ projectId: String) -> MissionStatus? {
-        // 1. In-memory mapping (set during startMissionAsync in this session)
-        if let mid = projectMissionIds[projectId] {
-            return missionStatusById(mid)
-        }
-        // 2. Persisted in Project model (survives app restarts)
-        if let mid = ProjectStore.shared.projects.first(where: { $0.id == projectId })?.missionId {
-            projectMissionIds[projectId] = mid   // cache for next call
-            return missionStatusById(mid)
-        }
-        // 3. Fallback: if this is the current project, use global mission ID
-        if projectId == currentProjectId, let mid = currentMissionId {
-            return missionStatusById(mid)
-        }
-        return nil
-    }
+    // MARK: - Event Routing
 
     /// Get events for a specific project
     func eventsForProject(_ projectId: String) -> [AgentEvent] {
@@ -685,115 +295,6 @@ final class SFBridge: ObservableObject {
         // Fallback: if this is the current project, use global events
         if projectId == currentProjectId { return events }
         return []
-    }
-
-    private func missionStatusById(_ mid: String) -> MissionStatus? {
-        return mid.withCString { ptr -> MissionStatus? in
-            guard let result = _sf_mission_status(ptr) else { return nil }
-            let json = String(cString: result)
-            _sf_free_string(result)
-            guard let data = json.data(using: .utf8) else { return nil }
-            return try? JSONDecoder().decode(MissionStatus.self, from: data)
-        }
-    }
-
-    struct SFAgent: Codable, Identifiable {
-        let id: String
-        let name: String
-        let role: String
-        let persona: String
-    }
-
-    private var _agentCache: [String: SFAgent] = [:]
-
-    /// Quick lookup for agent metadata (cached after first listAgents call)
-    func agentInfo(_ agentId: String) -> SFAgent? {
-        if _agentCache.isEmpty {
-            for a in listAgents() { _agentCache[a.id] = a }
-        }
-        return _agentCache[agentId]
-    }
-
-    func listAgents() -> [SFAgent] {
-        guard let ptr = _sf_list_agents() else { return [] }
-        let json = String(cString: ptr)
-        _sf_free_string(ptr)
-        guard let data = json.data(using: .utf8) else { return [] }
-        let agents = (try? JSONDecoder().decode([SFAgent].self, from: data)) ?? []
-        for a in agents { _agentCache[a.id] = a }
-        return agents
-    }
-
-    func listWorkflows() -> [[String: Any]] {
-        guard let ptr = _sf_list_workflows() else { return [] }
-        let json = String(cString: ptr)
-        _sf_free_string(ptr)
-        guard let data = json.data(using: .utf8),
-              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-        return arr
-    }
-
-    /// Run AC/LLM bench tests. Returns JSON array of results.
-    func runBench() -> String {
-        syncLLMConfig()
-        guard let ptr = _sf_run_bench() else { return "[]" }
-        let result = String(cString: ptr)
-        _sf_free_string(ptr)
-        return result
-    }
-
-    func startIdeation(idea: String) -> String? {
-        ideationEvents.removeAll()
-        ideationRunning = true
-        syncLLMConfig()
-        var result: String?
-        idea.withCString { ptr in
-            if let r = _sf_start_ideation(ptr) {
-                result = String(cString: r)
-                _sf_free_string(r)
-            }
-        }
-        return result
-    }
-
-    /// Start a Jarvis intake discussion (network pattern: RTE + PO discuss the request).
-    /// Events stream via the callback with "discuss_*" event types.
-    @Published var discussionEvents: [AgentEvent] = []
-    @Published var discussionRunning = false
-    @Published var discussionSynthesis: String?
-    @Published var isReasoning = false
-
-    func startDiscussion(message: String, projectContext: String) -> String? {
-        discussionEvents.removeAll()
-        discussionRunning = true
-        discussionSynthesis = nil
-        syncLLMConfig()
-        var result: String?
-        message.withCString { m in
-            projectContext.withCString { c in
-                if let r = _sf_jarvis_discuss(m, c) {
-                    result = String(cString: r)
-                    _sf_free_string(r)
-                }
-            }
-        }
-        return result
-    }
-
-    /// Non-blocking variant: runs the FFI call on a background thread.
-    func startDiscussionAsync(message: String, projectContext: String) {
-        discussionEvents.removeAll()
-        discussionRunning = true
-        discussionSynthesis = nil
-        let msg = message
-        let ctx = projectContext
-        Task.detached {
-            msg.withCString { m in
-                ctx.withCString { c in
-                    let _ = _sf_jarvis_discuss(m, c)
-                }
-            }
-        }
     }
 
     // Called from the global C callback
@@ -920,95 +421,6 @@ final class SFBridge: ObservableObject {
         }
     }
 
-    // MARK: - Discussion Messages from DB
-
-    struct DiscussionMessage: Identifiable {
-        let id: Int
-        let sessionId: String
-        let agentId: String
-        let agentName: String
-        let agentRole: String
-        let round: Int
-        let content: String
-        let createdAt: String
-    }
-
-    /// Read all discussion sessions from the Rust engine DB
-    func listDiscussionSessions() -> [(id: String, topic: String, status: String)] {
-        guard !dbPath.isEmpty else { return [] }
-        var db: OpaquePointer?
-        guard sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_close(db) }
-
-        var stmt: OpaquePointer?
-        let sql = "SELECT id, topic, status FROM discussion_sessions ORDER BY created_at DESC"
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_finalize(stmt) }
-
-        var results: [(id: String, topic: String, status: String)] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let id = String(cString: sqlite3_column_text(stmt, 0))
-            let topic = String(cString: sqlite3_column_text(stmt, 1))
-            let status = String(cString: sqlite3_column_text(stmt, 2))
-            results.append((id, topic, status))
-        }
-        return results
-    }
-
-    /// Read discussion messages for a given session ID
-    func discussionMessages(sessionId: String) -> [DiscussionMessage] {
-        guard !dbPath.isEmpty else { return [] }
-        var db: OpaquePointer?
-        guard sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_close(db) }
-
-        var stmt: OpaquePointer?
-        let sql = """
-            SELECT id, session_id, agent_id, agent_name, agent_role, round, content, created_at
-            FROM discussion_messages WHERE session_id = ? ORDER BY id
-            """
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, sessionId, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
-
-        var msgs: [DiscussionMessage] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            msgs.append(DiscussionMessage(
-                id: Int(sqlite3_column_int(stmt, 0)),
-                sessionId: String(cString: sqlite3_column_text(stmt, 1)),
-                agentId: String(cString: sqlite3_column_text(stmt, 2)),
-                agentName: String(cString: sqlite3_column_text(stmt, 3)),
-                agentRole: String(cString: sqlite3_column_text(stmt, 4)),
-                round: Int(sqlite3_column_int(stmt, 5)),
-                content: String(cString: sqlite3_column_text(stmt, 6)),
-                createdAt: String(cString: sqlite3_column_text(stmt, 7))
-            ))
-        }
-        return msgs
-    }
-
-    /// Find the most recent discussion session matching a project name/topic
-    func discussionSessionForProject(_ projectName: String) -> String? {
-        let sessions = listDiscussionSessions()
-        let lowered = projectName.lowercased()
-        return sessions.first(where: { $0.topic.lowercased().contains(lowered) })?.id
-    }
-
-    /// Find discussion messages for a project by matching its name in session topics
-    func discussionMessagesForProject(_ projectName: String) -> [DiscussionMessage] {
-        guard let sessionId = discussionSessionForProject(projectName) else { return [] }
-        return discussionMessages(sessionId: sessionId)
-    }
-
-    /// Get messages from the most recent discussion session that has messages
-    func mostRecentDiscussionMessages() -> [DiscussionMessage] {
-        let sessions = listDiscussionSessions()
-        for session in sessions {
-            let msgs = discussionMessages(sessionId: session.id)
-            if !msgs.isEmpty { return msgs }
-        }
-        return []
-    }
 }
 
 // Global C callback function — routes to SFBridge singleton
