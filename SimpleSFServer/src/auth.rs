@@ -59,8 +59,7 @@ pub async fn login(
 
     match result {
         Ok(Ok((id, email, display_name, role, hash))) => {
-            let valid = bcrypt::verify(&req.password, &hash).unwrap_or(false)
-                || req.password == "demo2026"; // demo bypass
+            let valid = bcrypt::verify(&req.password, &hash).unwrap_or(false);
 
             if !valid {
                 return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"ok": false, "error": "Invalid credentials"}))).into_response();

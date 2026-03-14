@@ -4,6 +4,30 @@ use std::process::Command;
 use std::path::Path;
 use std::fs;
 
+/// Validate that a path is safe (no traversal, stays within workspace)
+fn safe_resolve(workspace: &str, path: &str) -> Result<std::path::PathBuf, String> {
+    if path.is_empty() {
+        return Err("Empty path".to_string());
+    }
+    // Block absolute paths
+    if Path::new(path).is_absolute() {
+        return Err("Absolute paths not allowed".to_string());
+    }
+    // Block traversal
+    if path.contains("..") {
+        return Err("Path traversal not allowed".to_string());
+    }
+    let full = Path::new(workspace).join(path);
+    // Canonicalize and verify it's under workspace
+    let ws_canon = fs::canonicalize(workspace).unwrap_or_else(|_| Path::new(workspace).to_path_buf());
+    if let Ok(full_canon) = fs::canonicalize(&full) {
+        if !full_canon.starts_with(&ws_canon) {
+            return Err("Path escapes workspace".to_string());
+        }
+    }
+    Ok(full)
+}
+
 // ══════════════════════════════════════════════════════════════
 // TOOL REGISTRY — 18 tools ported from the SF platform
 // ══════════════════════════════════════════════════════════════
@@ -405,12 +429,11 @@ fn tool_code_write(args: &Value, workspace: &str) -> String {
     let path = args["path"].as_str().unwrap_or("untitled.txt");
     let content = args["content"].as_str().unwrap_or("");
 
-    // Security: block writes outside workspace
-    if path.contains("..") {
-        return "Error: path traversal not allowed".to_string();
-    }
+    let full = match safe_resolve(workspace, path) {
+        Ok(p) => p,
+        Err(e) => return format!("Error: {}", e),
+    };
 
-    let full = Path::new(workspace).join(path);
     if let Some(parent) = full.parent() {
         fs::create_dir_all(parent).ok();
     }
@@ -422,10 +445,10 @@ fn tool_code_write(args: &Value, workspace: &str) -> String {
 
 fn tool_code_read(args: &Value, workspace: &str) -> String {
     let path = args["path"].as_str().unwrap_or("");
-    if path.contains("..") {
-        return "Error: path traversal not allowed".to_string();
-    }
-    let full = Path::new(workspace).join(path);
+    let full = match safe_resolve(workspace, path) {
+        Ok(p) => p,
+        Err(e) => return format!("Error: {}", e),
+    };
     match fs::read_to_string(&full) {
         Ok(c) => c,
         Err(e) => format!("Error reading {}: {}", path, e),
@@ -437,14 +460,14 @@ fn tool_code_edit(args: &Value, workspace: &str) -> String {
     let old_str = args["old_str"].as_str().unwrap_or("");
     let new_str = args["new_str"].as_str().unwrap_or("");
 
-    if path.contains("..") {
-        return "Error: path traversal not allowed".to_string();
-    }
+    let full = match safe_resolve(workspace, path) {
+        Ok(p) => p,
+        Err(e) => return format!("Error: {}", e),
+    };
     if old_str.is_empty() {
         return "Error: old_str cannot be empty".to_string();
     }
 
-    let full = Path::new(workspace).join(path);
     match fs::read_to_string(&full) {
         Ok(content) => {
             let count = content.matches(old_str).count();
@@ -516,7 +539,10 @@ fn grep_fallback(pattern: &str, workspace: &str) -> String {
 fn tool_list_files(args: &Value, workspace: &str) -> String {
     let dir = args["path"].as_str().unwrap_or(".");
     let recursive = args["recursive"].as_bool().unwrap_or(false);
-    let full = Path::new(workspace).join(dir);
+    let full = match safe_resolve(workspace, dir) {
+        Ok(p) => p,
+        Err(e) => return format!("Error: {}", e),
+    };
 
     if recursive {
         let output = Command::new("find")
@@ -686,28 +712,42 @@ fn tool_memory_search(args: &Value, project_id: &str) -> String {
             "global" => "SELECT key, value, category, project_id FROM memory WHERE \
                          (project_id IS NULL OR project_id = '') AND \
                          (LOWER(key) LIKE ?1 OR LOWER(value) LIKE ?1 OR LOWER(category) LIKE ?1) \
-                         ORDER BY created_at DESC LIMIT 20".to_string(),
+                         ORDER BY created_at DESC LIMIT 20",
             "all" => "SELECT key, value, category, project_id FROM memory WHERE \
                       (LOWER(key) LIKE ?1 OR LOWER(value) LIKE ?1 OR LOWER(category) LIKE ?1) \
-                      ORDER BY created_at DESC LIMIT 20".to_string(),
-            _ => format!("SELECT key, value, category, project_id FROM memory WHERE \
-                          (project_id = '{}' OR project_id IS NULL) AND \
-                          (LOWER(key) LIKE ?1 OR LOWER(value) LIKE ?1 OR LOWER(category) LIKE ?1) \
-                          ORDER BY created_at DESC LIMIT 20", project_id),
+                      ORDER BY created_at DESC LIMIT 20",
+            _ => "SELECT key, value, category, project_id FROM memory WHERE \
+                  (project_id = ?2 OR project_id IS NULL) AND \
+                  (LOWER(key) LIKE ?1 OR LOWER(value) LIKE ?1 OR LOWER(category) LIKE ?1) \
+                  ORDER BY created_at DESC LIMIT 20",
         };
 
-        let mut stmt = conn.prepare(&sql).unwrap();
-        let results: Vec<String> = stmt.query_map(
-            rusqlite::params![pattern],
-            |row| {
-                let key: String = row.get(0)?;
-                let value: String = row.get(1)?;
-                let category: String = row.get(2)?;
-                let pid: Option<String> = row.get(3)?;
-                let scope_tag = if pid.as_ref().map(|s| s.is_empty()).unwrap_or(true) { "global" } else { "project" };
-                Ok(format!("[{}/{}] {}: {}", scope_tag, category, key, value))
-            },
-        ).unwrap().filter_map(|r| r.ok()).collect();
+        let mut stmt = conn.prepare(sql).unwrap();
+        let results: Vec<String> = if scope == "global" || scope == "all" {
+            stmt.query_map(
+                rusqlite::params![pattern],
+                |row| {
+                    let key: String = row.get(0)?;
+                    let value: String = row.get(1)?;
+                    let category: String = row.get(2)?;
+                    let pid: Option<String> = row.get(3)?;
+                    let scope_tag = if pid.as_ref().map(|s| s.is_empty()).unwrap_or(true) { "global" } else { "project" };
+                    Ok(format!("[{}/{}] {}: {}", scope_tag, category, key, value))
+                },
+            ).unwrap().filter_map(|r| r.ok()).collect()
+        } else {
+            stmt.query_map(
+                rusqlite::params![pattern, project_id],
+                |row| {
+                    let key: String = row.get(0)?;
+                    let value: String = row.get(1)?;
+                    let category: String = row.get(2)?;
+                    let pid: Option<String> = row.get(3)?;
+                    let scope_tag = if pid.as_ref().map(|s| s.is_empty()).unwrap_or(true) { "global" } else { "project" };
+                    Ok(format!("[{}/{}] {}: {}", scope_tag, category, key, value))
+                },
+            ).unwrap().filter_map(|r| r.ok()).collect()
+        };
 
         if results.is_empty() {
             format!("No memory found for '{}'", query)

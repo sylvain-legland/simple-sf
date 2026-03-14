@@ -10,7 +10,9 @@ use axum::{
     routing::{get, post, put, delete},
     Router,
 };
-use tower_http::cors::{CorsLayer, Any};
+use tower_http::cors::{CorsLayer, AllowOrigin};
+use tower_http::set_header::SetResponseHeaderLayer;
+use axum::http::HeaderValue;
 use std::sync::Arc;
 
 pub struct AppState {
@@ -41,14 +43,48 @@ async fn main() -> anyhow::Result<()> {
     db.migrate()?;
 
     let jwt_secret = std::env::var("JWT_SECRET")
-        .unwrap_or_else(|_| "simple-sf-secret-2026".to_string());
+        .expect("JWT_SECRET env var is required — generate with: openssl rand -hex 32");
 
     let state = Arc::new(AppState { db, jwt_secret });
 
+    let allowed_origins = std::env::var("CORS_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:8099".to_string());
+    let origins: Vec<HeaderValue> = allowed_origins
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::PUT,
+            axum::http::Method::DELETE,
+        ])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+        ]);
+
+    // Security headers middleware
+    let security_headers = tower::ServiceBuilder::new()
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::HeaderName::from_static("x-xss-protection"),
+            HeaderValue::from_static("1; mode=block"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::HeaderName::from_static("referrer-policy"),
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ));
 
     let app = Router::new()
         .route("/health", get(health))
@@ -72,7 +108,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/providers", get(llm::list_providers))
         .route("/api/providers/:name/test", post(llm::test_provider))
         .with_state(state)
-        .layer(cors);
+        .layer(cors)
+        .layer(security_headers);
 
     let addr = format!("127.0.0.1:{}", port);
     tracing::info!("Simple SF Server running on {}", addr);
