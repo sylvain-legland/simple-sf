@@ -5,15 +5,15 @@ import SwiftUI
 struct OnboardingView: View {
     @ObservedObject private var keychain = KeychainService.shared
     @ObservedObject private var llm = LLMService.shared
-    @ObservedObject private var mlx = MLXService.shared
-    @ObservedObject private var ollama = OllamaService.shared
+    @ObservedObject var mlx = MLXService.shared
+    @ObservedObject var ollama = OllamaService.shared
     @ObservedObject private var appState = AppState.shared
     @State private var keys: [LLMProvider: String] = [:]
     @State private var testing: LLMProvider? = nil
     @State private var testResults: [LLMProvider: Bool] = [:]
     @State private var modelOverrides: [LLMProvider: String] = [:]
 
-    private var isSelected: LLMProvider? { appState.selectedProvider }
+    var isSelected: LLMProvider? { appState.selectedProvider }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -209,270 +209,7 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Local LLM Section
-
-    private var localLLMSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "desktopcomputer")
-                    .foregroundColor(SF.Colors.purple)
-                Text("Local Models")
-                    .font(.headline)
-                    .foregroundColor(SF.Colors.textPrimary)
-                Spacer()
-                Text("100% on-device · no internet needed")
-                    .font(.caption2)
-                    .foregroundColor(SF.Colors.textSecondary)
-            }
-
-            ollamaCard
-            mlxCard
-        }
-        .padding()
-        .background(SF.Colors.bgSecondary)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(
-                    (ollama.isRunning || mlx.isRunning) ? Color.green.opacity(0.4) : SF.Colors.border,
-                    lineWidth: 1.5
-                )
-        )
-    }
-
-    // MARK: - Ollama Card
-
-    private var ollamaCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Ollama")
-                        .font(.subheadline.bold())
-                        .foregroundColor(SF.Colors.textPrimary)
-                    Text(LLMProvider.ollama.subtitle)
-                        .font(.caption2)
-                        .foregroundColor(SF.Colors.textMuted)
-                }
-                if ollama.isRunning {
-                    Label("Running", systemImage: "circle.fill")
-                        .font(.caption2)
-                        .foregroundColor(.green)
-                } else {
-                    Label("Stopped", systemImage: "circle")
-                        .font(.caption2)
-                        .foregroundColor(SF.Colors.textMuted)
-                }
-                Spacer()
-                if ollama.isRunning {
-                    useButton(.ollama, available: true)
-                }
-                Button(action: { Task { await ollama.refresh() } }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.caption)
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(SF.Colors.purple)
-            }
-
-            if ollama.isRunning {
-                if !ollama.availableModels.isEmpty {
-                    HStack {
-                        Text("Model:")
-                            .font(.callout)
-                            .foregroundColor(SF.Colors.textSecondary)
-                        Picker("", selection: $ollama.activeModel) {
-                            ForEach(ollama.availableModels) { model in
-                                HStack {
-                                    Text(model.name)
-                                    Text("(\(model.size))")
-                                        .foregroundColor(.secondary)
-                                }
-                                .tag(model as OllamaService.OllamaModel?)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 300)
-                    }
-                } else {
-                    Text("No models installed. Run: ollama pull qwen3:14b")
-                        .font(.caption)
-                        .foregroundColor(SF.Colors.textSecondary)
-                }
-
-                HStack(spacing: 12) {
-                    Button(action: { ollama.stop() }) {
-                        Label("Stop", systemImage: "stop.circle.fill")
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
-                    .controlSize(.small)
-
-                    Text("Port \(ollama.port)")
-                        .font(.caption.monospaced())
-                        .foregroundColor(SF.Colors.textSecondary)
-                }
-            } else {
-                HStack(spacing: 12) {
-                    Button(action: { ollama.start() }) {
-                        Label("Start Ollama", systemImage: "play.circle.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(SF.Colors.purple)
-                    .controlSize(.small)
-
-                    Text("or run: ollama serve")
-                        .font(.caption2)
-                        .foregroundColor(SF.Colors.textSecondary)
-                }
-            }
-        }
-        .padding(12)
-        .background(cardBg(.ollama))
-        .cornerRadius(8)
-        .overlay(selectionBorder(.ollama))
-    }
-
-    // MARK: - MLX Card
-
-    private var mlxCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Apple MLX")
-                        .font(.subheadline.bold())
-                        .foregroundColor(SF.Colors.textPrimary)
-                    Text(LLMProvider.mlx.subtitle)
-                        .font(.caption2)
-                        .foregroundColor(SF.Colors.textMuted)
-                }
-                mlxStatusBadge
-                Spacer()
-                if mlx.isRunning {
-                    useButton(.mlx, available: true)
-                }
-                Button(action: { mlx.scanModels() }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.caption)
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(SF.Colors.purple)
-            }
-
-            if !mlx.availableModels.isEmpty {
-                HStack {
-                    Text("Model:")
-                        .font(.callout)
-                        .foregroundColor(SF.Colors.textSecondary)
-                    Picker("", selection: $mlx.activeModel) {
-                        ForEach(mlx.availableModels) { model in
-                            HStack {
-                                Text(model.name)
-                                if !model.modelType.isEmpty {
-                                    Text(model.modelType)
-                                        .foregroundColor(.secondary)
-                                }
-                                Text(String(format: "%.1f GB", model.sizeGB))
-                                    .foregroundColor(.secondary)
-                            }
-                            .tag(model as MLXService.MLXModel?)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 300)
-                }
-            } else {
-                Text("No MLX models in ~/.cache/huggingface/hub/ or ~/.cache/mlx-models/")
-                    .font(.caption)
-                    .foregroundColor(SF.Colors.textSecondary)
-            }
-
-            HStack(spacing: 12) {
-                if mlx.isRunning {
-                    Button(action: { mlx.stop() }) {
-                        Label("Stop", systemImage: "stop.circle.fill")
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
-                    .controlSize(.small)
-
-                    Text("Port \(mlx.port)")
-                        .font(.caption.monospaced())
-                        .foregroundColor(SF.Colors.textSecondary)
-                } else {
-                    Button(action: {
-                        mlx.start()
-                        Task {
-                            try? await Task.sleep(nanoseconds: 5_000_000_000)
-                            if mlx.isRunning { SFBridge.shared.syncLLMConfig() }
-                        }
-                    }) {
-                        Label("Start Server", systemImage: "play.circle.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(SF.Colors.purple)
-                    .controlSize(.small)
-                    .disabled(mlx.activeModel == nil)
-                }
-
-                Spacer()
-
-                Toggle(isOn: Binding(
-                    get: { AppState.shared.mlxAutoRestart },
-                    set: { AppState.shared.setMLXAutoRestart($0) }
-                )) {
-                    Text("Auto-start")
-                        .font(.caption)
-                        .foregroundColor(SF.Colors.textSecondary)
-                }
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-            }
-
-            if !mlx.logLines.isEmpty {
-                ScrollView(.vertical) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(mlx.logLines.suffix(3).enumerated()), id: \.offset) { _, line in
-                            Text(line)
-                                .font(.caption2.monospaced())
-                                .foregroundColor(SF.Colors.textMuted)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxHeight: 40)
-            }
-        }
-        .padding(12)
-        .background(cardBg(.mlx))
-        .cornerRadius(8)
-        .overlay(selectionBorder(.mlx))
-    }
-
-    @ViewBuilder
-    private var mlxStatusBadge: some View {
-        switch mlx.state {
-        case .stopped:
-            Label("Stopped", systemImage: "circle")
-                .font(.caption2)
-                .foregroundColor(SF.Colors.textMuted)
-        case .starting:
-            HStack(spacing: 4) {
-                ProgressView().scaleEffect(0.5)
-                Text("Starting...")
-                    .font(.caption2)
-                    .foregroundColor(.orange)
-            }
-        case .running:
-            Label("Running", systemImage: "circle.fill")
-                .font(.caption2)
-                .foregroundColor(.green)
-        case .error(let msg):
-            Label(msg, systemImage: "exclamationmark.circle.fill")
-                .font(.caption2)
-                .foregroundColor(.red)
-                .lineLimit(1)
-        }
-    }
+    // Local LLM section: see OnboardingStepView.swift
 
     // MARK: - Cloud Section
 
@@ -520,7 +257,7 @@ struct OnboardingView: View {
     // MARK: - Shared helpers
 
     @ViewBuilder
-    private func useButton(_ provider: LLMProvider, available: Bool) -> some View {
+    func useButton(_ provider: LLMProvider, available: Bool) -> some View {
         if isSelected == provider {
             Label("Active", systemImage: "checkmark.circle.fill")
                 .font(.caption.bold())
@@ -536,14 +273,14 @@ struct OnboardingView: View {
         }
     }
 
-    private func cardBg(_ provider: LLMProvider) -> Color {
+    func cardBg(_ provider: LLMProvider) -> Color {
         isSelected == provider
             ? SF.Colors.purple.opacity(0.08)
             : SF.Colors.bgTertiary.opacity(0.5)
     }
 
     @ViewBuilder
-    private func selectionBorder(_ provider: LLMProvider) -> some View {
+    func selectionBorder(_ provider: LLMProvider) -> some View {
         if isSelected == provider {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(SF.Colors.purple.opacity(0.5), lineWidth: 1.5)
@@ -572,131 +309,3 @@ struct OnboardingView: View {
     }
 }
 
-// MARK: - Cloud Provider Card
-
-struct CloudProviderCard: View {
-    let provider: LLMProvider
-    let storedKey: String?
-    @Binding var draftKey: String
-    @Binding var modelOverride: String
-    let isSelected: Bool
-    let isTesting: Bool
-    let testResult: Bool?
-    let onSave: () -> Void
-    let onTest: () -> Void
-    let onDelete: () -> Void
-    let onUse: () -> Void
-
-    @State private var expanded = false
-
-    private var hasKey: Bool { storedKey != nil && !storedKey!.isEmpty }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Row header
-            Button(action: { withAnimation(.spring(response: 0.3)) { expanded.toggle() } }) {
-                HStack(spacing: 10) {
-                    // Selection indicator
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                            .font(.system(size: 14))
-                    } else {
-                        Circle()
-                            .fill(hasKey ? Color.green : SF.Colors.textMuted.opacity(0.3))
-                            .frame(width: 8, height: 8)
-                    }
-
-                    Text(provider.displayName)
-                        .font(.headline)
-                        .foregroundColor(SF.Colors.textPrimary)
-
-                    Text(provider.subtitle)
-                        .font(.caption2)
-                        .foregroundColor(SF.Colors.textMuted)
-
-                    Spacer()
-
-                    if hasKey {
-                        if isTesting {
-                            ProgressView().scaleEffect(0.7)
-                        } else if let ok = testResult {
-                            Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(ok ? .green : .red)
-                        }
-
-                        if !isSelected {
-                            Button(action: onUse) {
-                                Text("Use")
-                                    .font(.caption.bold())
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(SF.Colors.purple)
-                            .controlSize(.mini)
-                        } else {
-                            Label("Active", systemImage: "checkmark.circle.fill")
-                                .font(.caption.bold())
-                                .foregroundColor(.green)
-                        }
-                    }
-
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(SF.Colors.textMuted)
-                }
-                .padding(12)
-            }
-            .buttonStyle(.plain)
-
-            if expanded {
-                Divider().background(SF.Colors.border)
-                VStack(alignment: .leading, spacing: 10) {
-                    // Model override
-                    HStack {
-                        Text("Model:")
-                            .font(.callout)
-                            .foregroundColor(SF.Colors.textSecondary)
-                        TextField(provider.defaultModel, text: $modelOverride)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 250)
-                            .onChange(of: modelOverride) { newValue in
-                                UserDefaults.standard.set(newValue, forKey: "sf_model_\(provider.rawValue)")
-                                if isSelected {
-                                    AppState.shared.setActiveProvider(provider, model: newValue.isEmpty ? nil : newValue)
-                                }
-                            }
-                    }
-
-                    // API key
-                    HStack {
-                        SecureField("API Key", text: $draftKey)
-                            .textFieldStyle(.roundedBorder)
-                        Button("Save") { onSave() }
-                            .buttonStyle(.bordered)
-                        if hasKey {
-                            Button("Test") { onTest() }
-                                .buttonStyle(.bordered)
-                                .tint(.green)
-                            Button("Delete", role: .destructive) { onDelete(); draftKey = "" }
-                                .buttonStyle(.plain)
-                                .foregroundColor(.red)
-                        }
-                    }
-                    Button("Get API key →") {
-                        NSWorkspace.shared.open(URL(string: provider.docURL)!)
-                    }
-                    .font(.caption)
-                    .buttonStyle(.plain)
-                    .foregroundColor(SF.Colors.purple)
-                }
-                .padding(12)
-            }
-        }
-        .background(isSelected ? SF.Colors.purple.opacity(0.08) : SF.Colors.bgTertiary.opacity(0.5))
-        .cornerRadius(10)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? SF.Colors.purple.opacity(0.5) : Color.clear, lineWidth: 1.5)
-        )
-    }
-}
