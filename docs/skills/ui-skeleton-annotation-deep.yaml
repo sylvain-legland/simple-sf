@@ -1,0 +1,1731 @@
+skill:
+  name: ui-skeleton-annotation-deep
+  version: '1.0'
+  description: >
+    Comprehensive reference for skeleton loading, agentation-inspired annotation studio,
+    placeholder state management, and network resilience patterns for Simple SF (SwiftUI + SimpleSFServer REST API).
+    Covers progressive loading (L0→L2), shimmer animations, annotation overlays with drag-drop markers,
+    placeholder lifecycle (loading/success/empty/error/offline), and exponential backoff with jitter.
+  source: https://www.agentation.com/
+  author: Macaron Software — inspired by Agentation (Benji Taylor)
+  platform: SwiftUI (iOS 17+ / macOS 14+)
+  backend: SimpleSFServer (Vapor REST API)
+
+  categories:
+    skeleton:
+      description: Skeleton loading system — shimmer shapes, progressive disclosure, accessibility
+      items:
+        - SK-001
+        - SK-002
+        - SK-003
+        - SK-004
+        - SK-005
+        - SK-006
+        - SK-007
+        - SK-008
+        - SK-009
+        - SK-010
+    annotation:
+      description: Agentation-inspired annotation studio — click-to-annotate, markers, export, types
+      items:
+        - AN-001
+        - AN-002
+        - AN-003
+        - AN-004
+        - AN-005
+        - AN-006
+        - AN-007
+        - AN-008
+        - AN-009
+        - AN-010
+        - AN-011
+        - AN-012
+    placeholder:
+      description: Placeholder state management — loading, success, empty, error, offline
+      items:
+        - PH-001
+        - PH-002
+        - PH-003
+        - PH-004
+        - PH-005
+        - PH-006
+        - PH-007
+        - PH-008
+    network:
+      description: Network resilience patterns — compression, backoff, timeouts, offline detection
+      items:
+        - NR-001
+        - NR-002
+        - NR-003
+        - NR-004
+        - NR-005
+        - NR-006
+        - NR-007
+
+  # ---------------------------------------------------------------------------
+  # SKELETON LOADING SYSTEM
+  # ---------------------------------------------------------------------------
+  skeleton:
+    - id: SK-001
+      name: Skeleton Mandate
+      category: skeleton
+      description: Every data-dependent View MUST have a skeleton variant.
+      principle: >
+        No View that displays data from the network or database should render empty
+        or flash content. Before data arrives, the View shows a skeleton that mirrors
+        the eventual layout — same widths, heights, and spacing — so the user perceives
+        instant structure. This prevents Cumulative Layout Shift (CLS) and satisfies
+        Doherty's Threshold (<400ms perceived response).
+      rule: >
+        If a View has an @Published, @State, or @Binding property populated by an
+        async call, it MUST implement a .skeleton() modifier or a dedicated SkeletonView
+        that matches the final layout geometry.
+      swiftui_example: |
+        struct ProjectCard: View {
+            let project: Project?
+
+            var body: some View {
+                if let project {
+                    // Real content
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(project.name).font(.headline)
+                        Text(project.description).font(.subheadline)
+                        HStack { BadgeView(project.status); Spacer(); Text(project.date) }
+                    }
+                } else {
+                    // Skeleton variant — same geometry
+                    VStack(alignment: .leading, spacing: 8) {
+                        SkeletonLine(width: 180, height: 20)
+                        SkeletonLine(width: .infinity, height: 16)
+                        HStack { SkeletonBadge(); Spacer(); SkeletonLine(width: 80, height: 14) }
+                    }
+                    .accessibilityHint("Loading project")
+                    .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
+        }
+      checklist:
+        - Skeleton geometry matches final layout (width, height, spacing)
+        - No layout shift when data arrives
+        - Accessibility hint set to "Loading" context
+        - Shimmer animation active on all skeleton shapes
+
+    - id: SK-002
+      name: Shimmer Animation
+      category: skeleton
+      description: Standardized shimmer gradient animation — 1.5s, left-to-right, infinite repeat.
+      principle: >
+        A shimmer communicates "content is on its way" — it is the visual heartbeat of
+        the loading state. The animation must be consistent across all skeleton shapes:
+        1.5 second duration, left-to-right linear gradient sweep, using the design
+        token colors. The gradient moves from --bg-skeleton (dark) through
+        --bg-skeleton-highlight (lighter) back to --bg-skeleton.
+      swiftui_example: |
+        struct ShimmerModifier: ViewModifier {
+            @State private var phase: CGFloat = -1
+
+            func body(content: Content) -> some View {
+                content
+                    .overlay(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                Color.white.opacity(0.15),
+                                .clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .offset(x: phase * 400)
+                    )
+                    .clipped()
+                    .onAppear {
+                        withAnimation(
+                            .linear(duration: 1.5)
+                            .repeatForever(autoreverses: false)
+                        ) {
+                            phase = 1
+                        }
+                    }
+            }
+        }
+
+        extension View {
+            func shimmer() -> some View {
+                modifier(ShimmerModifier())
+            }
+        }
+      tokens:
+        bg_skeleton: "Color(.systemGray5)  // #2a2a2e in dark mode"
+        bg_skeleton_highlight: "Color(.systemGray4)  // #3a3a3e in dark mode"
+        duration: "1.5s"
+        timing: "linear"
+        direction: "leading → trailing"
+        repeat: "infinite, no autoreverse"
+
+    - id: SK-003
+      name: Accessibility for Skeletons
+      category: skeleton
+      description: aria-busy="true" equivalent via SwiftUI accessibility modifiers.
+      principle: >
+        Screen readers must announce that content is loading, not read out placeholder
+        shapes. In SwiftUI there is no aria-busy attribute, but we achieve the same
+        semantics with .accessibilityHint("Loading") and .accessibilityAddTraits(.updatesFrequently).
+        When data arrives, these modifiers are removed and the real content is announced
+        via .accessibilityElement(children: .contain).
+      rules:
+        - Every skeleton container MUST have .accessibilityHint("Loading <context>")
+        - Add .accessibilityAddTraits(.updatesFrequently) so VoiceOver polls
+        - Hide individual skeleton shapes from accessibility tree with .accessibilityHidden(true)
+        - "On data arrival, post UIAccessibility.post(notification: .layoutChanged, argument: nil)"
+      swiftui_example: |
+        // Skeleton state
+        VStack { ... skeleton shapes ... }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Project card")
+            .accessibilityHint("Loading project details")
+            .accessibilityAddTraits(.updatesFrequently)
+
+        // Loaded state — announce change
+        VStack { ... real content ... }
+            .accessibilityElement(children: .contain)
+            .onAppear {
+                UIAccessibility.post(notification: .layoutChanged, argument: nil)
+            }
+
+    - id: SK-004
+      name: Progressive Loading (L0 → L1 → L2)
+      category: skeleton
+      description: Three-tier progressive disclosure — skeleton → summary → full detail.
+      principle: >
+        Not all data has the same cost. Progressive loading delivers perceived
+        performance by showing the cheapest representation first and upgrading
+        as more data arrives. This satisfies both Doherty's Threshold (instant skeleton)
+        and Miller's Law (manageable information chunks).
+      levels:
+        L0_skeleton:
+          description: Instant skeleton shapes matching final layout
+          timing: "0ms — rendered from cache or inline"
+          data_source: "None (static geometry)"
+          purpose: "Eliminate blank flash, show structure"
+        L1_summary:
+          description: Lightweight summary data (title, status badge, thumbnail)
+          timing: "<500ms — from local cache or lightweight API endpoint"
+          data_source: "GET /api/v1/projects?fields=id,name,status (sparse fieldset)"
+          purpose: "Give user enough to scan and decide what to open"
+        L2_full_detail:
+          description: Complete data including rich content, metrics, history
+          timing: "On-demand — when user taps/expands an item"
+          data_source: "GET /api/v1/projects/:id (full resource)"
+          purpose: "Deliver everything, but only when explicitly requested"
+      swiftui_example: |
+        enum LoadingPhase<Summary, Detail> {
+            case skeleton
+            case summary(Summary)
+            case detail(Detail)
+        }
+
+        struct ProjectListItem: View {
+            @State private var phase: LoadingPhase<ProjectSummary, Project> = .skeleton
+
+            var body: some View {
+                switch phase {
+                case .skeleton:
+                    ProjectCardSkeleton()
+                case .summary(let summary):
+                    ProjectCardSummary(summary)
+                        .onTapGesture { Task { await loadDetail(summary.id) } }
+                case .detail(let project):
+                    ProjectCardFull(project)
+                }
+            }
+        }
+      transition: >
+        Each phase transition uses .transition(.opacity) with 300ms animation to
+        prevent jarring content swaps. The skeleton fades out as the summary fades in.
+
+    - id: SK-005
+      name: Skeleton Shapes
+      category: skeleton
+      description: Four primitive skeleton shapes — .skLine, .skCircle, .skBadge, .skCard.
+      principle: >
+        Skeleton shapes are the atoms of the loading system. Each shape mirrors a
+        specific UI element type. They share the same shimmer animation and base
+        color tokens. Compose them to build any skeleton layout.
+      shapes:
+        skLine:
+          description: Rectangular placeholder for text lines
+          parameters: "width: CGFloat?, height: CGFloat = 16"
+          corner_radius: "4pt (--radius-sm)"
+          usage: "Titles, descriptions, labels, dates"
+          swiftui: |
+            struct SkeletonLine: View {
+                var width: CGFloat? = nil
+                var height: CGFloat = 16
+
+                var body: some View {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(.systemGray5))
+                        .frame(width: width, height: height)
+                        .frame(maxWidth: width == nil ? .infinity : nil)
+                        .shimmer()
+                }
+            }
+        skCircle:
+          description: Circular placeholder for avatars, icons, thumbnails
+          parameters: "diameter: CGFloat = 40"
+          usage: "User avatars, agent icons, status indicators"
+          swiftui: |
+            struct SkeletonCircle: View {
+                var diameter: CGFloat = 40
+
+                var body: some View {
+                    Circle()
+                        .fill(Color(.systemGray5))
+                        .frame(width: diameter, height: diameter)
+                        .shimmer()
+                }
+            }
+        skBadge:
+          description: Pill-shaped placeholder for status badges, tags
+          parameters: "width: CGFloat = 60, height: CGFloat = 24"
+          corner_radius: "12pt (--radius-full)"
+          usage: "Status badges, role tags, labels"
+          swiftui: |
+            struct SkeletonBadge: View {
+                var width: CGFloat = 60
+                var height: CGFloat = 24
+
+                var body: some View {
+                    Capsule()
+                        .fill(Color(.systemGray5))
+                        .frame(width: width, height: height)
+                        .shimmer()
+                }
+            }
+        skCard:
+          description: Full card placeholder combining line + circle + badge shapes
+          parameters: "height: CGFloat = 120"
+          corner_radius: "12pt (--radius-lg)"
+          usage: "List items, dashboard cards, detail previews"
+          swiftui: |
+            struct SkeletonCard: View {
+                var height: CGFloat = 120
+
+                var body: some View {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 12) {
+                            SkeletonCircle(diameter: 36)
+                            VStack(alignment: .leading, spacing: 6) {
+                                SkeletonLine(width: 140, height: 18)
+                                SkeletonLine(width: 200, height: 14)
+                            }
+                        }
+                        SkeletonLine(height: 14)
+                        SkeletonLine(width: 260, height: 14)
+                        HStack {
+                            SkeletonBadge()
+                            Spacer()
+                            SkeletonLine(width: 80, height: 12)
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .shimmer()
+                }
+            }
+
+    - id: SK-006
+      name: Fade-In Transition
+      category: skeleton
+      description: Content appears with .transition(.opacity) and 300ms easeOut animation.
+      principle: >
+        Abrupt content swaps feel jarring. A 300ms opacity fade smooths the
+        skeleton-to-content transition. This matches the design system's base
+        animation duration (--animation-base: 300ms). The skeleton fades out
+        simultaneously as the real content fades in, creating a cross-dissolve effect.
+      rules:
+        - Use .transition(.opacity) on both skeleton and content views
+        - Wrap state change in withAnimation(.easeOut(duration: 0.3))
+        - Never exceed 500ms — loading should feel fast, not theatrical
+        - Group transitions so all skeleton shapes fade together, not individually
+      swiftui_example: |
+        struct DataView<Content: View, Skeleton: View>: View {
+            let isLoading: Bool
+            @ViewBuilder let content: () -> Content
+            @ViewBuilder let skeleton: () -> Skeleton
+
+            var body: some View {
+                ZStack {
+                    if isLoading {
+                        skeleton()
+                            .transition(.opacity)
+                    } else {
+                        content()
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.3), value: isLoading)
+            }
+        }
+
+    - id: SK-007
+      name: Skeleton Count Matching
+      category: skeleton
+      description: Skeleton lists should show a plausible item count, not a fixed number.
+      principle: >
+        A list skeleton showing exactly 3 cards every time trains users to expect
+        exactly 3 results. Instead, estimate the visible count based on available
+        viewport height divided by card height, clamped to a sensible range (2–8).
+        This creates a more believable loading state.
+      swiftui_example: |
+        struct SkeletonList: View {
+            let estimatedItemHeight: CGFloat
+            let minItems: Int = 2
+            let maxItems: Int = 8
+
+            var body: some View {
+                GeometryReader { geo in
+                    let count = min(maxItems, max(minItems,
+                        Int(geo.size.height / estimatedItemHeight)))
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(0..<count, id: \.self) { _ in
+                                SkeletonCard()
+                            }
+                        }
+                        .padding()
+                    }
+                    .disabled(true)
+                }
+            }
+        }
+
+    - id: SK-008
+      name: Skeleton Timing Rules
+      category: skeleton
+      description: When to show skeletons vs spinners vs nothing.
+      rules:
+        instant_skeleton: >
+          Show skeleton immediately (0ms) for any view that loads from network.
+          Never show a blank screen.
+        spinner_threshold: >
+          If an action takes >2s after skeleton is shown, overlay a subtle
+          spinner on top of the skeleton to indicate continued progress.
+          Use ProgressView().tint(.secondary) at 20% opacity.
+        stale_while_revalidate: >
+          If cached data exists, show it immediately with a subtle refresh
+          indicator (pull-to-refresh spinner). Only show skeleton on first load.
+        timeout_to_error: >
+          If loading exceeds 8s, transition skeleton to error placeholder
+          (PH-004) with retry button. Do not leave skeleton indefinitely.
+
+    - id: SK-009
+      name: Skeleton for Navigation Transitions
+      category: skeleton
+      description: Skeleton shown during navigation push before destination data loads.
+      principle: >
+        When navigating to a detail view, show the destination skeleton immediately
+        during the push animation. The skeleton is part of the destination view's
+        initial state, not a separate loading screen. This makes navigation feel
+        instant even when the detail API call is in-flight.
+      swiftui_example: |
+        struct ProjectDetailView: View {
+            let projectId: String
+            @State private var project: Project?
+
+            var body: some View {
+                Group {
+                    if let project {
+                        ProjectDetailContent(project: project)
+                    } else {
+                        ProjectDetailSkeleton()
+                    }
+                }
+                .animation(.easeOut(duration: 0.3), value: project != nil)
+                .task { project = try? await api.fetchProject(projectId) }
+            }
+        }
+
+    - id: SK-010
+      name: Redacted Modifier Alternative
+      category: skeleton
+      description: Using SwiftUI's built-in .redacted(reason:) as a lightweight skeleton.
+      principle: >
+        For simple cases, SwiftUI's .redacted(reason: .placeholder) can generate
+        automatic skeleton shapes from real content. This is faster to implement
+        but less controllable than custom skeleton shapes. Use for prototyping
+        or low-priority views; prefer custom skeletons for primary UI.
+      swiftui_example: |
+        ProjectCard(project: .placeholder)
+            .redacted(reason: .placeholder)
+            .shimmer()
+            .accessibilityHint("Loading project")
+      tradeoffs:
+        pros:
+          - Zero skeleton code — works from real view
+          - Automatically matches layout geometry
+          - Built into SwiftUI
+        cons:
+          - Less control over individual shape styling
+          - Cannot vary skeleton count in lists
+          - Shimmer requires custom overlay (not built-in)
+
+  # ---------------------------------------------------------------------------
+  # ANNOTATION STUDIO SYSTEM (Agentation-inspired)
+  # ---------------------------------------------------------------------------
+  annotation:
+    - id: AN-001
+      name: Annotation System Overview
+      category: annotation
+      description: >
+        Agentation-inspired annotation system adapted for SwiftUI native apps.
+        Users click any element to add annotations, enabling structured UI feedback
+        that can be exported as markdown for AI agents or design review.
+      inspiration: >
+        Agentation (agentation.com) pioneered click-to-annotate UI feedback for web apps.
+        Their Annotation Format Schema (AFS v1) defines a portable format with element paths,
+        bounding boxes, intent, severity, status lifecycle (pending → acknowledged → resolved),
+        and threaded conversations. We adapt these concepts for SwiftUI's view hierarchy
+        and accessibility tree, replacing CSS selectors with SwiftUI view identity paths.
+      architecture: |
+        ┌─────────────────────────────────────────────┐
+        │  AnnotationOverlay (ZStack, top-level)       │
+        │  ┌─────────────────────────────────────────┐ │
+        │  │  App Content Views                      │ │
+        │  │  (normal interaction when inactive)      │ │
+        │  └─────────────────────────────────────────┘ │
+        │  ┌─────────────────────────────────────────┐ │
+        │  │  Annotation Layer (when active)          │ │
+        │  │  - Hit-test overlay captures taps        │ │
+        │  │  - Renders markers at annotation coords  │ │
+        │  │  - Highlight on hover (macOS) / long-press│ │
+        │  └─────────────────────────────────────────┘ │
+        │  ┌──────────┐                                │
+        │  │ Toolbar  │  Toggle · Export · Clear · Pause│
+        │  └──────────┘                                │
+        └─────────────────────────────────────────────┘
+
+    - id: AN-002
+      name: Annotation Data Model
+      category: annotation
+      description: Core annotation struct following Agentation Format Schema adapted for SwiftUI.
+      swiftui_example: |
+        struct Annotation: Identifiable, Codable {
+            let id: String                          // "ann_\(UUID().uuidString.prefix(8))"
+            var comment: String
+            var viewPath: String                    // SwiftUI hierarchy path
+            var timestamp: Date
+            var position: CGPoint                   // relative to annotated view
+            var boundingBox: CGRect?                // frame of annotated element
+            var annotationType: AnnotationType
+            var intent: AnnotationIntent
+            var severity: AnnotationSeverity
+            var status: AnnotationStatus
+            var thread: [ThreadMessage]
+            var screenName: String?                 // current NavigationPath screen
+
+            enum AnnotationType: String, Codable, CaseIterable {
+                case comment  // general feedback
+                case bug      // something broken
+                case move     // element should be repositioned
+                case area     // region-based annotation (rectangle)
+                case text     // inline text suggestion
+            }
+
+            enum AnnotationIntent: String, Codable {
+                case fix, change, question, approve
+            }
+
+            enum AnnotationSeverity: String, Codable {
+                case blocking, important, suggestion
+            }
+
+            enum AnnotationStatus: String, Codable {
+                case pending, acknowledged, resolved, dismissed
+            }
+
+            struct ThreadMessage: Identifiable, Codable {
+                let id: String
+                var role: Role
+                var content: String
+                var timestamp: Date
+                enum Role: String, Codable { case human, agent }
+            }
+        }
+
+    - id: AN-003
+      name: Annotation Types & Colors
+      category: annotation
+      description: Five annotation types with distinct color coding for visual clarity.
+      types:
+        comment:
+          color: "yellow (#FBBF24)"
+          icon: "bubble.left.fill"
+          description: General feedback, observations, suggestions
+          usage: "Default type — 'This spacing feels tight'"
+        bug:
+          color: "red (#EF4444)"
+          icon: "ladybug.fill"
+          description: Something is broken, incorrect, or unexpected
+          usage: "Mark visual glitches, wrong data, broken interactions"
+        move:
+          color: "blue (#3B82F6)"
+          icon: "arrow.up.and.down.and.arrow.left.and.right"
+          description: Element should be repositioned or reordered
+          usage: "Suggest layout changes — 'Move this above the fold'"
+        area:
+          color: "green (#10B981)"
+          icon: "rectangle.dashed"
+          description: Region-based annotation covering a rectangular area
+          usage: "Highlight an entire section — 'This whole card needs rework'"
+        text:
+          color: "purple (#A855F7)"
+          icon: "textformat"
+          description: Inline text correction or content suggestion
+          usage: "Typos, wording changes, copy improvements"
+      swiftui_example: |
+        extension Annotation.AnnotationType {
+            var color: Color {
+                switch self {
+                case .comment: .yellow
+                case .bug:     .red
+                case .move:    .blue
+                case .area:    .green
+                case .text:    .purple
+                }
+            }
+
+            var systemImage: String {
+                switch self {
+                case .comment: "bubble.left.fill"
+                case .bug:     "ladybug.fill"
+                case .move:    "arrow.up.and.down.and.arrow.left.and.right"
+                case .area:    "rectangle.dashed"
+                case .text:    "textformat"
+                }
+            }
+        }
+
+    - id: AN-004
+      name: Click-to-Annotate Interaction
+      category: annotation
+      description: Tap any element to create an annotation at that location.
+      principle: >
+        When annotation mode is active, the overlay intercepts taps. On tap,
+        hit-test the underlying view hierarchy to identify the tapped element,
+        capture its frame and view path, then present the annotation composer
+        popover anchored to the tap point.
+      swiftui_example: |
+        struct AnnotationOverlay: View {
+            @Binding var isActive: Bool
+            @Binding var annotations: [Annotation]
+            @State private var tapLocation: CGPoint?
+            @State private var showComposer = false
+
+            var body: some View {
+                ZStack {
+                    if isActive {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { location in
+                                tapLocation = location
+                                showComposer = true
+                            }
+
+                        // Render existing markers
+                        ForEach(annotations) { ann in
+                            AnnotationMarker(annotation: ann)
+                                .position(ann.position)
+                        }
+                    }
+                }
+                .sheet(isPresented: $showComposer) {
+                    if let loc = tapLocation {
+                        AnnotationComposer(
+                            position: loc,
+                            onSubmit: { annotation in
+                                annotations.append(annotation)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+    - id: AN-005
+      name: Drag-Drop Annotation Markers
+      category: annotation
+      description: Markers can be repositioned via drag gesture after placement.
+      principle: >
+        Once placed, annotation markers should be draggable so users can adjust
+        positioning without deleting and re-creating. The marker snaps to the
+        nearest element boundary on drop. Drag uses .gesture(DragGesture()) with
+        a minimum distance of 5pt to avoid accidental drags on tap.
+      swiftui_example: |
+        struct AnnotationMarker: View {
+            @Binding var annotation: Annotation
+            @State private var dragOffset: CGSize = .zero
+
+            var body: some View {
+                Image(systemName: annotation.annotationType.systemImage)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 32, height: 32)
+                    .background(annotation.annotationType.color)
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                    .overlay(alignment: .topTrailing) {
+                        Text("\(annotation.thread.count)")
+                            .font(.caption2.bold())
+                            .foregroundColor(.white)
+                            .frame(width: 16, height: 16)
+                            .background(.red)
+                            .clipShape(Circle())
+                            .opacity(annotation.thread.isEmpty ? 0 : 1)
+                    }
+                    .offset(dragOffset)
+                    .gesture(
+                        DragGesture(minimumDistance: 5)
+                            .onChanged { value in dragOffset = value.translation }
+                            .onEnded { value in
+                                annotation.position.x += value.translation.width
+                                annotation.position.y += value.translation.height
+                                dragOffset = .zero
+                            }
+                    )
+            }
+        }
+
+    - id: AN-006
+      name: Pause Animations for Annotation Mode
+      category: annotation
+      description: Freeze all animations when annotation mode is active.
+      principle: >
+        Moving elements are impossible to annotate accurately. When annotation mode
+        activates, all animations must pause — shimmer, transitions, auto-scrolling
+        carousels, progress bars. Use an @EnvironmentObject flag that all animating
+        views observe. This mirrors Agentation's "pause animation" toolbar button.
+      swiftui_example: |
+        class AnnotationEnvironment: ObservableObject {
+            @Published var isAnnotationMode = false
+            @Published var animationsPaused = false
+
+            func activateAnnotationMode() {
+                isAnnotationMode = true
+                animationsPaused = true
+            }
+
+            func deactivateAnnotationMode() {
+                isAnnotationMode = false
+                animationsPaused = false
+            }
+        }
+
+        // In any animating view:
+        struct ShimmerView: View {
+            @EnvironmentObject var annotationEnv: AnnotationEnvironment
+
+            var body: some View {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color(.systemGray5))
+                    .modifier(ShimmerModifier())
+                    .animation(
+                        annotationEnv.animationsPaused ? nil : .linear(duration: 1.5).repeatForever(),
+                        value: annotationEnv.animationsPaused
+                    )
+            }
+        }
+
+    - id: AN-007
+      name: Export Annotations as Markdown
+      category: annotation
+      description: >
+        Export all annotations as structured markdown for pasting into AI agents
+        (Claude Code, Cursor, etc.) — following Agentation's output format.
+      principle: >
+        The exported markdown must give an AI agent enough context to locate and
+        fix the annotated element without guessing. Include the SwiftUI view path,
+        screen name, bounding box, annotation type, severity, and the human's comment.
+        This is the SwiftUI equivalent of Agentation's CSS selector + React component
+        tree export.
+      markdown_format: |
+        ## UI Annotations — Simple SF
+        **Exported:** {date}
+        **Screen:** {screenName}
+        **Total:** {count} annotations
+
+        ---
+
+        ### Annotation #{index}
+        **Type:** {type} | **Severity:** {severity} | **Intent:** {intent}
+        **View Path:** {viewPath}
+        **Screen:** {screenName}
+        **Position:** ({x}, {y}) — {width}×{height}pt
+        **Status:** {status}
+
+        **Feedback:** {comment}
+
+        **Thread:**
+        - [{role}] {message} ({timestamp})
+
+        ---
+      swiftui_example: |
+        extension [Annotation] {
+            func toMarkdown() -> String {
+                var md = "## UI Annotations — Simple SF\n"
+                md += "**Exported:** \(Date().formatted())\n"
+                md += "**Total:** \(count) annotations\n\n---\n\n"
+
+                for (i, ann) in enumerated() {
+                    md += "### Annotation #\(i + 1)\n"
+                    md += "**Type:** \(ann.annotationType.rawValue)"
+                    md += " | **Severity:** \(ann.severity.rawValue)"
+                    md += " | **Intent:** \(ann.intent.rawValue)\n"
+                    md += "**View Path:** `\(ann.viewPath)`\n"
+                    if let screen = ann.screenName {
+                        md += "**Screen:** \(screen)\n"
+                    }
+                    if let box = ann.boundingBox {
+                        md += "**Bounding Box:** (\(Int(box.origin.x)), \(Int(box.origin.y)))"
+                        md += " — \(Int(box.width))×\(Int(box.height))pt\n"
+                    }
+                    md += "**Status:** \(ann.status.rawValue)\n\n"
+                    md += "**Feedback:** \(ann.comment)\n\n"
+
+                    if !ann.thread.isEmpty {
+                        md += "**Thread:**\n"
+                        for msg in ann.thread {
+                            md += "- [\(msg.role.rawValue)] \(msg.content)\n"
+                        }
+                    }
+                    md += "\n---\n\n"
+                }
+                return md
+            }
+        }
+
+    - id: AN-008
+      name: View Hierarchy Path Tracking
+      category: annotation
+      description: Track element identity via SwiftUI view hierarchy paths.
+      principle: >
+        Unlike Agentation's CSS selectors (body > main > .hero > button.cta),
+        SwiftUI doesn't expose a DOM. We construct a path using View type names
+        and accessibility identifiers. Each annotatable view registers itself
+        via a preference key, building a hierarchy path like:
+        "ContentView > ProjectListView > ProjectCard[id:proj-42] > StatusBadge".
+        This path is stored in the annotation and used by AI agents to locate
+        the code.
+      swiftui_example: |
+        struct ViewPathKey: PreferenceKey {
+            static var defaultValue: String = ""
+            static func reduce(value: inout String, nextValue: () -> String) {
+                let next = nextValue()
+                if !next.isEmpty {
+                    value = value.isEmpty ? next : "\(value) > \(next)"
+                }
+            }
+        }
+
+        extension View {
+            func annotatable(_ name: String) -> some View {
+                self.preference(key: ViewPathKey.self, value: name)
+            }
+        }
+
+        // Usage:
+        ProjectCard(project: project)
+            .annotatable("ProjectCard[id:\(project.id)]")
+
+    - id: AN-009
+      name: Annotation Toolbar
+      category: annotation
+      description: Floating toolbar to toggle annotation mode, select type, export, clear.
+      principle: >
+        Inspired by Agentation's bottom-right corner toolbar. A small floating
+        action button expands into a toolbar with: toggle on/off, annotation
+        type selector, export button (copies markdown to clipboard), clear all,
+        pause animations toggle, and annotation count badge.
+      swiftui_example: |
+        struct AnnotationToolbar: View {
+            @Binding var isActive: Bool
+            @Binding var selectedType: Annotation.AnnotationType
+            @Binding var annotations: [Annotation]
+            @EnvironmentObject var annotationEnv: AnnotationEnvironment
+            @State private var isExpanded = false
+
+            var body: some View {
+                VStack(spacing: 8) {
+                    if isExpanded {
+                        // Type selector
+                        ForEach(Annotation.AnnotationType.allCases, id: \.self) { type in
+                            Button {
+                                selectedType = type
+                            } label: {
+                                Image(systemName: type.systemImage)
+                                    .foregroundColor(type == selectedType ? .white : type.color)
+                                    .frame(width: 36, height: 36)
+                                    .background(type == selectedType ? type.color : Color(.systemGray6))
+                                    .clipShape(Circle())
+                            }
+                        }
+
+                        Divider().frame(width: 36)
+
+                        // Export markdown
+                        Button {
+                            UIPasteboard.general.string = annotations.toMarkdown()
+                        } label: {
+                            Image(systemName: "doc.on.clipboard")
+                                .frame(width: 36, height: 36)
+                                .background(Color(.systemGray6))
+                                .clipShape(Circle())
+                        }
+
+                        // Clear all
+                        Button {
+                            annotations.removeAll()
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                                .frame(width: 36, height: 36)
+                                .background(Color(.systemGray6))
+                                .clipShape(Circle())
+                        }
+                    }
+
+                    // Main toggle
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            isExpanded.toggle()
+                            if isExpanded {
+                                annotationEnv.activateAnnotationMode()
+                            } else {
+                                annotationEnv.deactivateAnnotationMode()
+                            }
+                            isActive = isExpanded
+                        }
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(isActive ? Color.purple : Color(.systemGray5))
+                                .frame(width: 48, height: 48)
+                            Image(systemName: "pencil.tip.crop.circle")
+                                .font(.title2)
+                                .foregroundColor(isActive ? .white : .primary)
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            if !annotations.isEmpty {
+                                Text("\(annotations.count)")
+                                    .font(.caption2.bold())
+                                    .foregroundColor(.white)
+                                    .frame(width: 18, height: 18)
+                                    .background(.red)
+                                    .clipShape(Circle())
+                                    .offset(x: 4, y: -4)
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+            }
+        }
+
+    - id: AN-010
+      name: Annotation Status Lifecycle
+      category: annotation
+      description: >
+        Four-state lifecycle following Agentation Format Schema:
+        pending → acknowledged → resolved/dismissed.
+      lifecycle:
+        pending:
+          description: Annotation created, waiting for attention
+          marker_style: "Solid color, full opacity"
+          transitions: [acknowledged, dismissed]
+        acknowledged:
+          description: Agent/developer has seen the annotation and is working on it
+          marker_style: "Pulsing border animation"
+          transitions: [resolved, dismissed]
+        resolved:
+          description: Issue has been addressed with an optional summary
+          marker_style: "Checkmark overlay, 50% opacity"
+          transitions: [pending]  # can be reopened
+        dismissed:
+          description: Not going to be addressed, with a reason
+          marker_style: "Strikethrough, 30% opacity"
+          transitions: [pending]  # can be reopened
+
+    - id: AN-011
+      name: Annotation Persistence
+      category: annotation
+      description: Annotations are stored locally and survive app restarts.
+      principle: >
+        Annotations are serialized to JSON and stored in the app's documents
+        directory, keyed by screen name. On app launch, previously saved
+        annotations are restored. This mirrors Agentation's SQLite persistence
+        at ~/.agentation/store.db.
+      storage_path: "{documentsDir}/annotations/{screenName}.json"
+      swiftui_example: |
+        class AnnotationStore: ObservableObject {
+            @Published var annotations: [String: [Annotation]] = [:]
+
+            private let baseURL: URL = {
+                FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                    .appendingPathComponent("annotations", isDirectory: true)
+            }()
+
+            func save(screen: String) {
+                let url = baseURL.appendingPathComponent("\(screen).json")
+                try? FileManager.default.createDirectory(at: baseURL,
+                    withIntermediateDirectories: true)
+                let data = try? JSONEncoder().encode(annotations[screen] ?? [])
+                try? data?.write(to: url)
+            }
+
+            func load(screen: String) -> [Annotation] {
+                let url = baseURL.appendingPathComponent("\(screen).json")
+                guard let data = try? Data(contentsOf: url) else { return [] }
+                return (try? JSONDecoder().decode([Annotation].self, from: data)) ?? []
+            }
+        }
+
+    - id: AN-012
+      name: Annotation Composer Popover
+      category: annotation
+      description: Popover UI for creating/editing an annotation at a tapped location.
+      principle: >
+        The composer appears anchored near the tap point. It includes: annotation
+        type picker (segmented), severity picker, intent picker, comment text field,
+        and submit/cancel buttons. Follows Agentation's principle of "one issue per
+        annotation" for agent-parseable output.
+      swiftui_example: |
+        struct AnnotationComposer: View {
+            let position: CGPoint
+            let viewPath: String
+            let screenName: String
+            let onSubmit: (Annotation) -> Void
+
+            @State private var comment = ""
+            @State private var type: Annotation.AnnotationType = .comment
+            @State private var severity: Annotation.AnnotationSeverity = .suggestion
+            @State private var intent: Annotation.AnnotationIntent = .fix
+            @Environment(\.dismiss) private var dismiss
+
+            var body: some View {
+                NavigationStack {
+                    Form {
+                        Picker("Type", selection: $type) {
+                            ForEach(Annotation.AnnotationType.allCases, id: \.self) { t in
+                                Label(t.rawValue.capitalized, systemImage: t.systemImage)
+                                    .tag(t)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        Picker("Severity", selection: $severity) {
+                            Text("Blocking").tag(Annotation.AnnotationSeverity.blocking)
+                            Text("Important").tag(Annotation.AnnotationSeverity.important)
+                            Text("Suggestion").tag(Annotation.AnnotationSeverity.suggestion)
+                        }
+
+                        Picker("Intent", selection: $intent) {
+                            Text("Fix").tag(Annotation.AnnotationIntent.fix)
+                            Text("Change").tag(Annotation.AnnotationIntent.change)
+                            Text("Question").tag(Annotation.AnnotationIntent.question)
+                            Text("Approve").tag(Annotation.AnnotationIntent.approve)
+                        }
+
+                        Section("Feedback") {
+                            TextEditor(text: $comment)
+                                .frame(minHeight: 80)
+                        }
+
+                        Section {
+                            Text("View: \(viewPath)")
+                                .font(.caption).foregroundColor(.secondary)
+                        }
+                    }
+                    .navigationTitle("New Annotation")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { dismiss() }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Add") {
+                                let annotation = Annotation(
+                                    id: "ann_\(UUID().uuidString.prefix(8))",
+                                    comment: comment,
+                                    viewPath: viewPath,
+                                    timestamp: Date(),
+                                    position: position,
+                                    boundingBox: nil,
+                                    annotationType: type,
+                                    intent: intent,
+                                    severity: severity,
+                                    status: .pending,
+                                    thread: [],
+                                    screenName: screenName
+                                )
+                                onSubmit(annotation)
+                                dismiss()
+                            }
+                            .disabled(comment.isEmpty)
+                        }
+                    }
+                }
+            }
+        }
+
+  # ---------------------------------------------------------------------------
+  # PLACEHOLDER STATE MANAGEMENT
+  # ---------------------------------------------------------------------------
+  placeholder:
+    - id: PH-001
+      name: Placeholder State Machine
+      category: placeholder
+      description: Five-state lifecycle for every data-dependent component.
+      principle: >
+        Every component that displays data from the network or database has exactly
+        five possible states. The state machine transitions are deterministic and
+        must all be handled explicitly — no state should result in a blank or
+        broken UI.
+      states:
+        loading:
+          description: Data is being fetched (first load or refresh)
+          ui: Skeleton shapes with shimmer animation (see SK-001)
+          accessibility: ".accessibilityHint('Loading')"
+          transitions: [success, error, offline]
+        success:
+          description: Data loaded successfully and is being displayed
+          ui: Real content with fade-in transition (SK-006)
+          accessibility: Normal content accessibility
+          transitions: [loading]  # on pull-to-refresh
+        empty:
+          description: Request succeeded but returned no data
+          ui: Empty state illustration + call-to-action (PH-003)
+          accessibility: ".accessibilityLabel('No items') + action hint"
+          transitions: [loading]
+        error:
+          description: Request failed due to network, server, or parsing error
+          ui: Error state with empathetic copy + retry button (PH-004)
+          accessibility: ".accessibilityLabel('Error loading') + retry hint"
+          transitions: [loading]  # on retry tap
+        offline:
+          description: Device is offline, showing stale cached data or offline notice
+          ui: Stale data with "Offline" banner, or offline placeholder (PH-006)
+          accessibility: ".accessibilityHint('Showing cached data, currently offline')"
+          transitions: [loading]  # on connectivity restored
+      swiftui_example: |
+        enum DataState<T> {
+            case loading
+            case success(T)
+            case empty
+            case error(AppError)
+            case offline(staleData: T?)
+        }
+
+        struct DataStateView<T, Content: View, Empty: View, Error: View>: View {
+            let state: DataState<T>
+            @ViewBuilder let content: (T) -> Content
+            @ViewBuilder let empty: () -> Empty
+            @ViewBuilder let error: (AppError, @escaping () -> Void) -> Error
+            let onRetry: () -> Void
+
+            var body: some View {
+                switch state {
+                case .loading:
+                    SkeletonCard()
+                case .success(let data):
+                    content(data)
+                        .transition(.opacity)
+                case .empty:
+                    empty()
+                case .error(let err):
+                    error(err, onRetry)
+                case .offline(let stale):
+                    VStack(spacing: 0) {
+                        OfflineBanner()
+                        if let data = stale {
+                            content(data)
+                                .opacity(0.7)
+                        } else {
+                            OfflinePlaceholder()
+                        }
+                    }
+                }
+            }
+        }
+
+    - id: PH-002
+      name: Loading State
+      category: placeholder
+      description: Skeleton loading — see SK-001 through SK-010.
+      reference: "Skeleton Loading System (SK-001 to SK-010)"
+      rules:
+        - Show skeleton immediately (0ms delay)
+        - Skeleton geometry must match final layout
+        - Apply shimmer animation (1.5s, left-to-right)
+        - Set accessibility hint to loading context
+        - Transition to content via 300ms opacity fade
+
+    - id: PH-003
+      name: Empty State with CTA
+      category: placeholder
+      description: When data loads successfully but collection is empty.
+      principle: >
+        An empty state is an opportunity, not a dead end. Show an illustration
+        that matches the context, a friendly message explaining what would appear
+        here, and a prominent call-to-action button to create the first item.
+        Follow Peak-End Rule — make this feel inviting, not disappointing.
+      rules:
+        - Illustration: 120×120pt, contextual (not generic)
+        - Title: What this section is about ("No projects yet")
+        - Subtitle: What the user can do ("Create your first project to get started")
+        - CTA button: Primary style, verb-based ("Create Project")
+        - Never show raw "0 results" or empty tables
+      swiftui_example: |
+        struct EmptyState: View {
+            let icon: String
+            let title: String
+            let subtitle: String
+            let actionLabel: String
+            let action: () -> Void
+
+            var body: some View {
+                VStack(spacing: 16) {
+                    Image(systemName: icon)
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text(title)
+                        .font(.title3.bold())
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                    Button(action: action) {
+                        Label(actionLabel, systemImage: "plus")
+                            .font(.body.bold())
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top, 8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(40)
+            }
+        }
+
+        // Usage:
+        EmptyState(
+            icon: "folder.badge.plus",
+            title: "No projects yet",
+            subtitle: "Create your first project to start tracking your work",
+            actionLabel: "Create Project",
+            action: { showCreateProject = true }
+        )
+
+    - id: PH-004
+      name: Error State with Retry
+      category: placeholder
+      description: User-facing error with empathetic copy, never raw technical errors.
+      principle: >
+        Errors must be empathetic and actionable. Show WHAT went wrong in human
+        terms (not HTTP 500 or "NSURLError -1009"), WHY it might have happened,
+        and WHAT the user can do about it. Provide a retry button with clear
+        labeling. Follow Postel's Law — be liberal in what you accept from the
+        user's mental model.
+      rules:
+        - Never show raw error codes, stack traces, or technical messages
+        - Use empathetic copy ("Something went wrong" not "Error 500")
+        - Explain in simple terms ("We couldn't reach the server")
+        - Provide retry button as primary action
+        - Optionally provide "Contact Support" as secondary action
+        - Log the technical error to console/analytics, not to the user
+      error_copy_examples:
+        network_timeout: >
+          Title: "Taking longer than expected"
+          Subtitle: "The server is slow to respond. Check your connection and try again."
+        server_error: >
+          Title: "Something went wrong"
+          Subtitle: "We're having trouble on our end. Please try again in a moment."
+        parsing_error: >
+          Title: "Unexpected response"
+          Subtitle: "We received data we couldn't understand. This has been reported."
+        not_found: >
+          Title: "Not found"
+          Subtitle: "This item may have been moved or deleted."
+      swiftui_example: |
+        struct ErrorState: View {
+            let error: AppError
+            let onRetry: () -> Void
+
+            var body: some View {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 48))
+                        .foregroundColor(.orange)
+                    Text(error.userTitle)
+                        .font(.title3.bold())
+                    Text(error.userMessage)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                    Button(action: onRetry) {
+                        Label("Try Again", systemImage: "arrow.clockwise")
+                            .font(.body.bold())
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top, 8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(40)
+            }
+        }
+
+        enum AppError: Error {
+            case networkTimeout
+            case serverError(statusCode: Int)
+            case decodingFailed
+            case notFound
+            case offline
+
+            var userTitle: String {
+                switch self {
+                case .networkTimeout: "Taking longer than expected"
+                case .serverError:    "Something went wrong"
+                case .decodingFailed: "Unexpected response"
+                case .notFound:       "Not found"
+                case .offline:        "You're offline"
+                }
+            }
+
+            var userMessage: String {
+                switch self {
+                case .networkTimeout:
+                    "The server is slow to respond. Check your connection and try again."
+                case .serverError(let code):
+                    "We're having trouble on our end (ref: \(code)). Please try again in a moment."
+                case .decodingFailed:
+                    "We received data we couldn't understand. This has been reported."
+                case .notFound:
+                    "This item may have been moved or deleted."
+                case .offline:
+                    "Connect to the internet to load fresh data."
+                }
+            }
+        }
+
+    - id: PH-005
+      name: Empty vs Error Distinction
+      category: placeholder
+      description: Rules for correctly distinguishing empty results from errors.
+      rules:
+        - "HTTP 200 + empty array → Empty state (PH-003)"
+        - "HTTP 200 + null/missing field → Treat as empty, not error"
+        - "HTTP 4xx/5xx → Error state (PH-004)"
+        - "Network unreachable → Offline state (PH-006)"
+        - "JSON decode failure → Error state with 'Unexpected response' copy"
+        - "Timeout (>8s) → Error state with 'Taking longer than expected' copy"
+
+    - id: PH-006
+      name: Offline State with Stale Cache
+      category: placeholder
+      description: Show cached data with "offline" indicator when device is offline.
+      principle: >
+        Users shouldn't see a blank screen just because they're in an elevator.
+        If cached data exists, show it at reduced opacity (0.7) with a prominent
+        "Offline" banner. If no cache exists, show a dedicated offline placeholder
+        explaining the situation and offering to retry when connected.
+      swiftui_example: |
+        struct OfflineBanner: View {
+            var body: some View {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                        .font(.caption)
+                    Text("You're offline — showing cached data")
+                        .font(.caption)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.15))
+                .foregroundColor(.orange)
+            }
+        }
+
+        struct OfflinePlaceholder: View {
+            var body: some View {
+                VStack(spacing: 16) {
+                    Image(systemName: "wifi.slash")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("No internet connection")
+                        .font(.title3.bold())
+                    Text("Connect to the internet to load this content. We'll refresh automatically when you're back online.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(40)
+            }
+        }
+
+    - id: PH-007
+      name: Pull-to-Refresh Integration
+      category: placeholder
+      description: Pull-to-refresh transitions from success back to loading, then re-resolves.
+      rules:
+        - Use .refreshable { } modifier on ScrollView/List
+        - During refresh, keep showing current content (don't flash skeleton)
+        - Show inline ProgressView at top during refresh
+        - On success, smoothly update content in-place
+        - On error during refresh, show toast/banner (don't replace content with error state)
+      swiftui_example: |
+        List {
+            ForEach(projects) { project in
+                ProjectRow(project: project)
+            }
+        }
+        .refreshable {
+            do {
+                projects = try await api.fetchProjects()
+            } catch {
+                showErrorToast = true  // don't replace content
+            }
+        }
+
+    - id: PH-008
+      name: Placeholder State Testing Checklist
+      category: placeholder
+      description: Verification checklist for placeholder state implementation.
+      checklist:
+        - "[ ] Loading: Skeleton appears instantly (no blank flash)"
+        - "[ ] Loading: Skeleton matches final layout geometry"
+        - "[ ] Loading: Shimmer animation is visible and smooth"
+        - "[ ] Loading: VoiceOver announces 'Loading...'"
+        - "[ ] Loading → Success: 300ms opacity fade transition"
+        - "[ ] Success: Real content displays correctly"
+        - "[ ] Empty: Illustration + title + subtitle + CTA button"
+        - "[ ] Empty: CTA button triggers correct action"
+        - "[ ] Error: Empathetic copy (no raw error codes)"
+        - "[ ] Error: Retry button works and re-triggers load"
+        - "[ ] Error: Technical details logged (not shown to user)"
+        - "[ ] Offline + cache: Stale data shown with offline banner"
+        - "[ ] Offline + no cache: Offline placeholder with explanation"
+        - "[ ] Pull-to-refresh: Doesn't flash skeleton over existing content"
+        - "[ ] Timeout (>8s): Skeleton transitions to error state"
+        - "[ ] All states: Accessibility labels and hints set"
+
+  # ---------------------------------------------------------------------------
+  # NETWORK RESILIENCE
+  # ---------------------------------------------------------------------------
+  network:
+    - id: NR-001
+      name: gzip Compression
+      category: network
+      description: Enable gzip compression for all SimpleSFServer REST API responses.
+      principle: >
+        REST API responses (JSON) compress extremely well — typically 60-80% reduction.
+        The server must set Content-Encoding: gzip and the client must send
+        Accept-Encoding: gzip. URLSession handles decompression transparently,
+        but the server (Vapor) needs explicit middleware configuration.
+      server_vapor: |
+        // In configure.swift
+        app.middleware.use(GzipMiddleware())
+
+        // Custom middleware (Vapor doesn't bundle gzip by default)
+        struct GzipMiddleware: AsyncMiddleware {
+            func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+                let response = try await next.respond(to: request)
+                guard request.headers[.acceptEncoding].contains(where: { $0.contains("gzip") }),
+                      let body = response.body.data else {
+                    return response
+                }
+                let compressed = try body.gzipCompressed()
+                response.body = .init(data: compressed)
+                response.headers.replaceOrAdd(name: .contentEncoding, value: "gzip")
+                response.headers.replaceOrAdd(name: .vary, value: "Accept-Encoding")
+                return response
+            }
+        }
+      client_swift: |
+        // URLSession handles Accept-Encoding: gzip automatically
+        // No client-side code needed — iOS adds the header by default
+        // and decompresses transparently.
+
+    - id: NR-002
+      name: Exponential Backoff with Jitter
+      category: network
+      description: "Retry strategy: 500ms × 2^i + random(0-200ms), max 3 retries."
+      principle: >
+        Failed requests should be retried with exponential backoff to avoid
+        thundering herd problems. Add random jitter (0-200ms) to prevent
+        synchronized retry storms from multiple clients. Cap at 3 retries
+        (500ms → 1.2s → 2.6s worst case). Only retry on transient errors
+        (5xx, timeout, network error). Never retry on 4xx (client errors).
+      formula: "delay = min(500ms × 2^attempt, 4000ms) + random(0...200ms)"
+      retry_schedule:
+        attempt_0: "Immediate request"
+        attempt_1: "500ms + jitter (500-700ms)"
+        attempt_2: "1000ms + jitter (1000-1200ms)"
+        attempt_3: "2000ms + jitter (2000-2200ms)"
+        total_max: "~4.1s of waiting + request times"
+      retryable_errors:
+        - "HTTP 500, 502, 503, 504 (server errors)"
+        - "URLError.timedOut"
+        - "URLError.networkConnectionLost"
+        - "URLError.notConnectedToInternet (transition to offline state)"
+      non_retryable:
+        - "HTTP 400, 401, 403, 404, 409, 422 (client errors)"
+        - "URLError.cancelled (user initiated)"
+        - "DecodingError (response is malformed, retrying won't help)"
+      swiftui_example: |
+        actor RetryableClient {
+            private let session: URLSession
+            private let maxRetries = 3
+            private let baseDelay: UInt64 = 500_000_000 // 500ms in nanoseconds
+
+            func fetch<T: Decodable>(_ request: URLRequest) async throws -> T {
+                var lastError: Error?
+
+                for attempt in 0...maxRetries {
+                    if attempt > 0 {
+                        let delay = baseDelay * UInt64(pow(2.0, Double(attempt - 1)))
+                        let jitter = UInt64.random(in: 0...200_000_000)
+                        try await Task.sleep(nanoseconds: delay + jitter)
+                    }
+
+                    do {
+                        let (data, response) = try await session.data(for: request)
+                        guard let http = response as? HTTPURLResponse else {
+                            throw AppError.serverError(statusCode: 0)
+                        }
+
+                        switch http.statusCode {
+                        case 200...299:
+                            return try JSONDecoder().decode(T.self, from: data)
+                        case 400...499:
+                            throw AppError.clientError(statusCode: http.statusCode)
+                        case 500...599:
+                            lastError = AppError.serverError(statusCode: http.statusCode)
+                            continue // retry
+                        default:
+                            throw AppError.serverError(statusCode: http.statusCode)
+                        }
+                    } catch let error as URLError where error.code == .timedOut
+                        || error.code == .networkConnectionLost {
+                        lastError = error
+                        continue // retry
+                    } catch let error as URLError where error.code == .notConnectedToInternet {
+                        throw AppError.offline // don't retry, surface immediately
+                    } catch let error as AppError where isClientError(error) {
+                        throw error // don't retry client errors
+                    } catch {
+                        lastError = error
+                        if attempt == maxRetries { break }
+                        continue
+                    }
+                }
+
+                throw lastError ?? AppError.networkTimeout
+            }
+
+            private func isClientError(_ error: AppError) -> Bool {
+                if case .clientError = error { return true }
+                return false
+            }
+        }
+
+    - id: NR-003
+      name: Request Timeout
+      category: network
+      description: "8-second timeout for all API requests (Swift URLSession equivalent of AbortSignal.timeout)."
+      principle: >
+        No request should hang indefinitely. Set timeoutIntervalForRequest to 8
+        seconds on URLSessionConfiguration. This is the Swift equivalent of
+        JavaScript's AbortSignal.timeout(8000). After 8s, the request fails
+        with URLError.timedOut and triggers either retry (NR-002) or error
+        state (PH-004).
+      swiftui_example: |
+        extension URLSession {
+            static let api: URLSession = {
+                let config = URLSessionConfiguration.default
+                config.timeoutIntervalForRequest = 8    // 8s per request
+                config.timeoutIntervalForResource = 30  // 30s total for retries
+                config.waitsForConnectivity = false      // fail fast if offline
+                config.requestCachePolicy = .reloadRevalidatingCacheData
+                return URLSession(configuration: config)
+            }()
+        }
+      relationship: >
+        Works with NR-002 (backoff): if a single attempt times out at 8s, the
+        retry system waits (backoff + jitter) then tries again, up to 3 times.
+        Total worst case: 8s + 0.7s + 8s + 1.2s + 8s + 2.2s + 8s = ~36s before
+        showing error state.
+
+    - id: NR-004
+      name: Offline Detection
+      category: network
+      description: Detect network status and toggle between online/offline UI states.
+      principle: >
+        Use NWPathMonitor to observe network reachability. When the device goes
+        offline, immediately transition data views to offline state (PH-006).
+        When connectivity resumes, automatically trigger a refresh. Debounce
+        status changes by 500ms to avoid flicker from brief connectivity drops.
+      swiftui_example: |
+        import Network
+
+        @MainActor
+        class NetworkMonitor: ObservableObject {
+            @Published var isOnline = true
+            private let monitor = NWPathMonitor()
+            private let queue = DispatchQueue(label: "NetworkMonitor")
+            private var debounceTask: Task<Void, Never>?
+
+            init() {
+                monitor.pathUpdateHandler = { [weak self] path in
+                    self?.debounceTask?.cancel()
+                    self?.debounceTask = Task { @MainActor [weak self] in
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
+                        self?.isOnline = (path.status == .satisfied)
+                    }
+                }
+                monitor.start(queue: queue)
+            }
+
+            deinit { monitor.cancel() }
+        }
+
+        // Usage in views:
+        struct ProjectListView: View {
+            @EnvironmentObject var network: NetworkMonitor
+            @State private var state: DataState<[Project]> = .loading
+
+            var body: some View {
+                DataStateView(state: state, ...) { ... }
+                    .onChange(of: network.isOnline) { _, isOnline in
+                        if isOnline && state.isOffline {
+                            Task { await refresh() }
+                        }
+                    }
+            }
+        }
+
+    - id: NR-005
+      name: Stale-While-Revalidate Cache
+      category: network
+      description: Show cached data immediately while fetching fresh data in the background.
+      principle: >
+        For returning users, the best loading experience is no loading at all.
+        On app launch or screen navigation, immediately display cached data
+        (if available) while firing a background refresh. When fresh data arrives,
+        update the UI with a subtle cross-fade. If the refresh fails silently
+        (server error while cached data is still valid), keep showing cached data.
+      swiftui_example: |
+        actor APICache {
+            private var cache: [String: CacheEntry] = [:]
+
+            struct CacheEntry {
+                let data: Data
+                let timestamp: Date
+                let maxAge: TimeInterval
+            }
+
+            func get<T: Decodable>(_ key: String, type: T.Type) -> T? {
+                guard let entry = cache[key],
+                      Date().timeIntervalSince(entry.timestamp) < entry.maxAge else {
+                    return nil
+                }
+                return try? JSONDecoder().decode(T.self, from: entry.data)
+            }
+
+            func set<T: Encodable>(_ key: String, value: T, maxAge: TimeInterval = 300) {
+                guard let data = try? JSONEncoder().encode(value) else { return }
+                cache[key] = CacheEntry(data: data, timestamp: Date(), maxAge: maxAge)
+            }
+
+            func staleGet<T: Decodable>(_ key: String, type: T.Type) -> T? {
+                guard let entry = cache[key] else { return nil }
+                return try? JSONDecoder().decode(T.self, from: entry.data)
+            }
+        }
+
+        // Usage pattern:
+        func loadProjects() async {
+            // L0: Show cache immediately
+            if let cached: [Project] = await cache.get("projects", type: [Project].self) {
+                state = .success(cached)
+            } else if let stale: [Project] = await cache.staleGet("projects", type: [Project].self) {
+                state = .offline(staleData: stale)
+            } else {
+                state = .loading
+            }
+
+            // L1: Fetch fresh in background
+            do {
+                let fresh: [Project] = try await client.fetch(projectsRequest)
+                await cache.set("projects", value: fresh)
+                withAnimation(.easeOut(duration: 0.3)) { state = .success(fresh) }
+            } catch is AppError where state.hasData {
+                // Keep showing stale data, don't overwrite with error
+            } catch {
+                if !state.hasData { state = .error(error as? AppError ?? .serverError(statusCode: 0)) }
+            }
+        }
+
+    - id: NR-006
+      name: Request Deduplication
+      category: network
+      description: Prevent duplicate in-flight requests for the same resource.
+      principle: >
+        If multiple views request the same endpoint simultaneously (e.g., during
+        navigation transitions), only one network request should fire. Subsequent
+        callers await the same Task. Use an actor-isolated dictionary of in-flight
+        tasks keyed by request URL.
+      swiftui_example: |
+        actor RequestDeduplicator {
+            private var inFlight: [String: Task<Data, Error>] = [:]
+
+            func deduplicated(_ request: URLRequest) async throws -> Data {
+                let key = request.url?.absoluteString ?? UUID().uuidString
+
+                if let existing = inFlight[key] {
+                    return try await existing.value
+                }
+
+                let task = Task<Data, Error> {
+                    defer { inFlight[key] = nil }
+                    let (data, _) = try await URLSession.api.data(for: request)
+                    return data
+                }
+
+                inFlight[key] = task
+                return try await task.value
+            }
+        }
+
+    - id: NR-007
+      name: Network Resilience Testing Checklist
+      category: network
+      description: Verification checklist for network resilience implementation.
+      checklist:
+        - "[ ] Server sends Content-Encoding: gzip for JSON responses"
+        - "[ ] Client automatically decompresses (URLSession default)"
+        - "[ ] Retry fires on 5xx with exponential backoff"
+        - "[ ] Retry does NOT fire on 4xx client errors"
+        - "[ ] Jitter is added to prevent synchronized retries"
+        - "[ ] Max 3 retries before surfacing error to user"
+        - "[ ] Request timeout is 8 seconds"
+        - "[ ] Offline detection updates UI within 500ms"
+        - "[ ] Going online auto-triggers refresh"
+        - "[ ] Stale cache is shown when offline with banner"
+        - "[ ] Duplicate in-flight requests are coalesced"
+        - "[ ] Error states show empathetic copy, not raw errors"
+        - "[ ] Network errors logged to analytics (not shown to user)"
+        - "[ ] Charles Proxy / Network Link Conditioner tested"
