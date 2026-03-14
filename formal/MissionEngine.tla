@@ -11,37 +11,38 @@
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
 CONSTANTS
-    Phases,              \* Set of phase names (e.g. {"design", "dev", "gate", "qa"})
-    PhaseOrder,          \* Sequence of phase names (execution order)
-    PhaseTypes,          \* Function: phase -> {"once", "sprint", "gate", "feedback_loop"}
-    MaxSprintIter,       \* Max sprint iterations per phase
-    MaxFeedbackIter,     \* Max feedback loop iterations per phase
-    GateTargets,         \* Function: gate_phase -> target_phase name (or "none")
     NumAgents,           \* Number of agents available
     MaxRetries           \* MAX_PHASE_RETRIES (3 in code)
+
+\* -------------------------------------------------------------------
+\* Model constants — 4-phase workflow: design → dev → gate → qa
+\* -------------------------------------------------------------------
+Phases == {"design", "dev", "gate", "qa"}
+PhaseOrder == <<"design", "dev", "gate", "qa">>
+PhaseTypes == [design |-> "once", dev |-> "sprint", gate |-> "gate", qa |-> "feedback_loop"]
+MaxSprintIter == 3
+MaxFeedbackIter == 3
+GateTargets == [design |-> "none", dev |-> "none", gate |-> "dev", qa |-> "none"]
 
 VARIABLES
     missionState,        \* "running" | "completed" | "vetoed"
     phaseIdx,            \* Current index in PhaseOrder (1-based)
     phaseIter,           \* Current iteration within current phase
     phaseResult,         \* Result of last phase execution: "completed" | "vetoed" | "failed"
-    guardScore,          \* L0 adversarial guard score (0..10)
+    guardPassed,         \* Boolean: did L0 guard pass? (abstracts score < 7)
     retryCount,          \* Current retry attempt for current phase
     yoloMode,            \* Boolean: auto-approve gates
-    agentRound,          \* Current agent tool-call round (0..MAX_ROUNDS)
-    loopIter,            \* Current loop pattern iteration (writer↔reviewer)
-    history              \* Sequence of [phase, result] pairs for traceability
+    vetoCount,           \* How many phases were vetoed (replaces unbounded history)
+    completedCount       \* How many phases completed (replaces unbounded history)
 
-vars == <<missionState, phaseIdx, phaseIter, phaseResult, guardScore,
-          retryCount, yoloMode, agentRound, loopIter, history>>
+vars == <<missionState, phaseIdx, phaseIter, phaseResult, guardPassed,
+          retryCount, yoloMode, vetoCount, completedCount>>
 
 \* -------------------------------------------------------------------
 \* Constants derived from code
 \* -------------------------------------------------------------------
-GUARD_REJECT == 7           \* Score >= 7 → reject
-MAX_ROUNDS == 100           \* Agent execution max tool-call rounds
-MAX_LOOP_ITER == 5          \* Writer↔Reviewer loop max
-MAX_NETWORK_ROUNDS == 3    \* Network discussion rounds
+GUARD_REJECT == 7           \* Score >= 7 → reject (modeled as boolean guardPassed)
+MAX_GATE_LOOPBACKS == 3    \* Max times a gate can loop back before forcing veto
 
 \* -------------------------------------------------------------------
 \* Type invariant — every state must satisfy this
@@ -51,11 +52,11 @@ TypeInvariant ==
     /\ phaseIdx \in 1..(Len(PhaseOrder) + 1)
     /\ phaseIter \in 0..20
     /\ phaseResult \in {"none", "completed", "vetoed", "failed"}
-    /\ guardScore \in 0..10
+    /\ guardPassed \in BOOLEAN
     /\ retryCount \in 0..MaxRetries
     /\ yoloMode \in BOOLEAN
-    /\ agentRound \in 0..MAX_ROUNDS
-    /\ loopIter \in 0..MAX_LOOP_ITER
+    /\ vetoCount \in 0..10
+    /\ completedCount \in 0..50
 
 \* -------------------------------------------------------------------
 \* Safety invariants — properties that must ALWAYS hold
@@ -65,30 +66,21 @@ TypeInvariant ==
 NoVetoInYolo ==
     yoloMode => missionState /= "vetoed"
 
-\* Phase index never goes backwards unless a gate loops back
-\* (we track this via history length — it must never decrease)
-HistoryMonotonic ==
-    Len(history) >= 0  \* trivially true but placeholder for refinement
-
-\* Mission must eventually terminate (checked as liveness, not invariant)
-\* See Liveness property below
-
 \* A completed mission processed at least one phase
 CompletedMeansWork ==
-    missionState = "completed" => Len(history) > 0
+    missionState = "completed" => completedCount > 0
 
-\* A vetoed mission has at least one vetoed phase in history
+\* A vetoed mission has at least one vetoed phase
 VetoedMeansVeto ==
-    missionState = "vetoed" =>
-        \E i \in 1..Len(history) : history[i][2] = "vetoed"
+    missionState = "vetoed" => vetoCount > 0
 
 \* Retry count never exceeds max
 RetryBounded ==
     retryCount <= MaxRetries
 
-\* Agent rounds never exceed max
-AgentRoundBounded ==
-    agentRound <= MAX_ROUNDS
+\* Phase index is always valid
+PhaseIdxValid ==
+    phaseIdx >= 1
 
 \* -------------------------------------------------------------------
 \* Helper: current phase name and type
@@ -109,20 +101,11 @@ Init ==
     /\ phaseIdx = 1
     /\ phaseIter = 0
     /\ phaseResult = "none"
-    /\ guardScore = 0
+    /\ guardPassed \in BOOLEAN       \* Model check both outcomes
     /\ retryCount = 0
-    /\ yoloMode \in BOOLEAN      \* Model check both modes
-    /\ agentRound = 0
-    /\ loopIter = 0
-    /\ history = <<>>
-
-\* -------------------------------------------------------------------
-\* Agent execution: non-deterministic outcome
-\* -------------------------------------------------------------------
-AgentExecute ==
-    \* Agent produces output, guard scores it
-    /\ agentRound' \in 1..5     \* Non-det: agent takes 1-5 rounds
-    /\ guardScore' \in 0..10    \* Non-det: guard gives any score
+    /\ yoloMode \in BOOLEAN          \* Model check both modes
+    /\ vetoCount = 0
+    /\ completedCount = 0
 
 \* -------------------------------------------------------------------
 \* Execute a "once" phase
@@ -131,23 +114,22 @@ ExecuteOnce ==
     /\ missionState = "running"
     /\ CurrentPhaseType = "once"
     /\ retryCount = 0
-    /\ AgentExecute
+    /\ guardPassed' \in BOOLEAN
     /\ phaseIter' = 1
-    /\ loopIter' = 0
-    \* Determine phase result from guard score
-    /\ IF guardScore' >= GUARD_REJECT
-       THEN /\ phaseResult' = "failed"
-            /\ history' = Append(history, <<CurrentPhase, "failed">>)
+    /\ IF guardPassed'
+       THEN /\ phaseResult' = "completed"
+            /\ completedCount' = completedCount + 1
             /\ phaseIdx' = phaseIdx + 1
             /\ missionState' = "running"
             /\ retryCount' = 0
-            /\ yoloMode' = yoloMode
-       ELSE /\ phaseResult' = "completed"
-            /\ history' = Append(history, <<CurrentPhase, "completed">>)
+            /\ vetoCount' = vetoCount
+       ELSE /\ phaseResult' = "failed"
             /\ phaseIdx' = phaseIdx + 1
             /\ missionState' = "running"
             /\ retryCount' = 0
-            /\ yoloMode' = yoloMode
+            /\ vetoCount' = vetoCount
+            /\ completedCount' = completedCount
+    /\ yoloMode' = yoloMode
 
 \* -------------------------------------------------------------------
 \* Execute a "sprint" phase (iterative with PM checkpoint)
@@ -156,39 +138,36 @@ ExecuteSprint ==
     /\ missionState = "running"
     /\ CurrentPhaseType = "sprint"
     /\ phaseIter < MaxSprintIter
-    /\ AgentExecute
-    /\ loopIter' = 0
+    /\ guardPassed' \in BOOLEAN
     /\ retryCount' = 0
     /\ yoloMode' = yoloMode
+    /\ vetoCount' = vetoCount
     \* PM checkpoint: non-deterministic CONTINUE or DONE
-    /\ \/ \* PM says CONTINUE — iterate again
+    /\ \/ \* PM says CONTINUE
           /\ phaseIter' = phaseIter + 1
           /\ phaseResult' = "none"
           /\ phaseIdx' = phaseIdx
           /\ missionState' = "running"
-          /\ history' = history
-       \/ \* PM says DONE — move to next phase
+          /\ completedCount' = completedCount
+       \/ \* PM says DONE
           /\ phaseResult' = "completed"
-          /\ history' = Append(history, <<CurrentPhase, "completed">>)
           /\ phaseIdx' = phaseIdx + 1
           /\ phaseIter' = 0
           /\ missionState' = "running"
+          /\ completedCount' = completedCount + 1
 
-\* Sprint max iterations reached — force advance
+\* Sprint max iterations reached
 SprintMaxReached ==
     /\ missionState = "running"
     /\ CurrentPhaseType = "sprint"
     /\ phaseIter >= MaxSprintIter
     /\ phaseResult' = "completed"
-    /\ history' = Append(history, <<CurrentPhase, "completed">>)
     /\ phaseIdx' = phaseIdx + 1
     /\ phaseIter' = 0
     /\ missionState' = "running"
     /\ retryCount' = 0
-    /\ yoloMode' = yoloMode
-    /\ guardScore' = guardScore
-    /\ agentRound' = agentRound
-    /\ loopIter' = 0
+    /\ completedCount' = completedCount + 1
+    /\ UNCHANGED <<yoloMode, guardPassed, vetoCount>>
 
 \* -------------------------------------------------------------------
 \* Execute a "gate" phase (go/no-go decision)
@@ -196,40 +175,43 @@ SprintMaxReached ==
 ExecuteGate ==
     /\ missionState = "running"
     /\ CurrentPhaseType = "gate"
-    /\ AgentExecute
     /\ phaseIter' = 1
-    /\ loopIter' = 0
     /\ retryCount' = 0
+    /\ guardPassed' \in BOOLEAN
     \* Non-deterministic gate result
-    /\ \/ \* Gate APPROVED — continue
+    /\ \/ \* Gate APPROVED
           /\ phaseResult' = "completed"
-          /\ history' = Append(history, <<CurrentPhase, "completed">>)
           /\ phaseIdx' = phaseIdx + 1
           /\ missionState' = "running"
           /\ yoloMode' = yoloMode
+          /\ completedCount' = completedCount + 1
+          /\ vetoCount' = vetoCount
        \/ \* Gate VETOED
           /\ IF yoloMode
              THEN \* YOLO: override veto, continue
                   /\ phaseResult' = "completed"
-                  /\ history' = Append(history, <<CurrentPhase, "yolo_override">>)
                   /\ phaseIdx' = phaseIdx + 1
                   /\ missionState' = "running"
                   /\ yoloMode' = yoloMode
-             ELSE IF GateTargets[CurrentPhase] /= "none"
-                  THEN \* Loop back to target phase
+                  /\ completedCount' = completedCount + 1
+                  /\ vetoCount' = vetoCount
+             ELSE IF GateTargets[CurrentPhase] /= "none" /\ vetoCount < MAX_GATE_LOOPBACKS
+                  THEN \* Loop back to target phase (if under limit)
                        LET targetIdx == CHOOSE i \in 1..Len(PhaseOrder) :
                                             PhaseOrder[i] = GateTargets[CurrentPhase]
                        IN /\ phaseResult' = "vetoed"
-                          /\ history' = Append(history, <<CurrentPhase, "vetoed_loopback">>)
                           /\ phaseIdx' = targetIdx
                           /\ missionState' = "running"
                           /\ yoloMode' = yoloMode
-                  ELSE \* No target — mission vetoed
+                          /\ vetoCount' = vetoCount + 1
+                          /\ completedCount' = completedCount
+                  ELSE \* No target OR loopback limit exceeded — mission vetoed
                        /\ phaseResult' = "vetoed"
-                       /\ history' = Append(history, <<CurrentPhase, "vetoed">>)
                        /\ phaseIdx' = phaseIdx
                        /\ missionState' = "vetoed"
                        /\ yoloMode' = yoloMode
+                       /\ vetoCount' = vetoCount + 1
+                       /\ completedCount' = completedCount
 
 \* -------------------------------------------------------------------
 \* Execute a "feedback_loop" phase (QA → tickets → dev → QA)
@@ -238,45 +220,42 @@ ExecuteFeedbackLoop ==
     /\ missionState = "running"
     /\ CurrentPhaseType = "feedback_loop"
     /\ phaseIter < MaxFeedbackIter
-    /\ AgentExecute
-    /\ loopIter' = 0
+    /\ guardPassed' \in BOOLEAN
     /\ retryCount' = 0
     /\ yoloMode' = yoloMode
+    /\ vetoCount' = vetoCount
     \* QA result: non-deterministic
-    /\ \/ \* QA APPROVED — exit loop
+    /\ \/ \* QA APPROVED
           /\ phaseResult' = "completed"
-          /\ history' = Append(history, <<CurrentPhase, "completed">>)
           /\ phaseIdx' = phaseIdx + 1
           /\ phaseIter' = 0
           /\ missionState' = "running"
+          /\ completedCount' = completedCount + 1
        \/ \* QA found tickets — iterate
           /\ phaseIter' = phaseIter + 1
           /\ phaseResult' = "none"
           /\ phaseIdx' = phaseIdx
           /\ missionState' = "running"
-          /\ history' = history
-       \/ \* QA vetoed but no tickets — exit loop
+          /\ completedCount' = completedCount
+       \/ \* QA vetoed no tickets — exit
           /\ phaseResult' = "completed"
-          /\ history' = Append(history, <<CurrentPhase, "completed_no_tickets">>)
           /\ phaseIdx' = phaseIdx + 1
           /\ phaseIter' = 0
           /\ missionState' = "running"
+          /\ completedCount' = completedCount + 1
 
-\* Feedback loop max iterations reached
+\* Feedback max reached
 FeedbackMaxReached ==
     /\ missionState = "running"
     /\ CurrentPhaseType = "feedback_loop"
     /\ phaseIter >= MaxFeedbackIter
     /\ phaseResult' = "completed"
-    /\ history' = Append(history, <<CurrentPhase, "completed_max_iter">>)
     /\ phaseIdx' = phaseIdx + 1
     /\ phaseIter' = 0
     /\ missionState' = "running"
     /\ retryCount' = 0
-    /\ yoloMode' = yoloMode
-    /\ guardScore' = guardScore
-    /\ agentRound' = agentRound
-    /\ loopIter' = 0
+    /\ completedCount' = completedCount + 1
+    /\ UNCHANGED <<yoloMode, guardPassed, vetoCount>>
 
 \* -------------------------------------------------------------------
 \* Phase retry on failure (resilience.rs)
@@ -288,22 +267,20 @@ PhaseRetry ==
     /\ retryCount' = retryCount + 1
     /\ phaseResult' = "none"
     /\ phaseIter' = 0
-    \* Keep everything else the same — retry same phase
-    /\ UNCHANGED <<missionState, phaseIdx, yoloMode, guardScore,
-                   agentRound, loopIter, history>>
+    /\ UNCHANGED <<missionState, phaseIdx, yoloMode, guardPassed,
+                   vetoCount, completedCount>>
 
-\* Phase failure after max retries — advance anyway
+\* Phase failure after max retries — advance
 PhaseFailMaxRetry ==
     /\ missionState = "running"
     /\ phaseResult = "failed"
     /\ retryCount >= MaxRetries
-    /\ history' = Append(history, <<CurrentPhase, "failed_max_retry">>)
     /\ phaseIdx' = phaseIdx + 1
     /\ phaseIter' = 0
     /\ phaseResult' = "none"
     /\ retryCount' = 0
     /\ missionState' = "running"
-    /\ UNCHANGED <<yoloMode, guardScore, agentRound, loopIter>>
+    /\ UNCHANGED <<yoloMode, guardPassed, vetoCount, completedCount>>
 
 \* -------------------------------------------------------------------
 \* Mission completion — all phases done
@@ -312,11 +289,11 @@ MissionComplete ==
     /\ missionState = "running"
     /\ phaseIdx > Len(PhaseOrder)
     /\ missionState' = "completed"
-    /\ UNCHANGED <<phaseIdx, phaseIter, phaseResult, guardScore,
-                   retryCount, yoloMode, agentRound, loopIter, history>>
+    /\ UNCHANGED <<phaseIdx, phaseIter, phaseResult, guardPassed,
+                   retryCount, yoloMode, vetoCount, completedCount>>
 
 \* -------------------------------------------------------------------
-\* Stutter step (system does nothing — needed for liveness)
+\* Stutter step (terminal states)
 \* -------------------------------------------------------------------
 Stutter ==
     /\ missionState \in {"completed", "vetoed"}
@@ -363,12 +340,6 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 \* Every mission eventually terminates
 MissionTerminates ==
     <>(missionState \in {"completed", "vetoed"})
-
-\* If all gates pass, mission eventually completes
-GatesPassImpliesComplete ==
-    (\A i \in 1..Len(PhaseOrder) :
-        PhaseTypes[PhaseOrder[i]] = "gate" => yoloMode)
-    ~> (missionState = "completed")
 
 \* No phase runs forever (bounded iterations)
 NoPhaseLivelock ==

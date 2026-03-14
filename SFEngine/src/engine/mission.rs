@@ -82,6 +82,8 @@ async fn execute_workflow_plan(
     let mut phase_outputs: Vec<String> = Vec::new();
     let mut veto_conditions: Option<String> = None;
     let mut mission_vetoed = false;
+    let mut gate_loopback_count: usize = 0;
+    const MAX_GATE_LOOPBACKS: usize = 3;
 
     let mut phase_idx: usize = 0;
 
@@ -200,16 +202,23 @@ async fn execute_workflow_plan(
                         let yolo = YOLO_MODE.load(Ordering::Relaxed);
 
                         if !yolo {
-                            // Loop back to the on_veto phase
+                            // Loop back to the on_veto phase (with limit)
                             if let Some(target) = on_veto {
-                                if let Some(target_idx) = plan.phases.iter().position(|p| p.name == *target) {
+                                if gate_loopback_count < MAX_GATE_LOOPBACKS {
+                                    if let Some(target_idx) = plan.phases.iter().position(|p| p.name == *target) {
+                                        gate_loopback_count += 1;
+                                        on_event("engine", AgentEvent::Response {
+                                            content: format!("  GATE VETO — retour a la phase '{}' (tentative {}/{})", target, gate_loopback_count, MAX_GATE_LOOPBACKS),
+                                        });
+                                        veto_conditions = Some(truncate_ctx(&output, 1500).to_string());
+                                        phase_outputs.push(format!("[{} VETO->{}] {}", phase_def.name, target, output));
+                                        phase_idx = target_idx;
+                                        continue; // skip phase_idx increment
+                                    }
+                                } else {
                                     on_event("engine", AgentEvent::Response {
-                                        content: format!("  GATE VETO — retour a la phase '{}'", target),
+                                        content: format!("  GATE VETO — limite de {} loopbacks atteinte, mission arretee", MAX_GATE_LOOPBACKS),
                                     });
-                                    veto_conditions = Some(truncate_ctx(&output, 1500).to_string());
-                                    phase_outputs.push(format!("[{} VETO->{}] {}", phase_def.name, target, output));
-                                    phase_idx = target_idx;
-                                    continue; // skip phase_idx increment
                                 }
                             }
                             // No loop-back target — halt
