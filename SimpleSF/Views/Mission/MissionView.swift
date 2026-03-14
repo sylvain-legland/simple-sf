@@ -16,6 +16,8 @@ struct MissionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            IHMContextHeader(context: .mission)
+
             if !bridge.isRunning && bridge.currentMissionId == nil {
                 launchForm
             } else {

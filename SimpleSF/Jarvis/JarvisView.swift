@@ -123,6 +123,8 @@ struct JarvisView: View {
                 .frame(minWidth: 180, maxWidth: 220)
 
             VStack(spacing: 0) {
+                IHMContextHeader(context: .jarvis)
+
                 // ── Header bar ──
                 HStack(spacing: 12) {
                     Image(systemName: "sparkles")

@@ -20,6 +20,8 @@ struct IdeationView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            IHMContextHeader(context: .ideation)
+
             // Header
             HStack {
                 Image(systemName: "lightbulb.fill")

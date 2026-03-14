@@ -26,6 +26,8 @@ struct SetupWizardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            IHMContextHeader(context: .setupWizard)
+
             // Progress dots
             progressDots
                 .padding(.top, 24)

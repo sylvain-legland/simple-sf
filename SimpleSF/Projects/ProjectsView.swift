@@ -67,6 +67,7 @@ struct ProjectsView: View {
     @ObservedObject private var bridge = SFBridge.shared
     @State private var searchText = ""
     @State private var expandedProjectId: String?
+    @State private var loadingState: LoadingState = .loading  // Ref: FT-SSF-013
 
     private var filtered: [Project] {
         guard !searchText.isEmpty else { return store.projects }
@@ -78,6 +79,8 @@ struct ProjectsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            IHMContextHeader(context: .projects)
+
             // Header
             HStack(spacing: 10) {
                 Image(systemName: "folder.fill")
@@ -117,26 +120,46 @@ struct ProjectsView: View {
 
             Divider().background(SF.Colors.border).padding(.top, 10)
 
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    if !store.projects.isEmpty {
-                        ForEach(filtered) { project in
-                            ProjectAccordion(
-                                project: project,
-                                isExpanded: expandedProjectId == project.id,
-                                toggle: { toggleExpand(project.id) }
-                            )
+            // Ref: FT-SSF-013 — Skeleton loading
+            if loadingState == .loading {
+                SkeletonProjectList(count: 4)
+                    .padding(24)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        if !store.projects.isEmpty {
+                            ForEach(filtered) { project in
+                                ProjectAccordion(
+                                    project: project,
+                                    isExpanded: expandedProjectId == project.id,
+                                    toggle: { toggleExpand(project.id) }
+                                )
+                            }
+                        } else {
+                            emptyState
                         }
-                    } else {
-                        emptyState
                     }
-                }
-                .padding(24)
+                    .padding(24)
 
-                pilotSection
+                    pilotSection
+                }
             }
         }
         .background(SF.Colors.bgPrimary)
+        .onAppear { updateLoadingState() }
+        .onChange(of: store.projects.count) { _ in updateLoadingState() }
+    }
+
+    private func updateLoadingState() {
+        if store.projects.isEmpty {
+            loadingState = .loading
+            // Allow the reactive store a moment to populate
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                loadingState = store.projects.isEmpty ? .loaded : .loaded
+            }
+        } else {
+            loadingState = .loaded
+        }
     }
 
     private func toggleExpand(_ id: String) {

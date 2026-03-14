@@ -17,6 +17,8 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            IHMContextHeader(context: .onboarding)
+
             // Header
             HStack {
                 Image(systemName: "gearshape.fill").foregroundColor(SF.Colors.purple)

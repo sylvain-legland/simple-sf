@@ -4,9 +4,12 @@ import SwiftUI
 struct AgentsView: View {
     @ObservedObject private var bridge = SFBridge.shared
     @State private var agents: [SFBridge.SFAgent] = []
+    @State private var loadingState: LoadingState = .loading  // Ref: FT-SSF-013
 
     var body: some View {
         VStack(spacing: 0) {
+            IHMContextHeader(context: .agents)
+
             HStack {
                 Image(systemName: "person.3.fill")
                     .font(.title2)
@@ -14,26 +17,43 @@ struct AgentsView: View {
                 Text("Agent Team")
                     .font(.title2.bold())
                 Spacer()
-                Text("\(agents.count) agents")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if loadingState == .loaded {
+                    Text("\(agents.count) agents")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .padding()
 
             Divider()
 
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 16)], spacing: 16) {
-                    ForEach(agents) { agent in
-                        agentCard(agent)
+            // Ref: FT-SSF-013 — Skeleton loading
+            LoadingStateView(
+                state: loadingState,
+                skeleton: { SkeletonAgentGrid(count: 6) },
+                content: {
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 16)], spacing: 16) {
+                            ForEach(agents) { agent in
+                                agentCard(agent)
+                            }
+                        }
+                        .padding()
                     }
-                }
-                .padding()
-            }
+                },
+                onRetry: { loadAgents() },
+                emptyAction: { loadAgents() },
+                emptyActionLabel: "Reload"
+            )
         }
-        .onAppear {
-            agents = bridge.listAgents()
-        }
+        .onAppear { loadAgents() }
+    }
+
+    private func loadAgents() {
+        loadingState = .loading
+        let result = bridge.listAgents()
+        agents = result
+        loadingState = result.isEmpty ? .empty("No agents available yet.") : .loaded
     }
 
     private func agentCard(_ agent: SFBridge.SFAgent) -> some View {
