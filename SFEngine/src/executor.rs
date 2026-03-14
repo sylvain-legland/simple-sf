@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// No artificial round limit — agents run until they produce a text response (#2)
 /// Safety: if an agent truly loops, the LLM will eventually stop producing tool_calls.
+// Ref: FT-SSF-004
 const MAX_ROUNDS: usize = 100;
 
 /// Event emitted during execution — sent to Swift via callback

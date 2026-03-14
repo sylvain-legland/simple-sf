@@ -6,6 +6,7 @@ import SwiftUI
 
 // MARK: - Models
 
+// Ref: FT-SSF-010
 struct SFAgent: Codable, Identifiable {
     let id: String
     let name: String

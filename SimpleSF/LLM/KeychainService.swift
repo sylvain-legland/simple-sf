@@ -1,6 +1,7 @@
 import Foundation
 import Security
 
+// Ref: FT-SSF-005
 @MainActor
 final class KeychainService: ObservableObject {
     static let shared = KeychainService()

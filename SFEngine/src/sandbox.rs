@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 // ── Sandbox Mode ───────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+// Ref: FT-SSF-012
 pub enum SandboxMode {
     /// Docker container: --rm --network none, strongest isolation
     Docker,

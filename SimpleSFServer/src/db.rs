@@ -2,6 +2,7 @@ use rusqlite::{Connection, Result, params};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
+// Ref: FT-SSF-018
 pub struct Db(Arc<Mutex<Connection>>);
 
 impl Db {

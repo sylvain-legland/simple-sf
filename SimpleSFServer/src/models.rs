@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+// Ref: FT-SSF-023
 pub struct User {
     pub id: String,
     pub email: String,

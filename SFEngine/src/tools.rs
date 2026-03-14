@@ -5,6 +5,7 @@ use std::path::Path;
 use std::fs;
 
 /// Validate that a path is safe (no traversal, stays within workspace)
+// Ref: FT-SSF-019
 fn safe_resolve(workspace: &str, path: &str) -> Result<std::path::PathBuf, String> {
     if path.is_empty() {
         return Err("Empty path".to_string());

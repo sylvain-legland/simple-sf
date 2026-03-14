@@ -13,6 +13,7 @@ use crate::llm;
 
 // ─── Data types ──────────────────────────────────────────────
 
+// Ref: FT-SSF-022
 pub struct CodeChunk {
     pub file_path: String,
     pub language: String,

@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 use std::sync::Mutex;
 
+// Ref: FT-SSF-018
 static DB: std::sync::OnceLock<Mutex<Connection>> = std::sync::OnceLock::new();
 
 pub fn init_db(path: &str) {

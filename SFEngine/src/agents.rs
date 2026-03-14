@@ -2,6 +2,7 @@ use crate::db;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+// Ref: FT-SSF-010
 pub struct Agent {
     pub id: String,
     pub name: String,

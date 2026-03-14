@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Detects and manages Ollama (localhost:11434)
+// Ref: FT-SSF-005
 @MainActor
 final class OllamaService: ObservableObject {
     static let shared = OllamaService()

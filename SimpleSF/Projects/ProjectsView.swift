@@ -2,6 +2,7 @@ import SwiftUI
 
 // MARK: - Pilot Projects (AC validation — matches SF legacy)
 
+// Ref: FT-SSF-003
 private let pilotProjects: [(name: String, tech: String, description: String)] = [
     ("Design System WCAG AA",
      "React, TypeScript, CSS",

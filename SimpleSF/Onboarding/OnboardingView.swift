@@ -1,5 +1,6 @@
 import SwiftUI
 
+// Ref: FT-SSF-007
 @MainActor
 struct OnboardingView: View {
     @ObservedObject private var keychain = KeychainService.shared

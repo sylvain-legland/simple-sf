@@ -2,6 +2,7 @@ import Foundation
 
 // MARK: - Provider definitions
 
+// Ref: FT-SSF-005
 enum LLMProvider: String, CaseIterable, Codable {
     case ollama, mlx, openai, anthropic, gemini, minimax, kimi, openrouter, alibaba, glm
 

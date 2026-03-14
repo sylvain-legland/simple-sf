@@ -2,6 +2,7 @@ import SwiftUI
 
 // MARK: - Action parsing (Jarvis manages projects)
 
+// Ref: FT-SSF-001
 enum JarvisAction {
     case createProject(name: String, description: String, tech: String)
     case deleteProject(name: String)

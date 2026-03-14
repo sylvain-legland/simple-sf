@@ -2,6 +2,7 @@
 /// Each protocol constrains agent behavior depending on their role and the phase.
 
 /// Protocol for Tech Lead: decompose work, never code directly.
+// Ref: FT-SSF-020
 pub const DECOMPOSE_PROTOCOL: &str = r#"ROLE: Tech Lead. DECOMPOSE work into subtasks, do NOT code.
 
 WORKFLOW:

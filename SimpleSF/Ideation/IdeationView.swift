@@ -1,5 +1,6 @@
 import SwiftUI
 
+// Ref: FT-SSF-006
 @MainActor
 struct IdeationView: View {
     @ObservedObject private var bridge = SFBridge.shared

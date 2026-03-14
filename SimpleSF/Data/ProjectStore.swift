@@ -1,5 +1,6 @@
 import Foundation
 
+// Ref: FT-SSF-003
 struct Project: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
     var name: String

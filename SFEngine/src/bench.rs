@@ -9,6 +9,7 @@ use crate::catalog;
 use serde_json::{json, Value};
 
 #[derive(Debug)]
+// Ref: FT-SSF-021
 pub struct BenchResult {
     pub case_id: String,
     pub name: String,

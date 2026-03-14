@@ -1,5 +1,6 @@
 import Foundation
 
+// Ref: FT-SSF-016
 struct GitConfig {
     var repoURL: String        // e.g. https://github.com/user/repo.git
     var branch: String = "main"

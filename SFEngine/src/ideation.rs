@@ -4,6 +4,7 @@ use crate::executor::{AgentEvent, EventCallback};
 use rusqlite::params;
 
 /// Default ideation agents — configurable via run_ideation_with_team (#9)
+// Ref: FT-SSF-006
 const DEFAULT_IDEATION_AGENTS: &[(&str, &str, &str)] = &[
     (
         "ideation-pm",

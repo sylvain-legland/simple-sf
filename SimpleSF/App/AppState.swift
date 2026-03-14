@@ -1,5 +1,6 @@
 import Foundation
 
+// Ref: FT-SSF-001
 @MainActor
 final class AppState: ObservableObject {
     static let shared = AppState()

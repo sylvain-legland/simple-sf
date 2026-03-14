@@ -1,5 +1,6 @@
 import SwiftUI
 
+// Ref: FT-SSF-001
 struct ContentView: View {
     @EnvironmentObject var keychain: KeychainService
     @ObservedObject private var appState = AppState.shared

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::{OnceLock, RwLock};
 
+// Ref: FT-SSF-005
 static HTTP: OnceLock<Client> = OnceLock::new();
 
 fn client() -> &'static Client {

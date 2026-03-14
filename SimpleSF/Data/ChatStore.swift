@@ -1,5 +1,6 @@
 import Foundation
 
+// Ref: FT-SSF-009
 struct ChatSession: Codable, Identifiable {
     var id: String = UUID().uuidString
     var title: String

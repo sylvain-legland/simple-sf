@@ -12,6 +12,7 @@ use uuid::Uuid;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+// Ref: FT-SSF-020
 const PHASE_TIMEOUT_SECS: u64 = 900; // 15 min max per phase
 
 /// YOLO mode: auto-approve all gates (skip human-in-the-loop checkpoints)

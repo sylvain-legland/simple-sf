@@ -7,6 +7,7 @@ import SQLite3
 // We declare the C functions directly since SPM doesn't easily support bridging headers.
 // These match the extern "C" functions in SFEngine/src/ffi.rs.
 
+// Ref: FT-SSF-002
 typealias SFEventCallback = @convention(c) (UnsafePointer<CChar>?, UnsafePointer<CChar>?, UnsafePointer<CChar>?) -> Void
 
 @_silgen_name("sf_init")

@@ -5,6 +5,7 @@
 use regex::Regex;
 use std::sync::OnceLock;
 
+// Ref: FT-SSF-011
 pub struct GuardResult {
     pub passed: bool,
     pub score: i32,

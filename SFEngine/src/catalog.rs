@@ -14,6 +14,7 @@ use std::sync::OnceLock;
 // In-memory agent cache (for fast lookup without DB)
 // ──────────────────────────────────────────
 
+// Ref: FT-SSF-010
 static AGENT_CACHE: OnceLock<HashMap<String, AgentInfo>> = OnceLock::new();
 
 /// Lightweight agent info for runtime lookups

@@ -4,6 +4,7 @@ import SwiftUI
 // Horizontal phase timeline per epic, click-to-drill agent discussions.
 // Phases from product-lifecycle workflow: 14 phases, each with pattern + gate.
 
+// Ref: FT-SSF-004
 struct MissionView: View {
     @ObservedObject private var bridge = SFBridge.shared
     @ObservedObject private var catalog = SFCatalog.shared

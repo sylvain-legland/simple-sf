@@ -5,6 +5,7 @@ use crate::{db, llm, engine, agents, ideation};
 use crate::executor::{AgentEvent, EventCallback};
 
 // Global tokio runtime
+// Ref: FT-SSF-002
 static RT: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
 
 fn runtime() -> &'static tokio::runtime::Runtime {

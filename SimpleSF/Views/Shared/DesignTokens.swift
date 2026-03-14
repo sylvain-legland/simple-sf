@@ -3,6 +3,7 @@ import AppKit
 
 // MARK: - SF Design Tokens (adaptive light/dark theme)
 
+// Ref: FT-SSF-013
 enum SF {
     // MARK: Colors — Adaptive (auto light/dark based on system appearance)
     enum Colors {

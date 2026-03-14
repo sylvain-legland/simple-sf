@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Manages the local MLX LLM server (mlx_lm.server)
+// Ref: FT-SSF-005
 @MainActor
 final class MLXService: ObservableObject {
     static let shared = MLXService()

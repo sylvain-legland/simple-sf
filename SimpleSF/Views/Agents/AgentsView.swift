@@ -1,5 +1,6 @@
 import SwiftUI
 
+// Ref: FT-SSF-010
 struct AgentsView: View {
     @ObservedObject private var bridge = SFBridge.shared
     @State private var agents: [SFBridge.SFAgent] = []

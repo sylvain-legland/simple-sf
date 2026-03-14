@@ -2,6 +2,7 @@ import SwiftUI
 
 // MARK: - Markdown rendering for agent messages
 
+// Ref: FT-SSF-008
 struct MarkdownView: View {
     let text: String
     let fontSize: CGFloat

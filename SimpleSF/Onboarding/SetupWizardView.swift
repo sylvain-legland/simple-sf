@@ -1,5 +1,6 @@
 import SwiftUI
 
+// Ref: FT-SSF-007
 @MainActor
 struct SetupWizardView: View {
     @ObservedObject private var appState = AppState.shared

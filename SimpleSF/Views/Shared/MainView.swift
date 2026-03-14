@@ -1,5 +1,6 @@
 import SwiftUI
 
+// Ref: FT-SSF-001
 struct MainView: View {
     @State private var selection: SidebarItem = .jarvis
 

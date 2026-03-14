@@ -14,6 +14,7 @@ use serde::Serialize;
 // ── Eval Result ──
 
 #[derive(Debug, Clone, Serialize)]
+// Ref: FT-SSF-025
 pub struct EvalResult {
     pub domain: String,
     pub cases: Vec<EvalCase>,

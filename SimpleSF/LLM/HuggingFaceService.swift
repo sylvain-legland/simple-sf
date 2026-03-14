@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Browses and downloads MLX models from HuggingFace
+// Ref: FT-SSF-005
 @MainActor
 final class HuggingFaceService: ObservableObject {
     static let shared = HuggingFaceService()
