@@ -1,0 +1,1244 @@
+# =============================================================================
+# WAI-ARIA Authoring Practices Guide (APG) — Deep Skill
+# Source: https://www.w3.org/WAI/ARIA/apg/patterns/
+# Version: WAI-ARIA APG 1.2 (2024)
+# Patterns: 30
+# =============================================================================
+
+meta:
+  id: a11y-wai-aria-deep
+  name: "WAI-ARIA Authoring Practices Guide — 30 Patterns"
+  version: "1.0.0"
+  source: "https://www.w3.org/WAI/ARIA/apg/patterns/"
+  description: >
+    Comprehensive reference for all 30 WAI-ARIA APG design patterns.
+    Each pattern includes description, keyboard interaction, required ARIA
+    roles, properties/states, and implementation notes. Used by agents to
+    generate accessible UI components that comply with WCAG 2.1 AA.
+  tags:
+    - accessibility
+    - a11y
+    - wai-aria
+    - wcag
+    - keyboard-navigation
+    - screen-reader
+    - assistive-technology
+
+# =============================================================================
+# GLOBAL RULES — Apply to ALL patterns
+# =============================================================================
+global_rules:
+  semantic_html_first: >
+    Always prefer native HTML elements (button, input, select, a, details, etc.)
+    over ARIA roles. Native elements provide built-in keyboard and AT support.
+  keyboard_accessible: >
+    Every interactive widget must be operable via keyboard. All functionality
+    available via mouse must also be available via keyboard.
+  accessible_name: >
+    Every interactive element must have an accessible name via text content,
+    aria-label, or aria-labelledby. Never leave interactive elements unnamed.
+  focus_management: >
+    Composite widgets (grid, tree, tabs, menu, toolbar, listbox, radiogroup)
+    use roving tabindex or aria-activedescendant. Only one element in the
+    composite is in the page tab sequence.
+  state_communication: >
+    All state changes (expanded/collapsed, selected, checked, pressed, disabled)
+    must be communicated to assistive technologies via ARIA states.
+  color_independence: >
+    Color alone must never convey meaning. Use text, icons, patterns, or
+    other visual indicators in addition to color.
+  contrast_ratios: >
+    Normal text: 4.5:1 minimum. Large text (18pt+ or 14pt bold+): 3:1 minimum.
+    UI components and graphical objects: 3:1 minimum.
+  focus_visible: >
+    Focus indicators must be clearly visible. Minimum 2px outline with
+    3:1 contrast against adjacent colors.
+
+# =============================================================================
+# PATTERNS — 30 WAI-ARIA APG Design Patterns
+# =============================================================================
+patterns:
+
+  # ---------------------------------------------------------------------------
+  # A11Y-001: Accordion
+  # ---------------------------------------------------------------------------
+  - id: A11Y-001
+    name: Accordion
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/accordion/
+    description: >
+      A vertically stacked set of interactive headings that each contain a
+      title, content snippet, or thumbnail representing a section of content.
+      The headings function as controls that enable users to reveal or hide
+      their associated sections of content.
+    applied_to:
+      - Accordion
+    keyboard_interaction:
+      - key: "Enter / Space"
+        action: "Expand/collapse the associated panel"
+      - key: "Tab"
+        action: "Move to next focusable element in page tab sequence"
+      - key: "Shift + Tab"
+        action: "Move to previous focusable element"
+      - key: "Down Arrow"
+        optional: true
+        action: "Move focus to next accordion header"
+      - key: "Up Arrow"
+        optional: true
+        action: "Move focus to previous accordion header"
+      - key: "Home"
+        optional: true
+        action: "Move focus to first accordion header"
+      - key: "End"
+        optional: true
+        action: "Move focus to last accordion header"
+    aria_roles:
+      - button (header trigger)
+      - heading (wraps button, with aria-level)
+      - region (optional, for panel content)
+    aria_properties:
+      - aria-expanded: "true when panel visible, false when hidden"
+      - aria-controls: "ID of the controlled panel element"
+      - aria-disabled: "true when panel cannot be collapsed"
+      - aria-level: "appropriate heading level for page hierarchy"
+      - aria-labelledby: "on region, references the button controlling it"
+    implementation_notes: >
+      Button must be the only element inside the heading element. Avoid
+      using region role if more than ~6 panels can be expanded simultaneously
+      to prevent landmark proliferation.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-002: Alert
+  # ---------------------------------------------------------------------------
+  - id: A11Y-002
+    name: Alert
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/alert/
+    description: >
+      An element that displays a brief, important message in a way that
+      attracts the user's attention without interrupting the user's task.
+      Dynamically rendered alerts are automatically announced by screen readers.
+    applied_to:
+      - Alert
+      - Toast
+    keyboard_interaction:
+      - key: "N/A"
+        action: "Alerts do not receive focus and have no keyboard interaction"
+    aria_roles:
+      - alert
+    aria_properties:
+      - role: "alert (implies aria-live='assertive' and aria-atomic='true')"
+    implementation_notes: >
+      Do not design alerts that disappear automatically (WCAG 2.2.3).
+      Avoid frequent interruptions (WCAG 2.2.4). Alerts must not affect
+      keyboard focus. Use Alert Dialog pattern when interruption is needed.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-003: Alert Dialog
+  # ---------------------------------------------------------------------------
+  - id: A11Y-003
+    name: Alert Dialog
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/alertdialog/
+    description: >
+      A modal dialog that interrupts the user's workflow to communicate an
+      important message and acquire a response. Examples include action
+      confirmation prompts and error message confirmations.
+    applied_to:
+      - Alert
+      - Modal
+      - Dialog
+    keyboard_interaction:
+      - key: "Tab"
+        action: "Cycle focus to next tabbable element inside dialog (wraps)"
+      - key: "Shift + Tab"
+        action: "Cycle focus to previous tabbable element (wraps)"
+      - key: "Escape"
+        action: "Close the dialog"
+    aria_roles:
+      - alertdialog
+    aria_properties:
+      - aria-labelledby: "references the dialog title element"
+      - aria-label: "alternative if no visible title"
+      - aria-describedby: "references the alert message element"
+      - aria-modal: "true"
+    implementation_notes: >
+      Same keyboard interaction as Dialog (Modal) pattern. Focus should
+      be set on the least destructive action button when dialog opens.
+      Focus returns to invoking element on close.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-004: Breadcrumb
+  # ---------------------------------------------------------------------------
+  - id: A11Y-004
+    name: Breadcrumb
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/breadcrumb/
+    description: >
+      A list of links to the parent pages of the current page in hierarchical
+      order. Helps users find their place within a website or web application.
+    applied_to:
+      - Breadcrumb
+    keyboard_interaction:
+      - key: "N/A"
+        action: "Standard link navigation via Tab. No special keyboard handling."
+    aria_roles:
+      - navigation (landmark region, use <nav> element)
+    aria_properties:
+      - aria-label: "e.g., 'Breadcrumb' on the nav element"
+      - aria-current: "page — set on the link representing the current page"
+    implementation_notes: >
+      Use an ordered list (<ol>) inside <nav>. The last item represents
+      the current page and should have aria-current="page". Separate
+      links visually with CSS pseudo-elements, not text characters.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-005: Button
+  # ---------------------------------------------------------------------------
+  - id: A11Y-005
+    name: Button
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/button/
+    description: >
+      A widget that enables users to trigger an action or event. Supports
+      three types: command button, toggle button (on/off with aria-pressed),
+      and menu button (opens a menu with aria-haspopup).
+    applied_to:
+      - Button
+    keyboard_interaction:
+      - key: "Space"
+        action: "Activate the button"
+      - key: "Enter"
+        action: "Activate the button"
+    aria_roles:
+      - button
+    aria_properties:
+      - aria-pressed: "true/false for toggle buttons"
+      - aria-haspopup: "menu or true for menu buttons"
+      - aria-expanded: "true/false for menu buttons when menu is shown/hidden"
+      - aria-disabled: "true when action is unavailable"
+      - aria-label: "accessible name if no text content"
+      - aria-labelledby: "references visible label"
+      - aria-describedby: "references description element"
+    implementation_notes: >
+      Toggle button labels must NOT change when state changes. Use
+      aria-pressed instead. Distinguish buttons from links by function:
+      buttons perform actions, links navigate. Append "…" to label if
+      button launches a dialog.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-006: Carousel
+  # ---------------------------------------------------------------------------
+  - id: A11Y-006
+    name: Carousel
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/carousel/
+    description: >
+      Presents a set of items (slides) by sequentially displaying a subset.
+      Three structural variants: basic (prev/next buttons), tabbed (tab
+      controls), grouped (button group pickers). Supports auto-rotation.
+    applied_to:
+      - Carousel
+    keyboard_interaction:
+      - key: "Tab / Shift+Tab"
+        action: "Navigate interactive elements in normal tab order"
+      - key: "Button keys"
+        action: "Prev/next/rotation controls follow Button pattern"
+      - key: "Tab keys"
+        action: "Tabbed variant slide pickers follow Tabs pattern"
+      - key: "Keyboard focus"
+        action: "Auto-rotation stops when any element receives keyboard focus"
+    aria_roles:
+      - region or group (carousel container)
+      - group (each slide, with aria-roledescription="slide")
+      - tabpanel (tabbed variant slides)
+      - tablist / tab (tabbed variant pickers)
+    aria_properties:
+      - aria-roledescription: "'carousel' on container, 'slide' on each slide"
+      - aria-label or aria-labelledby: "on container and each slide"
+      - aria-live: "'off' when auto-rotating, 'polite' when static"
+      - aria-atomic: "false"
+    implementation_notes: >
+      Rotation control must be first in tab sequence inside carousel.
+      Auto-rotation must stop on keyboard focus AND mouse hover. Provide
+      visible stop/start button. Slides not visible must be properly hidden.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-007: Checkbox
+  # ---------------------------------------------------------------------------
+  - id: A11Y-007
+    name: Checkbox
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/checkbox/
+    description: >
+      Supports dual-state (checked/unchecked) and tri-state (checked/
+      unchecked/partially checked). Tri-state checkboxes can control the
+      state of a group of dual-state checkboxes.
+    applied_to:
+      - Checkbox
+    keyboard_interaction:
+      - key: "Space"
+        action: "Toggle the checkbox state"
+    aria_roles:
+      - checkbox
+      - group (for logically grouped checkboxes with visible label)
+    aria_properties:
+      - aria-checked: "true / false / mixed (tri-state)"
+      - aria-labelledby: "references visible label"
+      - aria-label: "alternative accessible name"
+      - aria-describedby: "references descriptive text"
+    implementation_notes: >
+      Use native <input type="checkbox"> whenever possible. For tri-state,
+      aria-checked="mixed" represents the partially checked state.
+      Group related checkboxes with role="group" and aria-labelledby.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-008: Combobox
+  # ---------------------------------------------------------------------------
+  - id: A11Y-008
+    name: Combobox
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/combobox/
+    description: >
+      An input widget with an associated popup (listbox, grid, tree, or dialog).
+      Two variants: editable (user types text) and select-only. Four autocomplete
+      behaviors: none, list with manual selection, list with automatic selection,
+      and list with inline autocomplete.
+    applied_to:
+      - Combobox
+      - Select
+      - Autocomplete
+      - DateInput
+    keyboard_interaction:
+      - key: "Tab"
+        action: "Move into/out of combobox (popup excluded from tab sequence)"
+      - key: "Down Arrow"
+        action: "Open popup and move focus into it"
+      - key: "Up Arrow"
+        optional: true
+        action: "Open popup, focus last item"
+      - key: "Escape"
+        action: "Dismiss popup; optionally clear combobox"
+      - key: "Enter"
+        action: "Accept autocomplete suggestion"
+      - key: "Alt + Down Arrow"
+        optional: true
+        action: "Open popup without moving focus"
+      - key: "Alt + Up Arrow"
+        optional: true
+        action: "Close popup, return focus to combobox"
+      - key: "Printable characters"
+        action: "Type in editable combobox or filter suggestions"
+    aria_roles:
+      - combobox (the input element)
+      - listbox (popup, most common)
+      - option (popup items)
+    aria_properties:
+      - aria-expanded: "true when popup visible, false when hidden"
+      - aria-controls: "references the popup element"
+      - aria-haspopup: "listbox, grid, tree, or dialog"
+      - aria-autocomplete: "none / list / both / inline"
+      - aria-activedescendant: "ID of focused option in popup"
+      - aria-labelledby or aria-label: "accessible name"
+    implementation_notes: >
+      Popup indicator, popup, and popup descendants are excluded from page
+      tab sequence. Ensure JavaScript does not interfere with browser text
+      editing functions in editable comboboxes.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-009: Dialog (Modal)
+  # ---------------------------------------------------------------------------
+  - id: A11Y-009
+    name: Dialog (Modal)
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+    description: >
+      A window overlaid on the primary window or another dialog. Modal
+      dialogs trap focus and prevent interaction with inert content underneath.
+      Content outside is visually obscured.
+    applied_to:
+      - Modal
+      - Dialog
+      - Drawer
+    keyboard_interaction:
+      - key: "Tab"
+        action: "Move to next tabbable element inside dialog (wraps from last to first)"
+      - key: "Shift + Tab"
+        action: "Move to previous tabbable element (wraps from first to last)"
+      - key: "Escape"
+        action: "Close the dialog"
+    aria_roles:
+      - dialog
+    aria_properties:
+      - aria-modal: "true"
+      - aria-labelledby: "references visible dialog title"
+      - aria-label: "alternative if no visible title"
+      - aria-describedby: "references description content (optional)"
+    implementation_notes: >
+      Focus moves into dialog on open (first focusable, or static element for
+      complex content). Focus returns to invoking element on close. Always
+      include a visible close button. Use aria-modal="true" instead of
+      aria-hidden on background content.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-010: Disclosure
+  # ---------------------------------------------------------------------------
+  - id: A11Y-010
+    name: Disclosure
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/
+    description: >
+      A widget that enables content to be either collapsed (hidden) or
+      expanded (visible). Has two elements: a disclosure button and a
+      section of content whose visibility is controlled by the button.
+    applied_to:
+      - Disclosure
+      - Accordion
+      - Dropdown
+    keyboard_interaction:
+      - key: "Enter"
+        action: "Toggle visibility of the controlled content"
+      - key: "Space"
+        action: "Toggle visibility of the controlled content"
+    aria_roles:
+      - button (the trigger element)
+    aria_properties:
+      - aria-expanded: "true when content visible, false when hidden"
+      - aria-controls: "references the controlled content element (optional)"
+    implementation_notes: >
+      Use native HTML <details>/<summary> elements when appropriate.
+      Style the button with a directional arrow indicator (right when
+      collapsed, down when expanded).
+
+  # ---------------------------------------------------------------------------
+  # A11Y-011: Feed
+  # ---------------------------------------------------------------------------
+  - id: A11Y-011
+    name: Feed
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/feed/
+    description: >
+      A section of a page that automatically loads new content as the user
+      scrolls. Content is in article elements. Establishes an interoperability
+      contract between web page and assistive technologies for scroll behavior.
+    applied_to:
+      - Feed
+    keyboard_interaction:
+      - key: "Page Down"
+        action: "Move focus to next article"
+      - key: "Page Up"
+        action: "Move focus to previous article"
+      - key: "Ctrl + End"
+        action: "Move focus to first element after the feed"
+      - key: "Ctrl + Home"
+        action: "Move focus to first element before the feed"
+    aria_roles:
+      - feed (container)
+      - article (each content unit)
+    aria_properties:
+      - aria-labelledby or aria-label: "on feed element"
+      - aria-labelledby: "on each article, referencing title elements"
+      - aria-describedby: "on each article, referencing primary content (recommended)"
+      - aria-posinset: "position of article in feed"
+      - aria-setsize: "total articles loaded or -1 if undetermined"
+      - aria-busy: "true during DOM updates, false when complete"
+    implementation_notes: >
+      Web page is responsible for visual scrolling and loading/removing
+      articles based on focused article. Provide keyboard interface
+      documentation since feed is not based on a desktop GUI widget.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-012: Grid
+  # ---------------------------------------------------------------------------
+  - id: A11Y-012
+    name: Grid
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/grid/
+    description: >
+      A container for navigating information or interactive elements using
+      directional keys. Two categories: data grids (tabular info) and layout
+      grids (grouping widgets). Only one element in grid is in tab sequence.
+    applied_to:
+      - DataTable
+      - Grid
+    keyboard_interaction:
+      - key: "Right Arrow"
+        action: "Move focus one cell right"
+      - key: "Left Arrow"
+        action: "Move focus one cell left"
+      - key: "Down Arrow"
+        action: "Move focus one cell down"
+      - key: "Up Arrow"
+        action: "Move focus one cell up"
+      - key: "Page Down / Page Up"
+        action: "Move focus by author-determined number of rows"
+      - key: "Home"
+        action: "First cell in row"
+      - key: "End"
+        action: "Last cell in row"
+      - key: "Ctrl + Home"
+        action: "First cell in first row"
+      - key: "Ctrl + End"
+        action: "Last cell in last row"
+      - key: "Ctrl + Space"
+        action: "Select column"
+      - key: "Shift + Space"
+        action: "Select row"
+      - key: "Ctrl + A"
+        action: "Select all cells"
+    aria_roles:
+      - grid
+      - row
+      - gridcell
+      - rowheader
+      - columnheader
+      - rowgroup
+    aria_properties:
+      - aria-labelledby or aria-label: "grid name"
+      - aria-rowcount / aria-colcount: "total rows/columns"
+      - aria-rowindex / aria-colindex: "cell position"
+      - aria-selected: "selection state"
+      - aria-readonly: "if cells are not editable"
+      - aria-activedescendant: "alternative to roving tabindex"
+    implementation_notes: >
+      Every cell must be focusable or contain a focusable element.
+      Layout grids may wrap arrow navigation. Data grids should not wrap.
+      Avoid nesting interactive widgets that need arrow keys inside grid cells.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-013: Landmarks
+  # ---------------------------------------------------------------------------
+  - id: A11Y-013
+    name: Landmarks
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/landmarks/
+    description: >
+      Eight roles identifying major sections of a page. Enable AT users to
+      perceive high-level page structure and navigate efficiently between
+      sections. Best practice: 7 or fewer landmarks per page.
+    applied_to:
+      - Header
+      - Footer
+      - Navigation
+      - Form
+    keyboard_interaction:
+      - key: "N/A"
+        action: "Landmarks are structural, not interactive"
+    aria_roles:
+      - banner (or <header>)
+      - navigation (or <nav>)
+      - main (or <main>)
+      - complementary (or <aside>)
+      - contentinfo (or <footer>)
+      - search
+      - form (or <form> with accessible name)
+      - region (or <section> with accessible name)
+    aria_properties:
+      - aria-label or aria-labelledby: "required when multiple instances of same landmark type exist"
+    implementation_notes: >
+      Use HTML5 sectioning elements which automatically create landmarks.
+      Ensure all page content is within a landmark. Label duplicate
+      landmarks (e.g., multiple <nav>) with aria-label to distinguish them.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-014: Link
+  # ---------------------------------------------------------------------------
+  - id: A11Y-014
+    name: Link
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/link/
+    description: >
+      A widget providing an interactive reference to a resource. Target can
+      be external or local. Authors are strongly encouraged to use native
+      HTML <a> elements with href attribute.
+    applied_to:
+      - Link
+    keyboard_interaction:
+      - key: "Enter"
+        action: "Execute the link and navigate to target"
+      - key: "Shift + F10"
+        optional: true
+        action: "Open context menu for the link"
+    aria_roles:
+      - link
+    aria_properties:
+      - aria-label or aria-labelledby: "if text content is insufficient"
+    implementation_notes: >
+      When applying role="link" to a non-anchor element, the author must
+      provide all link behaviors (navigation, context menu, cursor style).
+      Always prefer native <a href="..."> elements.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-015: Listbox
+  # ---------------------------------------------------------------------------
+  - id: A11Y-015
+    name: Listbox
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/listbox/
+    description: >
+      Presents a list of options allowing selection of one or more items.
+      Single-select and multi-select variants. Not suitable for lists of
+      interactive elements (use Grid instead).
+    applied_to:
+      - Listbox
+      - Select
+    keyboard_interaction:
+      - key: "Down Arrow"
+        action: "Focus next option (optionally selects in single-select)"
+      - key: "Up Arrow"
+        action: "Focus previous option"
+      - key: "Home"
+        action: "Focus first option"
+      - key: "End"
+        action: "Focus last option"
+      - key: "Type-ahead"
+        action: "Focus item starting with typed character(s)"
+      - key: "Space"
+        action: "Toggle selection (multi-select)"
+      - key: "Shift + Down/Up"
+        action: "Move and toggle selection"
+      - key: "Ctrl + A"
+        optional: true
+        action: "Select all options"
+    aria_roles:
+      - listbox
+      - option
+      - group (for grouped options)
+    aria_properties:
+      - aria-selected: "selection state of each option"
+      - aria-multiselectable: "true for multi-select listbox"
+      - aria-labelledby or aria-label: "listbox and group names"
+      - aria-activedescendant: "alternative focus management"
+      - aria-required: "if selection is required"
+      - aria-invalid: "if current selection is invalid"
+      - aria-orientation: "horizontal if options arranged horizontally"
+    implementation_notes: >
+      Keep option names short and distinct. Avoid options starting with
+      same word/phrase. Provide separate Select All / Unselect All controls
+      if those functions are important.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-016: Menu and Menubar
+  # ---------------------------------------------------------------------------
+  - id: A11Y-016
+    name: Menu and Menubar
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/menubar/
+    description: >
+      A widget offering a list of choices (actions or functions). Behaves like
+      native OS menus. A menubar is a visually persistent horizontal menu
+      typically near the top of the application.
+    applied_to:
+      - Menu
+      - Navigation
+    keyboard_interaction:
+      - key: "Enter"
+        action: "Open submenu or activate item and close menu"
+      - key: "Space"
+        action: "Toggle menuitemcheckbox/menuitemradio or activate item"
+      - key: "Down Arrow"
+        action: "Open submenu (menubar) or move to next item (menu)"
+      - key: "Up Arrow"
+        action: "Move to previous item in menu"
+      - key: "Right Arrow"
+        action: "Next menubar item or open submenu"
+      - key: "Left Arrow"
+        action: "Previous menubar item or close submenu"
+      - key: "Home"
+        action: "First item in current menu"
+      - key: "End"
+        action: "Last item in current menu"
+      - key: "Escape"
+        action: "Close menu and return focus to trigger"
+      - key: "Character"
+        action: "Move to item starting with typed character"
+    aria_roles:
+      - menu
+      - menubar
+      - menuitem
+      - menuitemcheckbox
+      - menuitemradio
+      - separator
+    aria_properties:
+      - aria-haspopup: "on parent menuitems with submenus"
+      - aria-expanded: "true/false on parent menuitems"
+      - aria-activedescendant: "alternative to roving tabindex"
+      - aria-disabled: "on disabled items (still focusable)"
+      - aria-checked: "on menuitemcheckbox/menuitemradio"
+    implementation_notes: >
+      Tab/Shift+Tab move focus in/out of menubar but not into menus.
+      Disabled items are focusable but not activatable. Separators are
+      not focusable. Append "…" to items that launch dialogs.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-017: Menu Button
+  # ---------------------------------------------------------------------------
+  - id: A11Y-017
+    name: Menu Button
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/
+    description: >
+      A button that opens a menu. Often styled with a downward pointing
+      arrow or triangle indicating that activating it will display a menu.
+    applied_to:
+      - MenuButton
+      - Dropdown
+    keyboard_interaction:
+      - key: "Enter"
+        action: "Open menu and focus first item"
+      - key: "Space"
+        action: "Open menu and focus first item"
+      - key: "Down Arrow"
+        optional: true
+        action: "Open menu and focus first item"
+      - key: "Up Arrow"
+        optional: true
+        action: "Open menu and focus last item"
+    aria_roles:
+      - button (the trigger)
+      - menu (the popup)
+    aria_properties:
+      - aria-haspopup: "menu or true"
+      - aria-expanded: "true when menu open, false when closed"
+      - aria-controls: "references the menu element (optional)"
+    implementation_notes: >
+      After menu opens, keyboard behavior follows Menu and Menubar pattern.
+      Escape closes menu and returns focus to button.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-018: Meter
+  # ---------------------------------------------------------------------------
+  - id: A11Y-018
+    name: Meter
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/meter/
+    description: >
+      A graphical display of a numeric value that varies within a defined
+      range. Not for progress indication (use progressbar) or values without
+      a meaningful maximum limit.
+    applied_to:
+      - Meter
+      - ProgressBar
+    keyboard_interaction:
+      - key: "N/A"
+        action: "Meter is not interactive"
+    aria_roles:
+      - meter
+    aria_properties:
+      - aria-valuenow: "current decimal value"
+      - aria-valuemin: "minimum value"
+      - aria-valuemax: "maximum value"
+      - aria-valuetext: "user-friendly text (e.g., '50% (6 hours) remaining')"
+      - aria-labelledby or aria-label: "accessible name"
+    implementation_notes: >
+      Prefer native HTML <meter> element. AT often presents aria-valuenow
+      as a percentage; use aria-valuetext when percentage alone is not
+      meaningful. Do not use for progress or values without a max.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-019: Radio Group
+  # ---------------------------------------------------------------------------
+  - id: A11Y-019
+    name: Radio Group
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/radio/
+    description: >
+      A set of checkable buttons where no more than one can be checked at
+      a time. Uses roving tabindex — Tab moves into/out of the group,
+      arrow keys move between options and select them.
+    applied_to:
+      - Radio
+    keyboard_interaction:
+      - key: "Tab / Shift+Tab"
+        action: "Move focus into/out of group (to checked or first button)"
+      - key: "Space"
+        action: "Check the focused radio button"
+      - key: "Right Arrow / Down Arrow"
+        action: "Move to and check next button (wraps)"
+      - key: "Left Arrow / Up Arrow"
+        action: "Move to and check previous button (wraps)"
+    aria_roles:
+      - radiogroup
+      - radio
+    aria_properties:
+      - aria-checked: "true on selected radio, false on others"
+      - aria-labelledby or aria-label: "on each radio and the radiogroup"
+      - aria-describedby: "references additional descriptive text"
+    implementation_notes: >
+      When inside a toolbar, arrow keys move focus without changing
+      selection; Space/Enter change selection. Use native HTML radio
+      inputs with fieldset/legend when possible.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-020: Slider
+  # ---------------------------------------------------------------------------
+  - id: A11Y-020
+    name: Slider
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/slider/
+    description: >
+      An input where the user selects a value from within a given range.
+      Has a thumb that moves along a bar/rail/track to change the value.
+    applied_to:
+      - Slider
+    keyboard_interaction:
+      - key: "Right Arrow / Up Arrow"
+        action: "Increase value by one step"
+      - key: "Left Arrow / Down Arrow"
+        action: "Decrease value by one step"
+      - key: "Home"
+        action: "Set to minimum value"
+      - key: "End"
+        action: "Set to maximum value"
+      - key: "Page Up"
+        optional: true
+        action: "Increase by larger step"
+      - key: "Page Down"
+        optional: true
+        action: "Decrease by larger step"
+    aria_roles:
+      - slider
+    aria_properties:
+      - aria-valuenow: "current value"
+      - aria-valuemin: "minimum allowed value"
+      - aria-valuemax: "maximum allowed value"
+      - aria-valuetext: "user-friendly text when value is not self-explanatory"
+      - aria-labelledby or aria-label: "accessible name"
+      - aria-orientation: "vertical if vertically oriented (default: horizontal)"
+    implementation_notes: >
+      Focus is placed on the thumb element. Test thoroughly with touch-based
+      AT as gestures for sliders may not be fully implemented. In some
+      contexts, reversing arrow key direction may be more intuitive.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-021: Slider (Multi-Thumb)
+  # ---------------------------------------------------------------------------
+  - id: A11Y-021
+    name: Slider (Multi-Thumb)
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/
+    description: >
+      A slider with two or more thumbs, often on a single rail. Each thumb
+      sets one value in a group of related values (e.g., min/max price
+      range). Thumbs may or may not be allowed to pass each other.
+    applied_to:
+      - Slider
+    keyboard_interaction:
+      - key: "Same as Slider"
+        action: "Each thumb is in tab sequence with identical keyboard interaction"
+      - key: "Tab order"
+        action: "Remains constant regardless of thumb value or visual position"
+    aria_roles:
+      - slider (each thumb)
+    aria_properties:
+      - aria-valuenow: "current value for each thumb"
+      - aria-valuemin: "minimum value (dynamically updated for dependent thumbs)"
+      - aria-valuemax: "maximum value (dynamically updated for dependent thumbs)"
+      - aria-valuetext: "user-friendly label"
+      - aria-labelledby or aria-label: "name for each thumb"
+      - aria-orientation: "vertical if applicable"
+    implementation_notes: >
+      When thumbs are dependent (e.g., range slider), dynamically update
+      aria-valuemin/aria-valuemax of dependent thumbs when values change.
+      Tab order must not change even if thumbs visually swap positions.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-022: Spinbutton
+  # ---------------------------------------------------------------------------
+  - id: A11Y-022
+    name: Spinbutton
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/spinbutton/
+    description: >
+      An input widget that restricts its value to a set or range of discrete
+      values. Typically has a text field plus increase/decrease buttons.
+      The text field is the focusable component.
+    applied_to:
+      - Spinbutton
+      - Stepper
+    keyboard_interaction:
+      - key: "Up Arrow"
+        action: "Increase value"
+      - key: "Down Arrow"
+        action: "Decrease value"
+      - key: "Home"
+        action: "Set to minimum value"
+      - key: "End"
+        action: "Set to maximum value"
+      - key: "Page Up"
+        optional: true
+        action: "Increase by larger step"
+      - key: "Page Down"
+        optional: true
+        action: "Decrease by larger step"
+    aria_roles:
+      - spinbutton
+    aria_properties:
+      - aria-valuenow: "current value"
+      - aria-valuemin: "minimum value (if known)"
+      - aria-valuemax: "maximum value (if known)"
+      - aria-valuetext: "user-friendly text"
+      - aria-labelledby or aria-label: "accessible name"
+      - aria-invalid: "true if value outside allowed range"
+      - aria-required: "true if value is required"
+    implementation_notes: >
+      Focus remains on text field during operation. Ensure JavaScript
+      does not interfere with browser text editing functions. Most
+      implementations prevent input of invalid characters.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-023: Switch
+  # ---------------------------------------------------------------------------
+  - id: A11Y-023
+    name: Switch
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/switch/
+    description: >
+      An input widget for choosing one of two values: on or off. Similar to
+      checkboxes and toggle buttons but only supports binary input. The label
+      must NOT change when state changes.
+    applied_to:
+      - Switch
+      - Toggle
+    keyboard_interaction:
+      - key: "Space"
+        action: "Toggle the switch state"
+      - key: "Enter"
+        optional: true
+        action: "Toggle the switch state"
+    aria_roles:
+      - switch
+      - group (for grouped switches)
+    aria_properties:
+      - aria-checked: "true when on, false when off"
+      - aria-labelledby or aria-label: "accessible name (must not change)"
+      - aria-describedby: "references descriptive text"
+    implementation_notes: >
+      Choose between switch, checkbox, and toggle button based on which
+      semantic (on/off vs checked/unchecked vs pressed/not pressed) best
+      matches the UI context. Use HTML input[type=checkbox] with role=switch
+      when appropriate — uses HTML checked attribute instead of aria-checked.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-024: Table
+  # ---------------------------------------------------------------------------
+  - id: A11Y-024
+    name: Table
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/table/
+    description: >
+      A static tabular structure with rows and cells. Not an interactive
+      widget. For interactive tables, use the Grid pattern. Strongly
+      prefer native HTML <table> element.
+    applied_to:
+      - DataTable
+      - Table
+    keyboard_interaction:
+      - key: "N/A"
+        action: "Table is not interactive. Widgets inside are separate tab stops."
+    aria_roles:
+      - table
+      - row
+      - cell
+      - rowheader
+      - columnheader
+      - rowgroup
+    aria_properties:
+      - aria-labelledby or aria-label: "table accessible name"
+      - aria-describedby: "references caption or description"
+      - aria-sort: "ascending/descending/none/other on sortable column headers"
+      - aria-colcount / aria-rowcount: "total columns/rows"
+      - aria-colindex / aria-rowindex: "cell position"
+      - aria-colspan / aria-rowspan: "spanning cells"
+    implementation_notes: >
+      Use native HTML <table>, <tr>, <th>, <td> whenever possible.
+      role="table" is new in ARIA 1.1 — test thoroughly. If table contains
+      many interactive widgets, consider using Grid pattern to reduce
+      tab stops.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-025: Tabs
+  # ---------------------------------------------------------------------------
+  - id: A11Y-025
+    name: Tabs
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
+    description: >
+      A set of layered content sections (tab panels) displaying one panel
+      at a time. Each panel has an associated tab element that when activated
+      displays the panel.
+    applied_to:
+      - Tabs
+    keyboard_interaction:
+      - key: "Tab"
+        action: "Move focus to active tab in tablist, then to tabpanel"
+      - key: "Left Arrow"
+        action: "Focus previous tab (wraps last to first)"
+      - key: "Right Arrow"
+        action: "Focus next tab (wraps first to last)"
+      - key: "Space / Enter"
+        action: "Activate tab if not auto-activated on focus"
+      - key: "Home"
+        optional: true
+        action: "Focus first tab"
+      - key: "End"
+        optional: true
+        action: "Focus last tab"
+      - key: "Delete"
+        optional: true
+        action: "Close/delete tab and its panel"
+      - key: "Shift + F10"
+        action: "Open popup menu if tab has one"
+    aria_roles:
+      - tablist
+      - tab
+      - tabpanel
+    aria_properties:
+      - aria-selected: "true on active tab, false on others"
+      - aria-controls: "tab references its tabpanel"
+      - aria-labelledby: "tabpanel references its tab"
+      - aria-haspopup: "if tab has a popup menu"
+      - aria-orientation: "vertical for vertical tab lists"
+    implementation_notes: >
+      Recommend auto-activation on focus when panel content is preloaded
+      (avoids latency). For vertical tabs, use Up/Down instead of Left/Right.
+      If tabpanel has no focusable elements, set tabindex="0" on tabpanel.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-026: Toolbar
+  # ---------------------------------------------------------------------------
+  - id: A11Y-026
+    name: Toolbar
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/toolbar/
+    description: >
+      A container for grouping controls (buttons, menubuttons, checkboxes).
+      Reduces tab stops by using roving tabindex. Recommended for groups
+      of 3 or more controls.
+    applied_to:
+      - Toolbar
+    keyboard_interaction:
+      - key: "Tab / Shift+Tab"
+        action: "Move focus into/out of toolbar"
+      - key: "Left Arrow"
+        action: "Previous control (wraps optional)"
+      - key: "Right Arrow"
+        action: "Next control (wraps optional)"
+      - key: "Home"
+        optional: true
+        action: "First element"
+      - key: "End"
+        optional: true
+        action: "Last element"
+    aria_roles:
+      - toolbar
+    aria_properties:
+      - aria-labelledby or aria-label: "toolbar name"
+      - aria-orientation: "vertical if controls arranged vertically"
+      - aria-activedescendant: "alternative to roving tabindex"
+    implementation_notes: >
+      Avoid controls requiring arrow keys (e.g., text inputs) except as
+      last element. First focus goes to first non-disabled control or
+      last focused control. Disabled controls may be focusable for
+      discoverability. Provide documented shortcut key for quick access.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-027: Tooltip
+  # ---------------------------------------------------------------------------
+  - id: A11Y-027
+    name: Tooltip
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/tooltip/
+    description: >
+      A popup that displays information related to an element when it
+      receives keyboard focus or mouse hover. Does not receive focus itself.
+      For focusable hover content, use a non-modal dialog instead.
+    applied_to:
+      - Tooltip
+    keyboard_interaction:
+      - key: "Escape"
+        action: "Dismiss the tooltip"
+    aria_roles:
+      - tooltip
+    aria_properties:
+      - aria-describedby: "trigger element references tooltip element"
+    implementation_notes: >
+      Tooltip appears on focus/hover, disappears on blur/mouse-out.
+      Focus always stays on the triggering element. Show after a small
+      delay. This pattern is work in progress in the APG specification.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-028: Tree View
+  # ---------------------------------------------------------------------------
+  - id: A11Y-028
+    name: Tree View
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/treeview/
+    description: >
+      A hierarchical list where items may have children that can be expanded
+      or collapsed. Supports single-select (optional selection follows focus)
+      and multi-select modes.
+    applied_to:
+      - TreeView
+    keyboard_interaction:
+      - key: "Right Arrow"
+        action: "Expand closed node / focus first child of open node"
+      - key: "Left Arrow"
+        action: "Collapse open node / focus parent of child node"
+      - key: "Down Arrow"
+        action: "Focus next visible node"
+      - key: "Up Arrow"
+        action: "Focus previous visible node"
+      - key: "Home"
+        action: "Focus first node"
+      - key: "End"
+        action: "Focus last visible node"
+      - key: "Enter"
+        action: "Activate node (default action)"
+      - key: "Type-ahead"
+        action: "Focus node starting with typed character(s)"
+      - key: "* (asterisk)"
+        optional: true
+        action: "Expand all sibling nodes"
+      - key: "Space"
+        action: "Toggle selection (multi-select)"
+      - key: "Ctrl + A"
+        optional: true
+        action: "Select all nodes"
+    aria_roles:
+      - tree
+      - treeitem
+      - group (contains child nodes)
+    aria_properties:
+      - aria-expanded: "true/false on parent nodes"
+      - aria-selected: "selection state"
+      - aria-checked: "if tree uses checkboxes"
+      - aria-labelledby or aria-label: "tree and item names"
+      - aria-owns: "for child nodes not DOM descendants"
+      - aria-level: "nesting depth"
+      - aria-setsize: "number of siblings"
+      - aria-posinset: "position among siblings"
+      - aria-activedescendant: "alternative focus management"
+    implementation_notes: >
+      Roving tabindex or aria-activedescendant for focus management.
+      Selection follows focus is optional for single-select trees.
+      Provide Select All / Unselect All controls for multi-select trees.
+
+  # ---------------------------------------------------------------------------
+  # A11Y-029: Treegrid
+  # ---------------------------------------------------------------------------
+  - id: A11Y-029
+    name: Treegrid
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/treegrid/
+    description: >
+      A hierarchical data grid with editable or interactive tabular content.
+      Rows with children can be expanded/collapsed. Combines tree view
+      navigation with grid cell navigation.
+    applied_to:
+      - TreeView
+      - DataTable
+    keyboard_interaction:
+      - key: "Enter"
+        action: "Expand/collapse row or perform default cell action"
+      - key: "Tab"
+        action: "Move to next focusable element in row, then out of treegrid"
+      - key: "Right Arrow"
+        action: "Expand row / focus first cell / move right in cells"
+      - key: "Left Arrow"
+        action: "Collapse row / focus row from cell / move left in cells"
+      - key: "Down Arrow / Up Arrow"
+        action: "Move one row/cell down/up"
+      - key: "Page Down / Page Up"
+        action: "Jump multiple rows"
+      - key: "Home / End"
+        action: "First/last cell in row"
+      - key: "Ctrl + Home / End"
+        action: "First/last row"
+      - key: "Ctrl + Space"
+        action: "Select column (cell focus) or all cells (row focus)"
+      - key: "Shift + Space"
+        action: "Select row"
+    aria_roles:
+      - treegrid
+      - row
+      - gridcell
+      - rowheader
+      - columnheader
+      - rowgroup
+    aria_properties:
+      - aria-expanded: "on expandable rows"
+      - aria-selected: "selection state"
+      - aria-level: "nesting depth"
+      - aria-setsize / aria-posinset: "position info"
+      - aria-rowcount / aria-colcount: "total counts"
+      - aria-rowindex / aria-colindex: "cell position"
+      - aria-labelledby or aria-label: "treegrid name"
+      - aria-activedescendant: "alternative focus management"
+    implementation_notes: >
+      Both rows and cells are focusable. Supports three navigation models:
+      rows first, cells first, cells only. Every cell must be focusable or
+      contain a focusable element (except non-functional headers).
+
+  # ---------------------------------------------------------------------------
+  # A11Y-030: Window Splitter
+  # ---------------------------------------------------------------------------
+  - id: A11Y-030
+    name: Window Splitter
+    url: https://www.w3.org/WAI/ARIA/apg/patterns/windowsplitter/
+    description: >
+      A moveable separator between two panes enabling users to resize them.
+      Can be fixed (toggles two positions) or variable (any position in range).
+      Value represents the size of the primary pane.
+    applied_to:
+      - WindowSplitter
+    keyboard_interaction:
+      - key: "Left Arrow"
+        action: "Move vertical splitter left"
+      - key: "Right Arrow"
+        action: "Move vertical splitter right"
+      - key: "Up Arrow"
+        action: "Move horizontal splitter up"
+      - key: "Down Arrow"
+        action: "Move horizontal splitter down"
+      - key: "Enter"
+        action: "Collapse/restore primary pane"
+      - key: "Home"
+        optional: true
+        action: "Set primary pane to minimum size"
+      - key: "End"
+        optional: true
+        action: "Set primary pane to maximum size"
+      - key: "F6"
+        optional: true
+        action: "Cycle through window panes"
+    aria_roles:
+      - separator (focusable)
+    aria_properties:
+      - aria-valuenow: "current position (0-100 typically)"
+      - aria-valuemin: "minimum position (typically 0)"
+      - aria-valuemax: "maximum position (typically 100)"
+      - aria-labelledby or aria-label: "name matching primary pane"
+      - aria-controls: "references the primary pane element"
+    implementation_notes: >
+      ARIA 1.1 changed separator to behave as a widget when focusable.
+      The accessible name should match the primary pane name. Fixed
+      splitters omit arrow key implementation.
+
+# =============================================================================
+# QUICK REFERENCE — Pattern to Component Mapping
+# =============================================================================
+component_mapping:
+  Accordion: [A11Y-001, A11Y-010]
+  Alert: [A11Y-002, A11Y-003]
+  Autocomplete: [A11Y-008]
+  Badge: []
+  Breadcrumb: [A11Y-004]
+  Button: [A11Y-005]
+  Carousel: [A11Y-006]
+  Checkbox: [A11Y-007]
+  Combobox: [A11Y-008]
+  DataTable: [A11Y-012, A11Y-024, A11Y-029]
+  DateInput: [A11Y-008]
+  Dialog: [A11Y-009, A11Y-003]
+  Disclosure: [A11Y-010]
+  Drawer: [A11Y-009]
+  Dropdown: [A11Y-010, A11Y-017]
+  Feed: [A11Y-011]
+  Footer: [A11Y-013]
+  Form: [A11Y-013]
+  Grid: [A11Y-012]
+  Header: [A11Y-013]
+  Link: [A11Y-014]
+  Listbox: [A11Y-015]
+  Menu: [A11Y-016]
+  MenuButton: [A11Y-017]
+  Meter: [A11Y-018]
+  Modal: [A11Y-009, A11Y-003]
+  Navigation: [A11Y-013, A11Y-016]
+  ProgressBar: [A11Y-018]
+  Radio: [A11Y-019]
+  Select: [A11Y-008, A11Y-015]
+  Slider: [A11Y-020, A11Y-021]
+  Spinbutton: [A11Y-022]
+  Stepper: [A11Y-022]
+  Switch: [A11Y-023]
+  Table: [A11Y-024]
+  Tabs: [A11Y-025]
+  Toast: [A11Y-002]
+  Toggle: [A11Y-023]
+  Toolbar: [A11Y-026]
+  Tooltip: [A11Y-027]
+  TreeView: [A11Y-028, A11Y-029]
+  WindowSplitter: [A11Y-030]

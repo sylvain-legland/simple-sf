@@ -1,0 +1,501 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Simple SF API",
+    "version": "0.1.0",
+    "description": "Simple Software Factory REST API \u2014 Axum-based with JWT auth"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8099",
+      "description": "Local dev"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "tags": [
+          "system"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "API health",
+        "tags": [
+          "system"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JWT token"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "summary": "Register",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "409": {
+            "description": "Email exists"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "summary": "Current user",
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User info"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "summary": "List projects",
+        "tags": [
+          "projects"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project list"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create project",
+        "tags": [
+          "projects"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "tech": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}": {
+      "get": {
+        "summary": "Get project",
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update project",
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete project",
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/start": {
+      "post": {
+        "summary": "Start project mission",
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mission started"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/stop": {
+      "post": {
+        "summary": "Stop project",
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stopped"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/pause": {
+      "post": {
+        "summary": "Pause project",
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paused"
+          }
+        }
+      }
+    },
+    "/api/chat/sessions": {
+      "post": {
+        "summary": "Create chat session",
+        "tags": [
+          "chat"
+        ],
+        "responses": {
+          "201": {
+            "description": "Session created"
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{id}/message": {
+      "post": {
+        "summary": "Send message",
+        "tags": [
+          "chat"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response"
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{id}/stream": {
+      "post": {
+        "summary": "Stream message (SSE)",
+        "tags": [
+          "chat"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream"
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{id}/history": {
+      "get": {
+        "summary": "Get chat history",
+        "tags": [
+          "chat"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message history"
+          }
+        }
+      }
+    },
+    "/api/ideation/sessions": {
+      "get": {
+        "summary": "List ideation sessions",
+        "tags": [
+          "ideation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Session list"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create ideation session",
+        "tags": [
+          "ideation"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/ideation/sessions/{id}": {
+      "get": {
+        "summary": "Get ideation session",
+        "tags": [
+          "ideation"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session"
+          }
+        }
+      }
+    },
+    "/api/ideation/sessions/{id}/start": {
+      "post": {
+        "summary": "Start ideation",
+        "tags": [
+          "ideation"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Started"
+          }
+        }
+      }
+    },
+    "/api/ideation/sessions/{id}/stream": {
+      "get": {
+        "summary": "Stream ideation (SSE)",
+        "tags": [
+          "ideation"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream"
+          }
+        }
+      }
+    },
+    "/api/providers": {
+      "get": {
+        "summary": "List LLM providers",
+        "tags": [
+          "llm"
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider list"
+          }
+        }
+      }
+    },
+    "/api/providers/{name}/test": {
+      "post": {
+        "summary": "Test LLM provider",
+        "tags": [
+          "llm"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test result"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

@@ -1,0 +1,636 @@
+skill:
+  name: ux-laws-deep
+  version: '2.0'
+  description: Comprehensive UX Laws reference — 30 laws from lawsofux.com by Jon Yablonski. Covers performance, decision-making,
+    memory, Gestalt perception, behavior, and strategic design principles.
+  source: https://lawsofux.com/
+  author: Jon Yablonski
+  total_laws: 30
+  categories:
+    performance:
+      description: Laws governing response times, interaction speed, and target acquisition
+      laws:
+      - UX-006
+      - UX-007
+    decision:
+      description: Laws governing how users make choices, form judgments, and build understanding
+      laws:
+      - UX-002
+      - UX-004
+      - UX-010
+      - UX-017
+    memory:
+      description: Laws governing working memory, recall, attention, and information processing
+      laws:
+      - UX-003
+      - UX-005
+      - UX-018
+      - UX-025
+      - UX-026
+      - UX-028
+      - UX-029
+    gestalt:
+      description: Gestalt principles governing visual perception and grouping
+      laws:
+      - UX-012
+      - UX-013
+      - UX-014
+      - UX-015
+      - UX-016
+    behavior:
+      description: Laws governing user motivation, engagement, and behavioral patterns
+      laws:
+      - UX-008
+      - UX-009
+      - UX-020
+      - UX-022
+      - UX-023
+      - UX-030
+    strategic:
+      description: High-level design principles governing simplicity, robustness, and user expectations
+      laws:
+      - UX-001
+      - UX-011
+      - UX-019
+      - UX-021
+      - UX-024
+      - UX-027
+  laws:
+  - id: UX-001
+    name: Aesthetic-Usability Effect
+    category: strategic
+    url: https://lawsofux.com/aesthetic-usability-effect/
+    description: Users often perceive aesthetically pleasing design as design that's more usable.
+    principle: An aesthetically pleasing design creates a positive response in people's brains and leads them to believe the
+      design actually works better. People are more tolerant of minor usability issues when the design is aesthetically pleasing.
+      However, visually pleasing design can mask usability problems and prevent issues from being discovered during usability
+      testing.
+    origin: First studied in 1995 by Masaaki Kurosu and Kaori Kashimura at the Hitachi Design Center who tested 26 ATM UI
+      variations with 252 participants.
+    takeaways:
+    - Aesthetically pleasing design creates a positive response and leads users to believe the design works better.
+    - People are more tolerant of minor usability issues when design is aesthetically pleasing.
+    - Visually pleasing design can mask usability problems and prevent issues from being discovered during testing.
+    application: Invest in visual polish to increase perceived usability. Use aesthetic quality to build trust and positive
+      first impressions. But always validate with usability testing — beauty can hide real problems. Balance visual appeal
+      with genuine functionality.
+  - id: UX-002
+    name: Choice Overload
+    category: decision
+    url: https://lawsofux.com/choice-overload/
+    description: The tendency for people to get overwhelmed when presented with a large number of options, often used interchangeably
+      with the term paradox of choice.
+    principle: Too many options hurt users' decision-making ability and can significantly impact how they feel about the experience.
+      When comparison is necessary, enable side-by-side comparison of related items. Optimize designs for the decision-making
+      process by prioritizing content shown at any given moment.
+    origin: Term first introduced by Alvin Toffler in his 1970 book Future Shock. Closely related to Hick's Law.
+    takeaways:
+    - Too many options hurt decision-making ability and overall experience perception.
+    - Enable side-by-side comparison when comparison is necessary.
+    - Prioritize content shown at any given moment and provide tools for narrowing choices.
+    application: Limit the number of choices presented at once. Use progressive disclosure to reveal options as needed. Provide
+      search and filtering tools to narrow choices. Feature recommended or popular options prominently. Use side-by-side comparison
+      views for complex decisions like pricing tiers.
+  - id: UX-003
+    name: Chunking
+    category: memory
+    url: https://lawsofux.com/chunking/
+    description: A process by which individual pieces of an information set are broken down and then grouped together in a
+      meaningful whole.
+    principle: Chunking enables users to easily scan content and identify information aligned with their goals. Structuring
+      content into visually distinct groups with clear hierarchy enables designers to align information with how people evaluate
+      and process digital content.
+    origin: Comes from George A. Miller's 1956 paper 'The Magical Number Seven, Plus or Minus Two'. Closely related to Miller's
+      Law.
+    takeaways:
+    - Chunking enables users to easily scan content and identify goal-relevant information.
+    - Structure content into visually distinct groups with clear hierarchy.
+    - Use chunking to help users understand underlying relationships between content.
+    application: Break long content into digestible groups. Use visual separators (whitespace, borders, backgrounds) to define
+      chunks. Apply clear hierarchy within and between groups. Format phone numbers, credit cards, and codes in chunks. Organize
+      navigation into logical groups.
+  - id: UX-004
+    name: Cognitive Bias
+    category: decision
+    url: https://lawsofux.com/cognitive-bias/
+    description: A systematic error of thinking or rationality in judgment that influences our perception of the world and
+      our decision-making ability.
+    principle: We conserve mental energy by developing rules of thumb (heuristics) based on past experiences. These mental
+      shortcuts increase efficiency but can influence decision-making without our awareness. Understanding our intrinsic biases
+      may not eliminate them but increases the chance of identifying them.
+    origin: Introduced by Amos Tversky and Daniel Kahneman in 1972 after observing people's inability to reason intuitively
+      with greater orders of magnitude.
+    takeaways:
+    - Mental shortcuts increase efficiency but can influence decisions without awareness.
+    - Understanding biases increases the chance of identifying them in ourselves and others.
+    - Confirmation bias makes logical discussion about polarizing issues difficult.
+    application: Design with awareness of confirmation bias, anchoring, and other cognitive biases. Present balanced information
+      to counteract bias. Use data-driven defaults that account for known biases. Test designs with diverse user groups. Be
+      ethical — don't exploit cognitive biases to manipulate users.
+  - id: UX-005
+    name: Cognitive Load
+    category: memory
+    url: https://lawsofux.com/cognitive-load/
+    description: The amount of mental resources needed to understand and interact with an interface.
+    principle: When information exceeds available mental capacity, tasks become more difficult, details are missed, and users
+      feel overwhelmed. Intrinsic cognitive load refers to effort for goal-relevant information. Extraneous cognitive load
+      refers to processing that doesn't help understanding (e.g., distracting design elements).
+    origin: Developed in the late 1980s by John Sweller, expanding on George Miller's information processing theories. Published
+      in 1988 as 'Cognitive Load Theory, Learning Difficulty, and Instructional Design'.
+    takeaways:
+    - When information exceeds mental capacity, users struggle and feel overwhelmed.
+    - Intrinsic load is effort for goal-relevant tasks; extraneous load is unnecessary processing.
+    - Reduce extraneous cognitive load through clear, focused design.
+    application: Minimize extraneous cognitive load by removing unnecessary elements. Use progressive disclosure to reveal
+      complexity gradually. Maintain consistency in UI patterns. Reduce the number of decisions required. Use familiar patterns
+      and conventions. Keep forms simple with clear labels.
+  - id: UX-006
+    name: Doherty Threshold
+    category: performance
+    url: https://lawsofux.com/doherty-threshold/
+    description: Productivity soars when a computer and its users interact at a pace (<400ms) that ensures that neither has
+      to wait on the other.
+    principle: System feedback within 400ms keeps users' attention and increases productivity. Use perceived performance to
+      improve response time perception. Animation can visually engage users during background processing. Progress bars help
+      make wait times tolerable. Purposefully adding a brief delay can increase perceived value and trust.
+    origin: In 1982, Walter J. Doherty and Ahrvind J. Thadani published research in the IBM Systems Journal setting the requirement
+      for 400ms computer response time, down from the previous 2-second standard.
+    takeaways:
+    - Provide system feedback within 400ms to maintain attention and productivity.
+    - Use perceived performance to improve response time perception.
+    - Animation engages users during background processing.
+    - Progress bars make wait times tolerable regardless of accuracy.
+    - Brief intentional delays can increase perceived value and trust.
+    application: Target <400ms response time for all interactions. Use skeleton screens and loading animations for longer
+      operations. Implement optimistic UI updates. Show progress indicators for multi-step processes. Pre-fetch data when
+      user intent is predictable. Use perceived performance techniques when actual speed isn't achievable.
+  - id: UX-007
+    name: Fitts's Law
+    category: performance
+    url: https://lawsofux.com/fittss-law/
+    description: The time to acquire a target is a function of the distance to and size of the target.
+    principle: Fast movements and small targets result in greater error rates due to the speed-accuracy trade-off. Touch targets
+      should be large enough for accurate selection, have ample spacing, and be placed in easily acquirable areas of the interface.
+    origin: In 1954, psychologist Paul Fitts examined the human motor system and showed that movement time depends on distance
+      to target and inversely relates to target size.
+    takeaways:
+    - Touch targets should be large enough for accurate selection.
+    - Touch targets should have ample spacing between them.
+    - Touch targets should be placed in areas that allow easy acquisition.
+    application: Make interactive elements at least 44px (touch) or 24px (pointer). Increase spacing between touch targets.
+      Place primary actions in easily reachable areas. Use edge and corner targets on desktop (infinite depth). Make destructive
+      actions harder to reach than constructive ones. Size buttons proportionally to their importance.
+  - id: UX-008
+    name: Flow
+    category: behavior
+    url: https://lawsofux.com/flow/
+    description: The mental state in which a person performing some activity is fully immersed in a feeling of energized focus,
+      full involvement, and enjoyment in the process of the activity.
+    principle: Flow occurs when there is balance between task difficulty and skill level, characterized by intense focused
+      concentration and a sense of control. A task too difficult leads to frustration; too easy leads to boredom. Design for
+      flow by providing feedback and removing unnecessary friction.
+    origin: Coined by psychologist Mihaly Csikszentmihalyi in 1975. The concept has been widely applied across various fields,
+      particularly occupational therapy.
+    takeaways:
+    - Flow requires balance between task difficulty and user skill level.
+    - Tasks too difficult cause frustration; too easy cause boredom.
+    - Design for flow by providing feedback and removing friction.
+    - Optimize efficiency and responsiveness to avoid disengagement.
+    application: Match challenge level to user skill. Provide clear, immediate feedback for every action. Remove friction
+      and unnecessary steps. Make content and features discoverable. Ensure system responsiveness. Allow users to maintain
+      focus without interruptions. Use progressive complexity.
+  - id: UX-009
+    name: Goal-Gradient Effect
+    category: behavior
+    url: https://lawsofux.com/goal-gradient-effect/
+    description: The tendency to approach a goal increases with proximity to the goal.
+    principle: The closer users are to completing a task, the faster they work toward it. Providing artificial progress toward
+      a goal helps ensure users have motivation to complete the task. Clear progress indication motivates task completion.
+    origin: Originally proposed by behaviorist Clark Hull in 1932. Hull found that rats ran progressively faster as they approached
+      food in experiments from 1934.
+    takeaways:
+    - Users work faster as they get closer to completing a task.
+    - Artificial progress toward a goal increases motivation to complete it.
+    - Clear progress indication motivates task completion.
+    application: Show progress indicators that emphasize how far users have come. Use progress bars in multi-step flows. Pre-fill
+      initial progress to create momentum (e.g., loyalty cards with starter stamps). Break large tasks into visible milestones.
+      Celebrate near-completion to maintain motivation.
+  - id: UX-010
+    name: Hick's Law
+    category: decision
+    url: https://lawsofux.com/hicks-law/
+    description: The time it takes to make a decision increases with the number and complexity of choices.
+    principle: More stimuli to choose from means longer decision time. Users bombarded with choices must take time to interpret
+      and decide. Minimize choices when response times are critical. Break complex tasks into smaller steps. Use progressive
+      onboarding for new users.
+    origin: Named after British psychologist William Edmund Hick and American psychologist Ray Hyman who in 1952 examined
+      the relationship between number of stimuli and reaction time.
+    takeaways:
+    - Minimize choices when response times are critical.
+    - Break complex tasks into smaller steps to decrease cognitive load.
+    - Highlight recommended options to avoid overwhelming users.
+    - Use progressive onboarding for new users.
+    - Don't simplify to the point of abstraction.
+    application: Reduce navigation options to essential items. Use progressive disclosure for complex features. Highlight
+      recommended options to guide decisions. Break multi-step processes into simple stages. Be careful not to over-simplify
+      to the point of abstraction. Use categorization to organize large option sets.
+  - id: UX-011
+    name: Jakob's Law
+    category: strategic
+    url: https://lawsofux.com/jakobs-law/
+    description: Users spend most of their time on other sites. This means that users prefer your site to work the same way
+      as all the other sites they already know.
+    principle: Users transfer expectations from familiar products to similar ones. By leveraging existing mental models, we
+      create superior experiences where users focus on tasks rather than learning new models. When making changes, minimize
+      discord by allowing users to continue using familiar versions temporarily.
+    origin: Coined by Jakob Nielsen, User Advocate and principal of the Nielsen Norman Group, co-founded with Dr. Donald A.
+      Norman (former VP of research at Apple Computer).
+    takeaways:
+    - Users transfer expectations from familiar products to similar ones.
+    - Leverage existing mental models for superior user experiences.
+    - When making changes, allow users to use familiar versions temporarily.
+    application: Follow established design conventions and patterns. Study competitor interfaces to understand user expectations.
+      When redesigning, allow gradual transition (like YouTube's 2017 redesign approach). Use standard form controls and navigation
+      patterns. Don't innovate for innovation's sake — match user mental models.
+  - id: UX-012
+    name: Law of Common Region
+    category: gestalt
+    url: https://lawsofux.com/law-of-common-region/
+    description: Elements tend to be perceived into groups if they are sharing an area with a clearly defined boundary.
+    principle: Common region creates clear structure and helps users quickly understand relationships between elements and
+      sections. Adding borders or defining backgrounds around elements are effective ways to create common region groupings.
+    origin: Part of Gestalt laws of grouping, first proposed by Gestalt psychologists. These principles describe how humans
+      naturally perceive objects as organized patterns (Pragnanz).
+    takeaways:
+    - Common region creates clear structure and aids understanding of relationships.
+    - Borders around elements are an easy way to create common region.
+    - Background colors behind elements also create effective common region.
+    application: Use cards to group related content. Apply borders around related form fields. Use background colors to distinguish
+      sections. Create visual containers for related actions. Maintain consistent boundary treatments across similar groupings.
+  - id: UX-013
+    name: Law of Proximity
+    category: gestalt
+    url: https://lawsofux.com/law-of-proximity/
+    description: Objects that are near, or proximate to each other, tend to be grouped together.
+    principle: Proximity establishes relationships with nearby objects. Elements in close proximity are perceived to share
+      similar functionality or traits. Proximity helps users understand and organize information faster and more efficiently.
+    origin: 'Part of Gestalt laws of grouping. Example: Google''s search results page uses spacing between results to group
+      each result as a related cluster of information.'
+    takeaways:
+    - Proximity establishes relationships between nearby objects.
+    - Elements in close proximity are perceived to share similar functionality.
+    - Proximity helps users understand and organize information faster.
+    application: Place related form labels close to their inputs. Group related navigation items together. Use spacing to
+      separate distinct content sections. Keep action buttons near the content they affect. Organize dashboard cards by proximity
+      to indicate relationships.
+  - id: UX-014
+    name: Law of Pragnanz
+    category: gestalt
+    url: https://lawsofux.com/law-of-pr%C3%A4gnanz/
+    description: People will perceive and interpret ambiguous or complex images as the simplest form possible, because it
+      is the interpretation that requires the least cognitive effort.
+    principle: The human eye likes to find simplicity and order in complex shapes to prevent information overwhelm. People
+      are better able to visually process and remember simple figures than complex ones. Complex shapes are simplified by
+      transforming them into single, unified shapes.
+    origin: In 1910, psychologist Max Wertheimer had an insight observing lights at a railroad crossing, leading to Gestalt
+      principles of visual perception. Also known as the Law of Good Figure or Law of Simplicity.
+    takeaways:
+    - The human eye seeks simplicity and order in complex shapes.
+    - People process and remember simple figures better than complex ones.
+    - Complex shapes are mentally simplified into unified forms.
+    application: Simplify visual elements and icons. Use clean, geometric shapes. Reduce visual noise and unnecessary detail.
+      Create clear visual hierarchy. Avoid ambiguous visual arrangements. Test icon and symbol comprehension with users.
+  - id: UX-015
+    name: Law of Similarity
+    category: gestalt
+    url: https://lawsofux.com/law-of-similarity/
+    description: The human eye tends to perceive similar elements as a complete picture, shape, or group, even if those elements
+      are separated.
+    principle: Visually similar elements are perceived as related. Color, shape, size, orientation, and movement can signal
+      group membership and shared meaning or functionality. Links and navigation must be visually differentiated from normal
+      text.
+    origin: 'Part of Gestalt laws of grouping, organized into five categories: Proximity, Similarity, Continuity, Closure,
+      and Connectedness.'
+    takeaways:
+    - Visually similar elements are perceived as related.
+    - Color, shape, size, orientation and movement signal group membership.
+    - Links and navigation must be visually differentiated from normal text.
+    application: Use consistent visual styling for elements with same function. Differentiate interactive elements from static
+      content. Apply consistent color coding across the interface. Ensure navigation items look distinctly different from
+      body text. Use consistent icon styles within the same context.
+  - id: UX-016
+    name: Law of Uniform Connectedness
+    category: gestalt
+    url: https://lawsofux.com/law-of-uniform-connectedness/
+    description: Elements that are visually connected are perceived as more related than elements with no connection.
+    principle: Group functions of similar nature so they are visually connected via colors, lines, frames, or other shapes.
+      Tangible connecting references (lines, arrows) from one element to the next also create visual connection. Use uniform
+      connectedness to show context or emphasize relationships.
+    origin: Part of Gestalt laws of grouping. Google Search uses borders around items like videos and featured snippets to
+      visually connect content and separate it from other results.
+    takeaways:
+    - Group similar functions visually via colors, lines, frames, or shapes.
+    - Use tangible connecting references (lines, arrows) between elements.
+    - Use uniform connectedness to show context or emphasize relationships.
+    application: Use lines or arrows to connect related elements. Apply consistent background colors to related groups. Use
+      borders to visually link content (like Google's featured snippets). Create visual flow between sequential steps. Connect
+      labels to their form fields with visual cues.
+  - id: UX-017
+    name: Mental Model
+    category: decision
+    url: https://lawsofux.com/mental-model/
+    description: A compressed model based on what we think we know about a system and how it works.
+    principle: Users form working models of systems and apply them to new similar situations. Match designs to users' mental
+      models to improve experience, enabling knowledge transfer between products without needing to learn how new systems
+      work. Shrinking the gap between designer and user mental models is one of the biggest UX challenges.
+    origin: Originally postulated by psychologist Kenneth Craik in 1943 in 'The Nature of Explanation'. People carry small-scale
+      models of how the world works to anticipate events, reason, and form explanations.
+    takeaways:
+    - Users form working models and apply them to new similar situations.
+    - Match designs to users' mental models for better experience.
+    - Use user research methods to understand and align with user mental models.
+    - Good UX comes from alignment between product design and user mental models.
+    application: Conduct user research to understand mental models. Use familiar metaphors and patterns (e.g., shopping cart
+      for e-commerce). Follow platform-specific conventions. Use card sorting to understand user categorization. Create personas
+      and journey maps. Test with real users to validate alignment.
+  - id: UX-018
+    name: Miller's Law
+    category: memory
+    url: https://lawsofux.com/millers-law/
+    description: The average person can only keep 7 (plus or minus 2) items in their working memory.
+    principle: Short-term memory capacity is limited to approximately 7 items (5-9 range). Don't use the 'magical number seven'
+      to justify unnecessary design limitations. Organize content into smaller chunks for easier processing. Remember that
+      capacity varies per individual based on prior knowledge and context.
+    origin: In 1956, George Miller asserted that immediate memory span and absolute judgment are limited to around 7 pieces
+      of information in his landmark paper.
+    takeaways:
+    - Don't use the magical number seven to justify unnecessary limitations.
+    - Organize content into smaller chunks for easier processing.
+    - Short-term memory capacity varies per individual based on context.
+    application: Organize navigation into groups of 5-9 items maximum. Chunk phone numbers, codes, and long strings. Don't
+      use this as rigid rule — it's a guideline. Structure information hierarchically. Use progressive disclosure for complex
+      content. Provide visual aids to support memory.
+  - id: UX-019
+    name: Occam's Razor
+    category: strategic
+    url: https://lawsofux.com/occams-razor/
+    description: Among competing hypotheses that predict equally well, the one with the fewest assumptions should be selected.
+    principle: The best method for reducing complexity is to avoid it in the first place. Analyze each element and remove
+      as many as possible without compromising function. Consider completion only when no additional items can be removed.
+    origin: Attributed to William of Ockham (c. 1287-1347), an English Franciscan friar and philosopher. Also known as 'lex
+      parsimoniae' (law of parsimony).
+    takeaways:
+    - The best method for reducing complexity is to avoid it in the first place.
+    - Analyze each element and remove as many as possible without compromising function.
+    - Consider completion only when no additional items can be removed.
+    application: Start with the simplest viable design. Remove decorative elements that don't serve a purpose. Simplify user
+      flows by eliminating unnecessary steps. Choose the simplest solution that solves the problem. Audit existing interfaces
+      for removable complexity. Prefer convention over configuration.
+  - id: UX-020
+    name: Paradox of the Active User
+    category: behavior
+    url: https://lawsofux.com/paradox-of-the-active-user/
+    description: Users never read manuals but start using the software immediately.
+    principle: Users are motivated to complete immediate tasks and won't spend time reading documentation upfront. The paradox
+      is that users would save time long-term by learning the system first. Make guidance accessible throughout the product
+      and design it to fit within context of use.
+    origin: 'First defined by Mary Beth Rosson and John Carroll in 1987 in ''Interfacing Thought: Cognitive Aspects of Human-Computer
+      Interaction''. They found new users didn''t read manuals and just started using computers.'
+    takeaways:
+    - Users are motivated by immediate tasks and won't read documentation upfront.
+    - Users would save time long-term by learning the system first — the paradox.
+    - Make guidance accessible throughout the product, fitting within context of use.
+    application: Use inline help and tooltips instead of manuals. Implement progressive onboarding within the product flow.
+      Provide contextual guidance at decision points. Design interfaces that are self-explanatory. Use empty states as teaching
+      moments. Make help searchable and contextual, not separated.
+  - id: UX-021
+    name: Pareto Principle
+    category: strategic
+    url: https://lawsofux.com/pareto-principle/
+    description: The Pareto principle states that, for many events, roughly 80% of the effects come from 20% of the causes.
+    principle: Inputs and outputs are often not evenly distributed. A large group may contain only a few meaningful contributors
+      to the desired outcome. Focus the majority of effort on the areas that will bring the largest benefits to the most users.
+    origin: Stems from Vilfredo Pareto, an economist who noticed 80% of Italy's land was owned by 20% of the population. Also
+      known as the 80/20 rule.
+    takeaways:
+    - Inputs and outputs are often not evenly distributed.
+    - A large group may contain only a few meaningful contributors.
+    - Focus majority of effort on areas bringing largest benefits to most users.
+    application: Identify the 20% of features that serve 80% of user needs. Prioritize fixing the most impactful usability
+      issues first. Focus design effort on the most-used user flows. Analyze analytics to find highest-impact improvement
+      areas. Don't over-invest in rarely-used features.
+  - id: UX-022
+    name: Parkinson's Law
+    category: behavior
+    url: https://lawsofux.com/parkinsons-law/
+    description: Any task will inflate until all of the available time is spent.
+    principle: Limit the time it takes to complete a task to what users expect. Reducing actual duration below expected duration
+      improves overall experience. Leverage features like autofill to save time when providing critical information within
+      forms.
+    origin: 'Articulated by Cyril Northcote Parkinson in a 1955 humorous essay in The Economist, later republished in the
+      1958 book ''Parkinson''s Law: The Pursuit of Progress''.'
+    takeaways:
+    - Limit task completion time to what users expect.
+    - Reducing actual duration below expected duration improves UX.
+    - Use autofill to save time when providing critical information in forms.
+    application: Set reasonable time constraints on tasks. Use autofill and smart defaults to speed up forms. Show estimated
+      completion times. Reduce form fields to the minimum required. Pre-populate known information. Use single-page checkouts
+      instead of multi-step when possible.
+  - id: UX-023
+    name: Peak-End Rule
+    category: behavior
+    url: https://lawsofux.com/peak-end-rule/
+    description: People judge an experience largely based on how they felt at its peak and at its end, rather than the total
+      sum or average of every moment of the experience.
+    principle: Pay close attention to the most intense points and final moments of the user journey. Identify moments when
+      the product is most helpful, valuable, or entertaining and design to delight. Remember that people recall negative experiences
+      more vividly than positive ones.
+    origin: 'A 1993 study by Kahneman, Fredrickson, Schreiber, and Redelmeier (''When More Pain Is Preferred to Less: Adding
+      a Better End'') provided groundbreaking evidence. Closely related to Cognitive Bias.'
+    takeaways:
+    - Pay close attention to the most intense points and final moments of user journeys.
+    - Design to delight at moments when the product is most helpful or valuable.
+    - People recall negative experiences more vividly than positive ones.
+    application: Design delightful moments at key touchpoints (like Mailchimp's campaign send screen). Ensure the end of user
+      flows is positive and satisfying. Minimize negative emotional peaks (like Uber reducing post-request cancellation frustration).
+      Add surprise and delight at high-impact moments. End onboarding flows with accomplishment feelings.
+  - id: UX-024
+    name: Postel's Law
+    category: strategic
+    url: https://lawsofux.com/postels-law/
+    description: Be liberal in what you accept, and conservative in what you send.
+    principle: Be empathetic, flexible, and tolerant of various user actions and inputs. Anticipate virtually anything in
+      terms of input, access, and capability while providing reliable and accessible output. The more we anticipate in design,
+      the more resilient it will be.
+    origin: 'Formulated by Jon Postel, early Internet pioneer. Also known as the Robustness Principle, originally applied
+      to TCP: ''Be conservative in what you do, be liberal in what you accept from others.'''
+    takeaways:
+    - Be empathetic, flexible, and tolerant of user actions and inputs.
+    - Anticipate varied input, access, and capability while providing reliable output.
+    - The more we anticipate in design, the more resilient it will be.
+    - Accept variable input, translate to meet requirements, define boundaries, provide clear feedback.
+    application: Accept multiple input formats (dates, phone numbers, addresses). Provide clear feedback on input requirements.
+      Handle edge cases gracefully. Support various devices, browsers, and capabilities. Validate on the server side, guide
+      on the client side. Design for accessibility and varied user needs.
+  - id: UX-025
+    name: Selective Attention
+    category: memory
+    url: https://lawsofux.com/selective-attention/
+    description: The process of focusing attention only to a subset of stimuli in the environment — usually those related
+      to our goals.
+    principle: People filter out information that isn't relevant to maintain focus on important information. Banner Blindness
+      demonstrates this — users ignore content resembling ads. Change Blindness occurs when significant changes go unnoticed
+      due to attention limitations and lack of strong cues.
+    origin: 'Originated mid-20th century. Key contributors: Broadbent''s Filter Theory (1958), Cherry''s Cocktail Party Effect
+      (1953), Treisman''s Attenuation Model (1960), Deutsch & Deutsch''s Late Selection Theory (1963).'
+    takeaways:
+    - People filter out information that isn't relevant to maintain task focus.
+    - 'Banner Blindness: users ignore content resembling ads — don''t style content like ads.'
+    - 'Change Blindness: significant changes go unnoticed without strong visual cues.'
+    application: Guide users' attention with visual hierarchy. Avoid styling content to look like ads (Banner Blindness).
+      Use clear visual cues for important changes. Avoid competing changes happening simultaneously. Don't rely on users noticing
+      passive updates — use active notifications. Design for focused task completion.
+  - id: UX-026
+    name: Serial Position Effect
+    category: memory
+    url: https://lawsofux.com/serial-position-effect/
+    description: Users have a propensity to best remember the first and last items in a series.
+    principle: The primacy effect (first items) and recency effect (last items) explain why items at the beginning and end
+      of sequences are recalled more accurately than middle items. Placing least important items in the middle is helpful
+      as they tend to be stored less frequently in memory.
+    origin: Term coined by Herman Ebbinghaus. Applied successfully by companies like Apple, Electronic Arts, and Nike in their
+      product designs.
+    takeaways:
+    - Place least important items in the middle of lists.
+    - Position key actions at the far left and right of navigation elements.
+    - First and last items in a series are remembered best.
+    application: Place the most important navigation items at the beginning and end. Put key actions at the far left and right
+      of toolbars. Place critical information at the start and end of lists. Use the middle for less critical content. Apply
+      to tab bars, navigation menus, and feature lists.
+  - id: UX-027
+    name: Tesler's Law
+    category: strategic
+    url: https://lawsofux.com/teslers-law/
+    description: For any system there is a certain amount of complexity which cannot be reduced. Also known as The Law of
+      Conservation of Complexity.
+    principle: All processes have core complexity that cannot be designed away and must be assumed by either the system or
+      the user. Ensure as much burden as possible is lifted from users by handling inherent complexity during design and development.
+      Don't build for idealized rational users.
+    origin: Larry Tesler realized this while working at Xerox PARC in the mid-1980s. Published in Dan Saffer's 'Designing
+      for Interaction'. Tesler argued engineers should spend an extra week reducing complexity vs. making millions of users
+      spend an extra minute.
+    takeaways:
+    - Core complexity cannot be designed away — it must be handled by system or user.
+    - Lift as much burden from users as possible during design and development.
+    - Don't build for idealized, rational users — people don't always behave rationally.
+    - Make guidance accessible and contextual for complex tasks.
+    application: Identify irreducible complexity in your system. Move complexity from the user to the system where possible.
+      Use smart defaults to reduce required decisions. Automate complex calculations and validations. Provide contextual help
+      for unavoidably complex tasks. Accept that some complexity must remain — manage it well.
+  - id: UX-028
+    name: Von Restorff Effect
+    category: memory
+    url: https://lawsofux.com/von-restorff-effect/
+    description: When multiple similar objects are present, the one that differs from the rest is most likely to be remembered.
+      Also known as The Isolation Effect.
+    principle: Make important information or key actions visually distinctive. Use restraint when placing emphasis to avoid
+      elements competing with each other and salient items being mistaken for ads. Don't exclude users with color vision deficiency
+      by relying exclusively on color for contrast.
+    origin: Coined by German psychiatrist and pediatrician Hedwig von Restorff (1906-1962) in her 1933 study showing improved
+      memory for distinctive items in lists of similar objects.
+    takeaways:
+    - Make important information or key actions visually distinctive.
+    - Use restraint with emphasis — avoid competing visual elements.
+    - Don't rely exclusively on color for contrast — ensure accessibility.
+    - Consider motion sensitivity when using animation for contrast.
+    application: Visually distinguish CTAs from surrounding elements. Use color, size, or shape to highlight key content.
+      Don't overuse visual emphasis — it loses effectiveness. Ensure accessibility (don't rely on color alone). Use multiple
+      visual cues (color + size + position). Consider motion sensitivity when using animation for emphasis.
+  - id: UX-029
+    name: Working Memory
+    category: memory
+    url: https://lawsofux.com/working-memory/
+    description: A cognitive system that temporarily holds and manipulates information needed to complete tasks.
+    principle: Working memory is limited to 4-7 chunks that fade after 20-30 seconds. Our brains recognize previously seen
+      information better than recalling new information. Support recognition over recall by making viewed information clear.
+      Place memory burden on the system, not the user.
+    origin: Term coined by George A. Miller, Eugene Galanter, and Karl H. Pribram in the 1960s. Atkinson and Shiffrin used
+      it in 1968 to describe 'short-term store'. Neural basis research traces back over 100 years to Hitzig and Ferrier's
+      prefrontal cortex ablation experiments.
+    takeaways:
+    - Working memory holds 4-7 chunks that fade after 20-30 seconds.
+    - Support recognition over recall — make viewed information identifiable.
+    - Place memory burden on the system, not the user.
+    application: Carry information across screens when needed (e.g., comparison tables). Visually differentiate visited links.
+      Provide breadcrumbs for navigation context. Show recently viewed items. Keep related information visible simultaneously.
+      Use persistent UI elements for critical context. Minimize required memorization between steps.
+  - id: UX-030
+    name: Zeigarnik Effect
+    category: behavior
+    url: https://lawsofux.com/zeigarnik-effect/
+    description: People remember uncompleted or interrupted tasks better than completed tasks.
+    principle: Invite content discovery by providing clear signifiers of additional content. Providing artificial progress
+      toward a goal helps ensure users have motivation to complete that task. Provide clear indication of progress to motivate
+      task completion.
+    origin: Discovered by Soviet psychologist Bluma Wulfovna Zeigarnik (1900-1988) in the 1920s. She found that incomplete
+      tasks are easier to remember than completed ones. Received the Lewin Memorial Award in 1983.
+    takeaways:
+    - Invite content discovery with clear signifiers of additional content.
+    - Artificial progress toward a goal increases motivation to complete tasks.
+    - Clear progress indication motivates task completion.
+    application: Use progress indicators in multi-step processes. Show incomplete profile or setup status to motivate completion.
+      Provide visual cues for unexplored content (unread badges). Use cliffhangers in content feeds to encourage continued
+      engagement. Show partial previews to invite exploration. Leverage incomplete states as motivation tools.
+  quick_reference:
+    performance_targets:
+      response_time: <400ms (Doherty Threshold UX-006)
+      touch_target_size: '>=44px (Fitts''s Law UX-007)'
+      touch_target_spacing: '>=8px between targets'
+    memory_limits:
+      working_memory_items: 7 +/- 2 (Miller's Law UX-018)
+      working_memory_chunks: 4-7 chunks, fade after 20-30s (Working Memory UX-029)
+      navigation_groups: 5-9 items maximum per group
+    decision_rules:
+      minimize_choices: Fewer options = faster decisions (Hick's Law UX-010)
+      avoid_choice_overload: Provide filtering and recommendations (Choice Overload UX-002)
+      follow_conventions: Users expect familiar patterns (Jakob's Law UX-011)
+    gestalt_grouping:
+      proximity: Near objects are grouped (UX-013)
+      similarity: Similar elements are grouped (UX-015)
+      common_region: Bounded areas create groups (UX-012)
+      uniform_connectedness: Connected elements are related (UX-016)
+      pragnanz: Simplest interpretation preferred (UX-014)
+    behavior_patterns:
+      flow: Balance challenge with skill (UX-008)
+      goal_gradient: Progress motivates completion (UX-009)
+      peak_end: Focus on peak moments and endings (UX-023)
+      zeigarnik: Incomplete tasks are remembered better (UX-030)
+      active_user: Users skip manuals — provide inline help (UX-020)
+    strategic_principles:
+      aesthetic_usability: Beautiful = perceived as more usable (UX-001)
+      occams_razor: Simplest solution is best (UX-019)
+      postels_law: Accept varied input, send clean output (UX-024)
+      teslers_law: Irreducible complexity exists — manage it (UX-027)
+      pareto: 80% of value from 20% of features (UX-021)
+  agent_guidelines:
+    when_designing_interfaces:
+    - 'Apply Fitts''s Law: make touch targets >=44px with >=8px spacing'
+    - 'Apply Doherty Threshold: ensure <400ms response time, use skeleton screens'
+    - 'Apply Hick''s Law: minimize choices, use progressive disclosure'
+    - 'Apply Miller''s Law: chunk content into groups of 5-9 items'
+    - 'Apply Jakob''s Law: follow established conventions and patterns'
+    - 'Apply Gestalt principles: use proximity, similarity, and common region for grouping'
+    when_reviewing_designs:
+    - 'Check for Choice Overload: are there too many options presented at once?'
+    - 'Check for Cognitive Load: is there unnecessary extraneous information?'
+    - 'Check for Von Restorff: are CTAs visually distinctive (not just by color)?'
+    - 'Check for Serial Position: are key items at the start/end of lists?'
+    - 'Check for Selective Attention: does any content look like ads?'
+    - 'Check for Peak-End Rule: is the end of the flow satisfying?'
+    when_writing_code:
+    - Implement skeleton screens for loading states (Doherty Threshold)
+    - Add progress indicators for multi-step flows (Goal-Gradient, Zeigarnik)
+    - Support autofill and smart defaults (Parkinson's Law, Tesler's Law)
+    - Implement breadcrumbs and visited-link styling (Working Memory)
+    - Accept flexible input formats (Postel's Law)
+    - Use consistent styling for same-function elements (Law of Similarity)
