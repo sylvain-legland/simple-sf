@@ -1,0 +1,234 @@
+{
+  "metadata": {
+    "app": "SimpleSF",
+    "type": "macOS SwiftUI",
+    "extracted_date": "2025-03-14",
+    "total_files_reviewed": 15,
+    "files_with_strings": 12,
+    "estimated_hardcoded_strings": 150,
+    "localization_coverage_percent": 7
+  },
+  "i18n_existing": {
+    "file": "SimpleSF/i18n/Localizable.xcstrings",
+    "format": "JSON Apple Localizable Strings Catalog",
+    "source_language": "en",
+    "supported_languages": 30,
+    "languages": [
+      "af", "ar", "bn", "ca", "cs", "da", "de", "el", "en", "es",
+      "fi", "fr", "he", "hi", "hr", "hu", "id", "it", "ja", "ko",
+      "lt", "lv", "ms", "nb", "nl", "pl", "pt", "ro", "ru", "sk",
+      "sl", "sr", "sv", "th", "tl", "tr", "uk", "ur", "vi", "zh"
+    ],
+    "existing_keys": [
+      "app.name",
+      "nav.projects",
+      "nav.jarvis",
+      "nav.ideation",
+      "mode.simple",
+      "mode.advanced",
+      "action.start",
+      "action.pause",
+      "action.stop",
+      "jarvis.welcome",
+      "onboarding.title",
+      "output.export_zip",
+      "output.push_git"
+    ]
+  },
+  "files_by_category": {
+    "app_initialization": [
+      {
+        "file": "SimpleSF/App/SimpleSFApp.swift",
+        "user_strings": 0,
+        "note": "No user-facing strings - initialization only"
+      },
+      {
+        "file": "SimpleSF/App/AppState.swift",
+        "user_strings": 0,
+        "note": "No user-facing strings - state management only"
+      }
+    ],
+    "navigation": [
+      {
+        "file": "SimpleSF/Views/Shared/ContentView.swift",
+        "user_strings": 0,
+        "note": "Routing view only"
+      },
+      {
+        "file": "SimpleSF/Views/Shared/MainView.swift",
+        "user_strings": 9,
+        "categories": ["navigation", "labels", "buttons", "help_text"],
+        "key_strings": [
+          "Software Factory",
+          "Jarvis / Projects / Ideation / Settings",
+          "YOLO",
+          "No LLM",
+          "loading…"
+        ]
+      }
+    ],
+    "content_views": [
+      {
+        "file": "SimpleSF/Views/Mission/MissionView.swift",
+        "lines": 681,
+        "user_strings": 25,
+        "categories": ["titles", "buttons", "labels", "status_messages"],
+        "key_strings": [
+          "Value Stream",
+          "Lancer un Epic",
+          "Cycle de Vie Produit Complet",
+          "En cours / Terminé / Échoué / Véto"
+        ],
+        "language_note": "FRENCH - appears to be primary UI language"
+      },
+      {
+        "file": "SimpleSF/Views/Agents/AgentsView.swift",
+        "user_strings": 3,
+        "key_strings": [
+          "Agent Team",
+          "agents (count badge)"
+        ]
+      },
+      {
+        "file": "SimpleSF/Jarvis/JarvisView.swift",
+        "lines": 27.3,
+        "unit": "KB",
+        "user_strings": 12,
+        "categories": ["title", "status", "sidebar", "messages"],
+        "key_strings": [
+          "Jarvis",
+          "Réflexion en cours…",
+          "Historique",
+          "192 agents · 1286 skills · 19 patterns"
+        ]
+      },
+      {
+        "file": "SimpleSF/Projects/ProjectsView.swift",
+        "lines": 73.1,
+        "unit": "KB",
+        "user_strings": 30,
+        "categories": ["headers", "empty_states", "pilot_projects", "phases", "messages"],
+        "key_strings": [
+          "Projects",
+          "No projects yet",
+          "Projets Pilotes",
+          "Cycle de Vie Produit Complet"
+        ]
+      },
+      {
+        "file": "SimpleSF/Ideation/IdeationView.swift",
+        "user_strings": 10,
+        "categories": ["title", "form_labels", "buttons", "help"],
+        "key_strings": [
+          "Ideation",
+          "Describe your idea",
+          "Launch Ideation",
+          "3 agents · 3 rounds · network pattern"
+        ]
+      }
+    ],
+    "onboarding": [
+      {
+        "file": "SimpleSF/Onboarding/SetupWizardView.swift",
+        "lines": 22.8,
+        "unit": "KB",
+        "user_strings": 50,
+        "categories": ["welcome", "engine_selection", "model_selection", "download", "ollama_setup", "completion"],
+        "key_strings": [
+          "Simple SF",
+          "Your private Software Factory...",
+          "How do you want to run AI?",
+          "Choose your model",
+          "Ollama Setup",
+          "You're all set!"
+        ]
+      },
+      {
+        "file": "SimpleSF/Onboarding/OnboardingView.swift",
+        "lines": 26.3,
+        "unit": "KB",
+        "user_strings": 40,
+        "categories": ["header", "active_model", "language", "local_models", "cloud_providers"],
+        "key_strings": [
+          "Settings",
+          "Language",
+          "Local Models",
+          "Ollama",
+          "Apple MLX",
+          "Cloud Providers"
+        ]
+      }
+    ],
+    "output": [
+      {
+        "file": "SimpleSF/Output/ZipExporter.swift",
+        "user_strings": 3,
+        "type": "error_messages",
+        "key_strings": [
+          "Workspace not found",
+          "Export cancelled",
+          "zip failed"
+        ]
+      },
+      {
+        "file": "SimpleSF/Output/GitPusher.swift",
+        "user_strings": 2,
+        "type": "error_messages",
+        "key_strings": [
+          "Project workspace not found",
+          "git failed"
+        ]
+      }
+    ],
+    "design_system": [
+      {
+        "file": "SimpleSF/Views/Shared/DesignTokens.swift",
+        "user_strings": 0,
+        "note": "Design tokens and component helpers only"
+      },
+      {
+        "file": "SimpleSF/Views/Shared/MarkdownView.swift",
+        "user_strings": 0,
+        "note": "Markdown rendering engine only"
+      }
+    ]
+  },
+  "string_categories": {
+    "navigation": 7,
+    "buttons": 35,
+    "labels": 20,
+    "status_messages": 25,
+    "empty_states": 8,
+    "help_text": 15,
+    "placeholders": 5,
+    "error_messages": 5,
+    "dynamic_content": 20,
+    "french_content": 35
+  },
+  "language_distribution": {
+    "english": 115,
+    "french": 35,
+    "note": "Many UI strings are in FRENCH, suggesting app is designed for French-speaking users primarily"
+  },
+  "recommendations": {
+    "priority": [
+      "Extract ~140 hardcoded strings to i18n",
+      "Create localization keys for each UI section",
+      "Review French content - consider if this should be primary UI language",
+      "Use NSLocalizedString or SwiftUI's String(localized:) throughout",
+      "Export localizations to translators for 30+ languages"
+    ],
+    "new_i18n_keys_needed": [
+      "mission.*",
+      "projects.*",
+      "ideation.*",
+      "settings.*",
+      "onboarding.welcome",
+      "onboarding.choose_engine",
+      "onboarding.model_select",
+      "onboarding.ollama_setup",
+      "onboarding.complete",
+      "errors.*"
+    ]
+  }
+}

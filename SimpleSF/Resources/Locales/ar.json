@@ -1,0 +1,16 @@
+{
+  "app": { "name": "مصنع بسيط", "tagline": "مصنع البرمجيات الخاص بك" },
+  "nav": { "jarvis": "جارفيس", "projects": "المشاريع", "ideation": "توليد الأفكار", "settings": "الإعدادات", "software_factory": "مصنع البرمجيات" },
+  "action": { "start": "بدء", "stop": "إيقاف", "pause": "إيقاف مؤقت", "cancel": "إلغاء", "save": "حفظ", "delete": "حذف", "retry": "إعادة المحاولة", "back": "رجوع", "continue": "متابعة", "refresh": "تحديث", "use": "استخدام", "test": "اختبار", "skip": "تخطي", "get_started": "ابدأ", "launch": "إطلاق" },
+  "status": { "running": "قيد التشغيل", "stopped": "متوقف", "active": "نشط", "ready": "جاهز", "queued": "في الانتظار", "paused": "مُعلَّق", "completed": "مكتمل", "loading": "جارٍ التحميل…", "starting": "جارٍ البدء…", "not_configured": "غير مُهيَّأ" },
+  "sidebar": { "yolo": "YOLO", "yolo_help": "YOLO: الموافقة التلقائية على جميع بوابات GO/NOGO", "no_llm": "لا يوجد LLM", "auto_detect": "تلقائي", "auto_detect_help": "العودة إلى الكشف التلقائي" },
+  "jarvis": { "title": "جارفيس", "thinking": "جارٍ التفكير…", "team_meeting": "الفريق يجتمع…", "welcome": "مرحباً! أنا جارفيس، مساعدك الذكي.", "new_conversation": "محادثة جديدة" },
+  "projects": { "title": "المشاريع", "empty": "لا توجد مشاريع", "empty_hint": "اطلب من جارفيس إنشاء مشروع.\n\"أنشئ مشروع MyApp باستخدام Swift\"", "lifecycle": "دورة حياة المنتج الكاملة" },
+  "ideation": { "title": "توليد الأفكار", "launch": "إطلاق توليد الأفكار", "describe": "صِف فكرتك" },
+  "settings": { "title": "الإعدادات", "language": "اللغة", "language_hint": "يرد جارفيس بهذه اللغة" },
+  "language_picker": { "title": "اللغة", "system": "لغة النظام", "search": "البحث عن لغات…" },
+  "plural": {
+    "agents": { "zero": "%d وكيل", "one": "وكيل واحد", "two": "وكيلان", "few": "%d وكلاء", "many": "%d وكيلاً", "other": "%d وكيل" },
+    "projects": { "zero": "%d مشروع", "one": "مشروع واحد", "two": "مشروعان", "few": "%d مشاريع", "many": "%d مشروعاً", "other": "%d مشروع" }
+  }
+}

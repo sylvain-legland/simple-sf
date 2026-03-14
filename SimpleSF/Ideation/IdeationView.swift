@@ -1,10 +1,11 @@
 import SwiftUI
 
-// Ref: FT-SSF-006
+// Ref: FT-SSF-006, FT-SSF-015
 @MainActor
 struct IdeationView: View {
     @ObservedObject private var bridge = SFBridge.shared
     @ObservedObject private var llm = LLMService.shared
+    @ObservedObject private var l10n = L10n.shared
 
     @State private var idea = ""
     @State private var errorMessage: String?
@@ -26,13 +27,13 @@ struct IdeationView: View {
             HStack {
                 Image(systemName: "lightbulb.fill")
                     .foregroundColor(.yellow)
-                Text("Ideation")
+                Text(l10n.t(.ideationTitle))
                     .font(.title2.bold())
                 Spacer()
                 if bridge.ideationRunning {
                     HStack(spacing: 6) {
                         ProgressView().scaleEffect(0.7)
-                        Text("Agents discussing...")
+                        Text(l10n.t(.ideationDiscussing))
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
@@ -46,7 +47,7 @@ struct IdeationView: View {
                 VStack(spacing: 16) {
                     // Idea input
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Describe your idea")
+                        Text(l10n.t(.ideationDescribe))
                             .font(.headline)
                         TextEditor(text: $idea)
                             .font(.body)
@@ -59,23 +60,23 @@ struct IdeationView: View {
                         }
                         HStack {
                             Button(action: startIdeation) {
-                                Label("Launch Ideation", systemImage: "play.circle.fill")
+                                Label(l10n.t(.ideationLaunch), systemImage: "play.circle.fill")
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(.purple)
                             .disabled(idea.isEmpty || bridge.ideationRunning || llm.activeProvider == nil)
 
                             if llm.activeProvider == nil {
-                                Label("Configure a provider in Settings", systemImage: "exclamationmark.triangle")
+                                Label(l10n.t(.ideationConfigureProvider), systemImage: "exclamationmark.triangle")
                                     .font(.caption)
                                     .foregroundColor(.orange)
                             } else {
                                 HStack(spacing: 4) {
-                                    Text("3 agents")
+                                    Text(l10n.t(.ideationAgents))
                                     Image(systemName: "arrow.triangle.2.circlepath")
-                                    Text("3 rounds")
+                                    Text(l10n.t(.ideationRounds))
                                     Image(systemName: "arrow.right")
-                                    Text("network pattern")
+                                    Text(l10n.t(.ideationPattern))
                                 }
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -148,7 +149,7 @@ struct IdeationView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
                             .font(.title2)
-                        Text("Ideation complete — 3 perspectives, 3 rounds")
+                        Text(l10n.t(.ideationComplete))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

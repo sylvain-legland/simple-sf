@@ -1,0 +1,196 @@
+{
+  "app": {
+    "name": "Simple SF",
+    "tagline": "Votre usine logicielle privée"
+  },
+  "nav": {
+    "jarvis": "Jarvis",
+    "projects": "Projets",
+    "ideation": "Idéation",
+    "settings": "Paramètres",
+    "software_factory": "Software Factory"
+  },
+  "action": {
+    "start": "Démarrer",
+    "stop": "Arrêter",
+    "pause": "Pause",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "retry": "Réessayer",
+    "back": "Retour",
+    "continue": "Continuer",
+    "refresh": "Actualiser",
+    "use": "Utiliser",
+    "test": "Tester",
+    "skip": "Passer",
+    "get_started": "Commencer",
+    "launch": "Lancer"
+  },
+  "status": {
+    "running": "En cours",
+    "stopped": "Arrêté",
+    "active": "Actif",
+    "ready": "Prêt",
+    "queued": "En attente",
+    "paused": "En pause",
+    "completed": "Terminé",
+    "loading": "Chargement…",
+    "starting": "Démarrage…",
+    "not_configured": "Non configuré"
+  },
+  "sidebar": {
+    "yolo": "YOLO",
+    "yolo_help": "YOLO : approuver automatiquement toutes les portes GO/NOGO",
+    "no_llm": "Pas de LLM",
+    "auto_detect": "Auto",
+    "auto_detect_help": "Revenir à la détection automatique"
+  },
+  "jarvis": {
+    "title": "Jarvis",
+    "thinking": "Réflexion en cours…",
+    "team_meeting": "L'équipe se réunit…",
+    "welcome": "Bonjour ! Je suis Jarvis, votre assistant IA.",
+    "new_conversation": "Nouvelle conversation"
+  },
+  "projects": {
+    "title": "Projets",
+    "empty": "Aucun projet",
+    "empty_hint": "Demandez à Jarvis de créer un projet.\n\"Crée un projet MyApp en Swift\"",
+    "pilot": "Projets Pilotes",
+    "ac_validation": "Validation AC",
+    "load_pilot": "Charger",
+    "reset": "Réinitialiser",
+    "load_pilot_hint": "Cliquez \"Charger\" pour importer les 8 projets pilotes",
+    "lifecycle": "Cycle de Vie Produit Complet",
+    "workflow_not_defined": "Workflow non défini — lancez le projet pour que le PM décide du cycle de vie",
+    "launch_workflow": "Lancez le workflow pour voir la discussion des agents",
+    "phase_result": "Résultat de phase",
+    "agent_working": "Agents en cours…",
+    "agent_writing": "%@ rédige…",
+    "messages": "messages",
+    "round": "Tour %d"
+  },
+  "mission": {
+    "title": "Mission",
+    "value_stream": "Chaîne de Valeur",
+    "launch_epic": "Lancer un Epic",
+    "description": "Décrivez votre produit. L'équipe SAFe enchaîne 14 phases :\nIdéation → Comité Stratégique → Architecture → Sprints Dev → QA → Deploy Prod → TMA",
+    "select_project": "Sélectionner un projet…",
+    "launch_safe": "Lancer le Workflow SAFe",
+    "phase_result": "Résultat de phase"
+  },
+  "ideation": {
+    "title": "Idéation",
+    "discussing": "Les agents discutent…",
+    "describe": "Décrivez votre idée",
+    "agents": "3 agents",
+    "rounds": "3 tours",
+    "pattern": "réseau d'agents",
+    "launch": "Lancer l'idéation",
+    "configure_provider": "Configurez un fournisseur dans les Paramètres",
+    "complete": "Idéation terminée — 3 perspectives, 3 tours"
+  },
+  "agents": {
+    "title": "Équipe d'Agents",
+    "count": "%d agents"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "language": "Langue",
+    "language_hint": "Jarvis répond dans cette langue",
+    "local_models": "Modèles Locaux",
+    "local_hint": "100% sur l'appareil · pas d'internet requis",
+    "cloud_providers": "Fournisseurs Cloud",
+    "cloud_hint": "Clé API requise",
+    "no_provider": "Aucun fournisseur",
+    "no_model_active": "Aucun modèle actif",
+    "select_provider": "Sélectionnez un fournisseur ci-dessous",
+    "configure_hint": "Configurez un fournisseur local ou cloud ci-dessous, puis cliquez \"Utiliser\" pour l'activer.",
+    "auto_start": "Démarrage auto",
+    "get_api_key": "Obtenir une clé API →",
+    "model": "Modèle :",
+    "port": "Port %d"
+  },
+  "setup": {
+    "title": "Simple SF",
+    "subtitle": "Votre usine logicielle privée\nPropulsée par des agents IA, 100% sur votre Mac.",
+    "hardware": "Apple %@ · %@ Go de mémoire unifiée",
+    "how_run": "Comment voulez-vous exécuter l'IA ?",
+    "privacy": "Tout reste sur votre Mac. Aucune donnée ne quitte votre machine.",
+    "choose_model": "Choisissez votre modèle",
+    "memory": "%@ Go de mémoire unifiée — recommandé :",
+    "recommended": "Recommandé",
+    "installed": "Installé",
+    "model_details": "%@ · %@ · %@ Go · min %@ Go RAM",
+    "download_complete": "Téléchargement terminé !",
+    "download_failed": "Échec du téléchargement",
+    "downloading": "Téléchargement de %@…",
+    "download_size": "%@ Go depuis HuggingFace",
+    "ollama": "Configuration d'Ollama",
+    "ollama_available": "Modèles disponibles :",
+    "ollama_no_models": "Aucun modèle installé. Exécutez dans le Terminal :",
+    "ollama_not_running": "Ollama n'est pas en cours d'exécution",
+    "ollama_running": "Ollama est en cours d'exécution",
+    "ollama_continue": "Continuer avec Ollama",
+    "ollama_open": "Ouvrir Ollama.app",
+    "ollama_install": "Installer Ollama",
+    "all_set": "Tout est prêt !",
+    "all_set_subtitle": "Votre usine logicielle IA privée est prête.\nParlez à Jarvis pour commencer à construire.",
+    "start_using": "Commencer à utiliser Simple SF",
+    "skip_configure": "Passer — je configurerai plus tard",
+    "skip_cloud": "Passer — utiliser des clés API cloud",
+    "use_model": "Utiliser ce modèle",
+    "download_model": "Télécharger %@ Go",
+    "ollama_mlx": "Ollama",
+    "apple_mlx": "Apple MLX",
+    "no_mlx_models": "Aucun modèle MLX dans ~/.cache/huggingface/hub/ ou ~/.cache/mlx-models/",
+    "no_ollama_models": "Aucun modèle installé. Exécutez : ollama pull qwen3:14b",
+    "start_ollama": "Démarrer Ollama",
+    "start_server": "Démarrer le Serveur"
+  },
+  "privacy": {
+    "local": "Les modèles locaux fonctionnent 100% sur votre Mac. Aucune donnée ne quitte votre machine.",
+    "cloud": "Les clés API cloud sont stockées dans le Trousseau macOS — envoyées uniquement au fournisseur."
+  },
+  "output": {
+    "export_zip": "Exporter en ZIP",
+    "push_git": "Pousser vers Git"
+  },
+  "a11y": {
+    "loading": "Chargement…",
+    "loading_agents": "Chargement des agents…",
+    "loading_projects": "Chargement des projets…",
+    "loading_chat": "Chargement du chat…",
+    "loading_mission": "Chargement de la mission…",
+    "error": "Erreur : %@",
+    "offline": "Hors ligne. Les modifications seront synchronisées à la reconnexion."
+  },
+  "plural": {
+    "agents": {
+      "one": "%d agent",
+      "other": "%d agents"
+    },
+    "projects": {
+      "one": "%d projet",
+      "other": "%d projets"
+    },
+    "messages": {
+      "one": "%d message",
+      "other": "%d messages"
+    },
+    "phases": {
+      "one": "%d phase",
+      "other": "%d phases"
+    },
+    "rounds": {
+      "one": "%d tour",
+      "other": "%d tours"
+    }
+  },
+  "language_picker": {
+    "title": "Langue",
+    "system": "Langue du système",
+    "search": "Rechercher une langue…"
+  }
+}

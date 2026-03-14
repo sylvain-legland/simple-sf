@@ -1,0 +1,9 @@
+{
+  "app": { "name": "SF ساده", "tagline": "کارخانه نرم‌افزار خصوصی شما" },
+  "nav": { "jarvis": "جارویس", "projects": "پروژه‌ها", "ideation": "ایده‌پردازی", "settings": "تنظیمات", "software_factory": "کارخانه نرم‌افزار" },
+  "action": { "start": "شروع", "stop": "توقف", "pause": "مکث", "cancel": "لغو", "save": "ذخیره", "delete": "حذف", "retry": "تلاش مجدد", "back": "بازگشت", "continue": "ادامه", "refresh": "بروزرسانی", "use": "استفاده", "test": "آزمایش", "skip": "رد شدن", "get_started": "شروع کنید", "launch": "اجرا" },
+  "status": { "running": "در حال اجرا", "stopped": "متوقف", "active": "فعال", "ready": "آماده", "loading": "در حال بارگذاری…" },
+  "jarvis": { "title": "جارویس", "thinking": "در حال فکر کردن…", "welcome": "سلام! من جارویس هستم، دستیار هوش مصنوعی شما.", "new_conversation": "گفتگوی جدید" },
+  "settings": { "title": "تنظیمات", "language": "زبان", "language_hint": "جارویس به این زبان پاسخ می‌دهد" },
+  "language_picker": { "title": "زبان", "system": "زبان سیستم", "search": "جستجوی زبان…" }
+}

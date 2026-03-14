@@ -4,10 +4,11 @@ import SwiftUI
 // Horizontal phase timeline per epic, click-to-drill agent discussions.
 // Phases from product-lifecycle workflow: 14 phases, each with pattern + gate.
 
-// Ref: FT-SSF-004
+// Ref: FT-SSF-004, FT-SSF-015
 struct MissionView: View {
     @ObservedObject var bridge = SFBridge.shared
     @ObservedObject var catalog = SFCatalog.shared
+    @ObservedObject var l10n = L10n.shared
     @State private var selectedProject: SFBridge.SFProject?
     @State private var brief = ""
     @State var status: SFBridge.MissionStatus?
@@ -50,7 +51,7 @@ struct MissionView: View {
                 Image(systemName: "flowchart.fill")
                     .font(.system(size: 20))
                     .foregroundColor(SF.Colors.purple)
-                Text("Value Stream")
+                Text(l10n.t(.missionValueStream))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(SF.Colors.textPrimary)
                 Spacer()
@@ -67,11 +68,11 @@ struct MissionView: View {
                     .font(.system(size: 52))
                     .foregroundColor(SF.Colors.purple.opacity(0.5))
 
-                Text("Lancer un Epic")
+                Text(l10n.t(.missionLaunchEpic))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(SF.Colors.textPrimary)
 
-                Text("Décrivez votre produit. L'équipe SAFe enchaîne 14 phases :\nIdéation → Comité Stratégique → Architecture → Sprints Dev → QA → Deploy Prod → TMA")
+                Text(l10n.t(.missionDescription))
                     .font(.system(size: 13))
                     .foregroundColor(SF.Colors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -80,7 +81,7 @@ struct MissionView: View {
                 let projects = bridge.listProjects()
                 if !projects.isEmpty {
                     Picker("Projet", selection: $selectedProject) {
-                        Text("Sélectionner un projet…").tag(nil as SFBridge.SFProject?)
+                        Text(l10n.t(.missionSelectProject)).tag(nil as SFBridge.SFProject?)
                         ForEach(projects) { p in
                             Text(p.name).tag(p as SFBridge.SFProject?)
                         }
@@ -104,7 +105,7 @@ struct MissionView: View {
                 Button(action: launchMission) {
                     HStack(spacing: 8) {
                         Image(systemName: "play.fill")
-                        Text("Lancer le Workflow SAFe")
+                        Text(l10n.t(.missionLaunchSAFe))
                             .font(.system(size: 14, weight: .semibold))
                     }
                     .padding(.horizontal, 24)
@@ -142,7 +143,7 @@ struct MissionView: View {
                 .foregroundColor(SF.Colors.purple)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Cycle de Vie Produit Complet")
+                Text(l10n.t(.projectsLifecycle))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(SF.Colors.textPrimary)
                 Text(status?.mission?.brief.prefix(120) ?? brief.prefix(120))

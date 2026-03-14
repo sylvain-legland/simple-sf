@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "Projektek", "ideation": "Otletek", "settings": "Beallitasok", "software_factory": "Software Factory" },
+  "settings": { "language": "Nyelv" },
+  "language_picker": { "title": "Nyelv" }
+}

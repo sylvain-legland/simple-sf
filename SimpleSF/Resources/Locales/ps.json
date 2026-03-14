@@ -1,0 +1,7 @@
+{
+  "app": { "name": "ساده SF" },
+  "nav": { "jarvis": "جارویس", "projects": "پروژې", "ideation": "نظریه ورکول", "settings": "تنظیمات", "software_factory": "سافټویر فابریکه" },
+  "action": { "start": "پیل", "stop": "ودریږئ", "cancel": "لغوه", "save": "خوندي", "back": "شاته" },
+  "settings": { "title": "تنظیمات", "language": "ژبه" },
+  "language_picker": { "title": "ژبه", "system": "د سیسټم ژبه", "search": "ژبې وپلټئ…" }
+}

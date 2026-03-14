@@ -1,0 +1,387 @@
+================================================================================
+SIMPLSF MACOS APP - USER-FACING STRINGS EXTRACTION SUMMARY
+================================================================================
+
+LOCATION: /Users/sylvain/_MACARON-SOFTWARE/simple-sf/SimpleSF/
+
+EXTRACTION DATE: March 14, 2025
+STATUS: COMPLETE - All requested files reviewed
+
+================================================================================
+ANALYSIS OVERVIEW
+================================================================================
+
+Total Files Reviewed:        15 Swift files + 1 i18n file
+Files with User Strings:     12
+Files with NO strings:       3 (ContentView, DesignTokens, MarkdownView)
+
+Estimated Hardcoded Strings: 150+
+Already Localized (i18n):    13 keys (in Localizable.xcstrings)
+Localization Coverage:       ~7%
+
+Estimated Strings Needing Localization: 137+
+
+================================================================================
+EXISTING i18n INFRASTRUCTURE
+================================================================================
+
+File: SimpleSF/i18n/Localizable.xcstrings
+
+Format: JSON Apple Localizable Strings Catalog
+- sourceLanguage: "en"
+- Supported Languages: 30+ (af, ar, bn, ca, cs, da, de, el, en, es, fi, fr, he, 
+  hi, hr, hu, id, it, ja, ko, lt, lv, ms, nb, nl, pl, pt, ro, ru, sk, sl, sr, sv, 
+  th, tl, tr, uk, ur, vi, zh)
+
+Currently Localized Keys (13):
+  1. app.name - "Simple SF"
+  2. nav.projects - "Projects"
+  3. nav.jarvis - "Jarvis"
+  4. nav.ideation - "Ideation"
+  5. mode.simple - "Simple"
+  6. mode.advanced - "Advanced"
+  7. action.start - "Start"
+  8. action.pause - "Pause"
+  9. action.stop - "Stop"
+  10. jarvis.welcome - "Hi, I'm Jarvis"
+  11. onboarding.title - "Configure your LLM providers"
+  12. output.export_zip - "Export as ZIP"
+  13. output.push_git - "Push to Git"
+
+================================================================================
+KEY FINDINGS
+================================================================================
+
+1. FRENCH AS PRIMARY UI LANGUAGE
+   ⚠️ WARNING: Many UI strings are in FRENCH, not English:
+   - "Lancer un Epic" (Launch Epic)
+   - "Décrivez votre produit" (Describe your product)
+   - "Réflexion en cours…" (Thinking...)
+   - "Cycle de Vie Produit Complet" (Full Product Lifecycle)
+   - "Workflow non défini" (Workflow undefined)
+   - Recommends reviewing if French should be primary UI language
+
+2. LARGEST FILES (Most strings):
+   - SimpleSF/Projects/ProjectsView.swift (73.1 KB, ~30 strings)
+   - SimpleSF/Jarvis/JarvisView.swift (27.3 KB, ~12 strings)
+   - SimpleSF/Onboarding/SetupWizardView.swift (22.8 KB, ~50 strings)
+   - SimpleSF/Onboarding/OnboardingView.swift (26.3 KB, ~40 strings)
+   - SimpleSF/Views/Mission/MissionView.swift (681 lines, ~25 strings)
+
+3. STRING DISTRIBUTION:
+   - Navigation:       7 strings
+   - Buttons:         35 strings
+   - Labels:          20 strings
+   - Status Messages: 25 strings
+   - Empty States:     8 strings
+   - Help Text:       15 strings
+   - Placeholders:     5 strings
+   - Error Messages:   5 strings
+   - French Content:  35 strings (needs review)
+
+4. DYNAMIC CONTENT:
+   - ~20 strings are composed at runtime with variables
+   - Agent names, project names, model names pulled from data
+   - Counts/numbers interpolated into UI
+   - Timestamps displayed in HH:MM:SS format
+
+================================================================================
+FILES WITH NO HARDCODED STRINGS
+================================================================================
+
+1. SimpleSF/App/SimpleSFApp.swift
+   - Initialization only, no UI strings
+
+2. SimpleSF/App/AppState.swift
+   - State management only, no UI strings
+
+3. SimpleSF/Views/Shared/ContentView.swift
+   - Routing view only, no UI strings
+
+4. SimpleSF/Views/Shared/DesignTokens.swift
+   - Design system (colors, fonts, spacing, radius)
+   - Component helpers (AgentAvatarView, RoleBadge, etc)
+   - No UI text strings
+
+5. SimpleSF/Views/Shared/MarkdownView.swift
+   - Markdown parsing and rendering engine
+   - No UI text strings (only markdown syntax handling)
+
+================================================================================
+CRITICAL UI SECTIONS & STRINGS
+================================================================================
+
+FILE 1: SimpleSF/Views/Shared/MainView.swift
+==========================================
+- "Software Factory" (app title)
+- "Jarvis", "Projects", "Ideation", "Settings" (navigation)
+- "YOLO" (auto-approve toggle)
+- "No LLM", "Not configured", "loading…" (status)
+- "YOLO: auto-approve all GO/NOGO gates" (help text)
+
+FILE 2: SimpleSF/Views/Mission/MissionView.swift ⚠️ FRENCH
+==========================================================
+LAUNCH FORM:
+- "Value Stream" (title)
+- "Lancer un Epic" (Launch Epic button)
+- "Décrivez votre produit. L'équipe SAFe enchaîne 14 phases..." (description)
+- "Sélectionner un projet…" (project picker)
+- "Lancer le Workflow SAFe" (launch button)
+
+MISSION RUNNING:
+- "Cycle de Vie Produit Complet" (lifecycle title)
+- "En cours" / "Terminé" / "Échoué" / "Véto" (status badges)
+- "Phase en attente" (phase status)
+- "Discussion en cours…" (discussion status)
+- "Résultat de phase" (result label)
+
+FILE 3: SimpleSF/Jarvis/JarvisView.swift
+========================================
+- "Jarvis" (title)
+- "Réflexion en cours…" (thinking status)
+- "L'equipe se reunit..." (team gathering status)
+- "Historique" (history sidebar)
+- "Votre equipe est prete" (team ready message)
+- "192 agents · 1286 skills · 19 patterns" (capability summary)
+- "Essayez : « Fais-moi un Pacman en SwiftUI »" (prompt suggestion)
+
+FILE 4: SimpleSF/Projects/ProjectsView.swift
+============================================
+HEADER & SEARCH:
+- "Projects" (title)
+- "[count] projects" (count badge)
+- "Search projects…" (search placeholder)
+
+EMPTY STATE:
+- "No projects yet"
+- "Ask Jarvis to create a project for you..."
+
+PILOT PROJECTS:
+- "Projets Pilotes" (section title)
+- "AC validation" (subtitle)
+- "Charger" (Load button)
+- "Réinitialiser" (Reset button)
+- "Cliquez \"Charger\" pour importer les 8 projets pilotes"
+
+PROJECT PHASES:
+- "Cycle de Vie Produit Complet"
+- "[count] phases"
+- "Workflow non défini — lancez le projet pour que le PM décide..."
+- "Prêt", "Queued", "Paused", "Terminé" (phase statuses)
+- "Agents en cours…" (agents working)
+
+FILE 5: SimpleSF/Ideation/IdeationView.swift
+============================================
+- "Ideation" (title)
+- "Describe your idea" (form label)
+- "Launch Ideation" (CTA button)
+- "Agents discussing..." (status while running)
+- "Configure a provider in Settings" (error when no provider)
+- "3 agents", "3 rounds", "network pattern" (badges)
+- "Ideation complete — 3 perspectives, 3 rounds" (completion)
+
+FILE 6: SimpleSF/Onboarding/SetupWizardView.swift (50+ STRINGS)
+============================================================
+WELCOME:
+- "Simple SF" (title)
+- "Your private Software Factory\nPowered by AI agents, running 100% on your Mac."
+- "Apple [chip] · [RAM] GB unified memory"
+- "Get Started" (button)
+- "Skip — I'll configure later" (skip button)
+
+CHOOSE ENGINE:
+- "How do you want to run AI?"
+- "Everything stays on your Mac. No data leaves your machine."
+
+MODEL SELECTION:
+- "Choose your model"
+- "Recommended", "Installed" (badges)
+- "[params] · [quant] · [size] GB · min [RAM] GB RAM"
+- "Use this model", "Download [size] GB" (buttons)
+
+DOWNLOADING:
+- "Downloading [model]..."
+- "[size] GB from HuggingFace"
+- "Download complete!", "Download failed"
+- "Cancel", "Retry"
+
+OLLAMA SETUP:
+- "Ollama Setup"
+- "Ollama is running", "Ollama is not running"
+- "Available models:"
+- "No models installed. Run in Terminal:"
+- "ollama pull qwen3:14b"
+- "Open Ollama.app", "Install Ollama"
+
+COMPLETION:
+- "You're all set!"
+- "Your private AI Software Factory is ready.\nTalk to Jarvis to start building."
+- "Start using Simple SF"
+
+FILE 7: SimpleSF/Onboarding/OnboardingView.swift (40+ STRINGS)
+===========================================================
+HEADER & SECURITY:
+- "Settings"
+- "Local models run 100% on your Mac. No data leaves your machine."
+- "Cloud API keys stored in macOS Keychain..."
+
+ACTIVE MODEL BANNER:
+- "No model active"
+- "Select a provider below"
+- "Configure a local or cloud provider below..."
+- "Auto" (button)
+
+LANGUAGE SECTION:
+- "Language" (label)
+- "Jarvis responds in this language"
+- [30+ language options]
+
+LOCAL MODELS:
+- "Local Models" (section)
+- "100% on-device · no internet needed"
+
+OLLAMA:
+- "Ollama" (provider name)
+- "Model:" (label)
+- "Running" / "Stopped" (status)
+- "No models installed. Run: ollama pull qwen3:14b"
+- "Port [port]", "Start Ollama", "Stop"
+- "or run: ollama serve"
+
+MLX:
+- "Apple MLX" (provider name)
+- "Model:", "[model name]", "[type]", "[size] GB"
+- "No MLX models in ~/.cache/..."
+- "Port [port]", "Start Server", "Stop"
+- "Auto-start" (toggle)
+
+CLOUD PROVIDERS:
+- "Cloud Providers" (section)
+- "Requires API key"
+- "Use", "Active" (buttons)
+- "Test", "Save", "Delete" (buttons)
+- "Get API key →" (link)
+
+FILES 8 & 9: SimpleSF/Output/ZipExporter.swift & GitPusher.swift
+================================================================
+ERROR MESSAGES ONLY:
+- "Workspace not found: [path]"
+- "Export cancelled"
+- "zip failed: [output]"
+- "Project workspace not found"
+- "git [cmd] failed:\n[output]"
+- UI Dialog: "Export" (save panel prompt)
+
+================================================================================
+STRINGS NEEDING LOCALIZATION
+================================================================================
+
+PRIORITY CATEGORIES (Estimated 137+ strings):
+
+1. MISSION/VALUE STREAM (20+ strings)
+   - "Value Stream", "Lancer un Epic", "Décrivez votre produit..."
+   - Status: "En cours", "Terminé", "Échoué", "Véto"
+   - Phase: "Phase en attente", "Discussion en cours…", "Résultat de phase"
+   - "Cycle de Vie Produit Complet"
+
+2. PROJECTS (30+ strings)
+   - "Projects", "[count] projects", "Search projects…"
+   - "No projects yet", "Ask Jarvis to create a project..."
+   - "Projets Pilotes", "AC validation", "Charger", "Réinitialiser"
+   - Phase statuses: "Prêt", "Queued", "Paused", "Terminé", "Agents en cours…"
+
+3. IDEATION (10+ strings)
+   - "Ideation", "Describe your idea", "Launch Ideation"
+   - "Agents discussing...", "Configure a provider in Settings"
+   - "3 agents", "3 rounds", "network pattern"
+   - "Ideation complete..."
+
+4. ONBOARDING (90+ strings)
+   - Welcome, engine selection, model selection, downloading, ollama setup, completion
+   - Multiple step titles, descriptions, buttons, status messages
+   - System info, error messages, help text
+
+5. SETTINGS (20+ strings)
+   - "Settings", "Language", "Local Models", "Cloud Providers"
+   - "Ollama", "Apple MLX", provider info
+   - Status messages, instructions, error states
+
+6. SHARED/NAVIGATION (7+ strings)
+   - "Software Factory", "YOLO", "No LLM", "loading…"
+   - Navigation menu: "Jarvis", "Projects", "Ideation", "Settings"
+
+7. ERROR MESSAGES (5+ strings)
+   - Workspace errors, git errors, export errors
+   - Download errors, model errors
+
+================================================================================
+TECHNICAL RECOMMENDATIONS
+================================================================================
+
+1. LOCALIZATION APPROACH:
+   - Use Apple's Localizable.xcstrings format (already in place)
+   - All strings should use String(localized: "key.name") or NSLocalizedString()
+   - Avoid hardcoded Text("string") in SwiftUI
+
+2. KEY NAMING CONVENTION:
+   - section.subsection.identifier
+   - Examples:
+     * mission.launch_epic
+     * mission.status.completed
+     * projects.empty_state.header
+     * onboarding.welcome.tagline
+     * settings.language.label
+
+3. LANGUAGE REVIEW:
+   ⚠️ IMPORTANT: Determine if French should be:
+     a) Localized to English (current content translations)
+     b) Kept as French with English as secondary
+     c) Made configurable per user preference
+
+4. IMPLEMENTATION STEPS:
+   1. Create new i18n keys for all 137+ strings
+   2. Replace hardcoded Text() with localized strings
+   3. Test with multiple languages
+   4. Export localizations for translator review
+   5. Import translations for all 30+ languages
+
+5. DYNAMIC CONTENT:
+   - Use string interpolation in localizations where needed
+   - Example: "Search \(category)..." vs separate keys per category
+   - Consider plural forms for counts (agents, projects, etc)
+
+================================================================================
+OUTPUT FILES GENERATED
+================================================================================
+
+Three detailed reports have been created:
+
+1. USER_FACING_STRINGS_REPORT.md (18 KB)
+   - Comprehensive markdown report with all strings organized by file
+   - Full categorization (navigation, buttons, labels, etc)
+   - Detailed localization recommendations
+
+2. STRINGS_INVENTORY.json (4 KB)
+   - JSON format inventory for programmatic access
+   - Metadata and statistics
+   - File-by-file breakdown with key strings
+
+3. This file: STRINGS_EXTRACTION_SUMMARY.txt
+   - Quick reference text summary
+   - Critical findings and action items
+
+All files located in: /Users/sylvain/_MACARON-SOFTWARE/simple-sf/
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Review French strings - confirm if language should change
+2. Create i18n keys for 137+ hardcoded strings
+3. Update all Text() calls to use localized strings
+4. Test localization with 2-3 languages
+5. Export localizations for professional translation
+6. Import translated content back to Localizable.xcstrings
+7. Re-test UI with translated strings to check for layout issues
+
+================================================================================

@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "プロジェクト", "ideation": "アイデア", "settings": "設定", "software_factory": "Software Factory" },
+  "settings": { "language": "言語" },
+  "language_picker": { "title": "言語" }
+}

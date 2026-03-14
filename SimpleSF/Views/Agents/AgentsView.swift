@@ -1,8 +1,9 @@
 import SwiftUI
 
-// Ref: FT-SSF-010
+// Ref: FT-SSF-010, FT-SSF-015
 struct AgentsView: View {
     @ObservedObject private var bridge = SFBridge.shared
+    @ObservedObject private var l10n = L10n.shared
     @State private var agents: [SFBridge.SFAgent] = []
     @State private var loadingState: LoadingState = .loading  // Ref: FT-SSF-013
 
@@ -14,11 +15,11 @@ struct AgentsView: View {
                 Image(systemName: "person.3.fill")
                     .font(.title2)
                     .foregroundColor(.purple)
-                Text("Agent Team")
+                Text(l10n.t(.agentsTitle))
                     .font(.title2.bold())
                 Spacer()
                 if loadingState == .loaded {
-                    Text("\(agents.count) agents")
+                    Text(l10n.plural(.pluralAgents, count: agents.count))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

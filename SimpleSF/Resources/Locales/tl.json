@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "Mga Proyekto", "ideation": "Ideya", "settings": "Mga Setting", "software_factory": "Software Factory" },
+  "settings": { "language": "Wika" },
+  "language_picker": { "title": "Wika" }
+}

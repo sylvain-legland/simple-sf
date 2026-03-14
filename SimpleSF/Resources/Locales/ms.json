@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "Projek", "ideation": "Idea", "settings": "Tetapan", "software_factory": "Software Factory" },
+  "settings": { "language": "Bahasa" },
+  "language_picker": { "title": "Bahasa" }
+}

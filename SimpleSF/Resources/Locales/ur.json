@@ -1,0 +1,8 @@
+{
+  "app": { "name": "سمپل SF", "tagline": "آپ کی نجی سافٹ ویئر فیکٹری" },
+  "nav": { "jarvis": "جارویس", "projects": "منصوبے", "ideation": "آئیڈیا سازی", "settings": "ترتیبات", "software_factory": "سافٹ ویئر فیکٹری" },
+  "action": { "start": "شروع", "stop": "رکیں", "pause": "وقفہ", "cancel": "منسوخ", "save": "محفوظ", "delete": "حذف", "back": "واپس", "continue": "جاری رکھیں" },
+  "jarvis": { "title": "جارویس", "thinking": "سوچ رہا ہے…", "welcome": "ہیلو! میں جارویس ہوں، آپ کا AI معاون۔" },
+  "settings": { "title": "ترتیبات", "language": "زبان" },
+  "language_picker": { "title": "زبان", "system": "سسٹم کی زبان", "search": "زبانیں تلاش کریں…" }
+}

@@ -1,0 +1,11 @@
+{
+  "app": { "name": "SF פשוט", "tagline": "בית התוכנה הפרטי שלך" },
+  "nav": { "jarvis": "ג'רוויס", "projects": "פרויקטים", "ideation": "סיעור מוחות", "settings": "הגדרות", "software_factory": "בית תוכנה" },
+  "action": { "start": "התחל", "stop": "עצור", "pause": "השהה", "cancel": "בטל", "save": "שמור", "delete": "מחק", "retry": "נסה שוב", "back": "חזרה", "continue": "המשך", "refresh": "רענן", "use": "השתמש", "test": "בדוק", "skip": "דלג", "get_started": "התחל", "launch": "הפעל" },
+  "status": { "running": "פועל", "stopped": "עצור", "active": "פעיל", "ready": "מוכן", "queued": "בתור", "paused": "מושהה", "completed": "הושלם", "loading": "טוען…", "starting": "מתחיל…", "not_configured": "לא מוגדר" },
+  "jarvis": { "title": "ג'רוויס", "thinking": "חושב…", "team_meeting": "הצוות מתכנס…", "welcome": "שלום! אני ג'רוויס, העוזר הדיגיטלי שלך.", "new_conversation": "שיחה חדשה" },
+  "projects": { "title": "פרויקטים", "empty": "אין פרויקטים", "lifecycle": "מחזור חיי מוצר מלא" },
+  "ideation": { "title": "סיעור מוחות", "launch": "התחל סיעור מוחות", "describe": "תאר את הרעיון שלך" },
+  "settings": { "title": "הגדרות", "language": "שפה", "language_hint": "ג'רוויס עונה בשפה זו" },
+  "language_picker": { "title": "שפה", "system": "שפת המערכת", "search": "חפש שפות…" }
+}

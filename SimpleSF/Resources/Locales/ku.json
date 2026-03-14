@@ -1,0 +1,7 @@
+{
+  "app": { "name": "SF ساده" },
+  "nav": { "jarvis": "جارڤیس", "projects": "پرۆژەکان", "ideation": "بیرۆکەکردن", "settings": "ڕێکخستنەکان", "software_factory": "کارگەی نەرمەکاڵا" },
+  "action": { "start": "دەست پێکردن", "stop": "وەستان", "cancel": "هەڵوەشاندنەوە", "save": "پاشکەوتکردن", "back": "گەڕانەوە" },
+  "settings": { "title": "ڕێکخستنەکان", "language": "زمان" },
+  "language_picker": { "title": "زمان", "system": "زمانی سیستەم", "search": "گەڕان بۆ زمان…" }
+}

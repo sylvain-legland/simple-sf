@@ -1,0 +1,13 @@
+{
+  "app": { "name": "SF Simple", "tagline": "Tu fábrica de software privada" },
+  "nav": { "jarvis": "Jarvis", "projects": "Proyectos", "ideation": "Ideación", "settings": "Configuración", "software_factory": "Software Factory" },
+  "action": { "start": "Iniciar", "stop": "Detener", "pause": "Pausar", "cancel": "Cancelar", "save": "Guardar", "delete": "Eliminar", "retry": "Reintentar", "back": "Atrás", "continue": "Continuar", "refresh": "Actualizar", "use": "Usar", "test": "Probar", "skip": "Omitir", "get_started": "Empezar", "launch": "Lanzar" },
+  "status": { "running": "Ejecutando", "stopped": "Detenido", "active": "Activo", "ready": "Listo", "queued": "En cola", "paused": "En pausa", "completed": "Completado", "loading": "Cargando…", "starting": "Iniciando…", "not_configured": "No configurado" },
+  "sidebar": { "yolo": "YOLO", "yolo_help": "YOLO: aprobar automáticamente todas las puertas GO/NOGO", "no_llm": "Sin LLM", "auto_detect": "Auto", "auto_detect_help": "Volver a detección automática" },
+  "jarvis": { "title": "Jarvis", "thinking": "Pensando…", "team_meeting": "El equipo se reúne…", "welcome": "¡Hola! Soy Jarvis, tu asistente de IA.", "new_conversation": "Nueva conversación" },
+  "projects": { "title": "Proyectos", "empty": "Sin proyectos", "empty_hint": "Pide a Jarvis que cree un proyecto.\n\"Crea un proyecto MyApp con Swift\"", "lifecycle": "Ciclo de Vida Completo del Producto" },
+  "ideation": { "title": "Ideación", "launch": "Lanzar Ideación", "describe": "Describe tu idea" },
+  "settings": { "title": "Configuración", "language": "Idioma", "language_hint": "Jarvis responde en este idioma" },
+  "language_picker": { "title": "Idioma", "system": "Idioma del sistema", "search": "Buscar idiomas…" },
+  "plural": { "agents": { "one": "%d agente", "other": "%d agentes" }, "projects": { "one": "%d proyecto", "other": "%d proyectos" } }
+}

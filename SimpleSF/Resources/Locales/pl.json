@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "Projekty", "ideation": "Pomysly", "settings": "Ustawienia", "software_factory": "Software Factory" },
+  "settings": { "language": "Jezyk" },
+  "language_picker": { "title": "Jezyk" }
+}

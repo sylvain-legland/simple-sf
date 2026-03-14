@@ -1,0 +1,1252 @@
+# =============================================================================
+# UI Components Deep Skill — Atomic Design System Reference
+# =============================================================================
+# Source: Brad Frost Atomic Design, component.gallery, WAI-ARIA APG
+# 60 components | 59 design tokens | skeleton system | icon policy
+# =============================================================================
+
+meta:
+  id: ui-components-deep
+  version: "2.0"
+  category: design-system
+  scope: full-stack-ui
+  sources:
+    - https://component.gallery/
+    - https://bradfrost.com/blog/post/atomic-web-design/
+    - https://www.w3.org/WAI/ARIA/apg/
+    - https://feathericons.com/
+
+# =============================================================================
+# 1. ATOMIC DESIGN SYSTEM
+# =============================================================================
+
+atomic_design:
+  description: |
+    Brad Frost's Atomic Design methodology organizes UI into five levels:
+    Atoms → Molecules → Organisms → Templates → Pages.
+    This skill covers the first three (reusable component layers).
+
+  # ---------------------------------------------------------------------------
+  # ATOMS — 29 fundamental building blocks
+  # ---------------------------------------------------------------------------
+  atoms:
+    description: |
+      The smallest functional UI elements. Cannot be broken down further
+      without losing meaning. Each atom maps to one HTML element or a
+      minimal wrapper around one.
+
+    avatar:
+      element: div > img | span
+      aliases: [profile-picture, user-image]
+      description: Graphical representation of a user — photo, illustration, or initials.
+      sizes: [xs-24px, sm-32px, md-40px, lg-56px, xl-80px]
+      variants: [image, initials, icon, status-dot]
+      a11y:
+        role: img
+        required_attrs: [alt]
+        note: "Decorative avatars use alt=''; meaningful ones describe the person."
+      rules:
+        - Initials fallback when image fails to load
+        - Status dot uses aria-label for online/offline state
+        - Circular shape via border-radius full
+      example: |
+        <div class="avatar avatar--md">
+          <img src="/user.jpg" alt="Jane Doe" />
+          <span class="avatar__status avatar__status--online"
+                aria-label="Online"></span>
+        </div>
+
+    badge:
+      element: span
+      aliases: [tag, label, chip, pill]
+      description: Small label representing status, property, or metadata.
+      variants: [default, success, warning, error, info, outline]
+      sizes: [sm, md]
+      a11y:
+        note: "Use aria-label when badge text alone is insufficient context."
+      rules:
+        - Max 2 words or a number
+        - Never interactive on its own (wrap in button if clickable)
+        - Dismissible badges need a close button with accessible name
+      example: |
+        <span class="badge badge--success">Active</span>
+        <span class="badge badge--error badge--sm">3</span>
+
+    button:
+      element: button | a
+      description: Triggers an action such as submitting a form or toggling UI.
+      variants: [primary, secondary, ghost, danger, link]
+      sizes: [sm-32px, md-40px, lg-48px]
+      states: [default, hover, active, focus-visible, disabled, loading]
+      a11y:
+        role: button (implicit for <button>)
+        required_attrs: [type]
+        keyboard: "Enter or Space to activate"
+        note: "Links styled as buttons still use <a> with role=button only if they perform an action."
+      rules:
+        - Always use <button> for actions, <a> for navigation
+        - Disabled buttons use aria-disabled, not disabled attr (for focusability)
+        - Loading state replaces content with spinner + aria-busy="true"
+        - Min touch target 44×44px (WCAG 2.5.8)
+      example: |
+        <button type="button" class="btn btn--primary btn--md">
+          Save changes
+        </button>
+        <button type="button" class="btn btn--primary btn--md" aria-busy="true" disabled>
+          <span class="spinner spinner--sm" aria-hidden="true"></span>
+          Saving…
+        </button>
+
+    checkbox:
+      element: input[type=checkbox]
+      description: Binary toggle (checked/unchecked) or multi-select from a list.
+      variants: [default, indeterminate]
+      a11y:
+        role: checkbox (implicit)
+        required_attrs: [aria-checked]
+        keyboard: "Space to toggle"
+        note: "Indeterminate state uses aria-checked='mixed'."
+      rules:
+        - Always pair with <label> using for/id
+        - Group related checkboxes in <fieldset> with <legend>
+        - Custom styling hides native input visually, not from AT
+
+    color-picker:
+      element: input[type=color] | custom
+      description: Input for choosing a color value.
+      a11y:
+        note: "Provide text input fallback for hex/rgb values."
+      rules:
+        - Show selected color as visual swatch
+        - Support keyboard navigation in palette grid
+
+    date-input:
+      element: input[type=date] | custom segmented
+      description: Date entry via segmented fields (day/month/year).
+      a11y:
+        role: group
+        required_attrs: [aria-label]
+        note: "Each segment is a spinbutton with min/max values."
+      rules:
+        - Respect locale date format (dd/mm/yyyy vs mm/dd/yyyy)
+        - Validate impossible dates (Feb 30)
+        - Support keyboard increment/decrement per segment
+
+    file:
+      element: a | div
+      aliases: [attachment, download]
+      description: Representation of a file — uploaded attachment or downloadable resource.
+      rules:
+        - Show file icon, name, size, and type
+        - Download links use download attribute
+
+    heading:
+      element: h1–h6
+      description: Title or caption introducing a new section.
+      rules:
+        - Follow hierarchical order (never skip levels)
+        - Only one h1 per page
+        - Use CSS for visual sizing, not heading level
+
+    icon:
+      element: svg
+      description: Graphic symbol indicating purpose of an interface element.
+      rules:
+        - ALWAYS use SVG Feather icons (stroke: round linecap, 2px width)
+        - NO emoji anywhere in the UI
+        - NO FontAwesome or icon fonts
+        - Decorative icons use aria-hidden="true"
+        - Meaningful icons need aria-label or <title> inside SVG
+        - Size matches text line-height (16px, 20px, 24px)
+      example: |
+        <!-- Decorative -->
+        <svg class="icon icon--sm" aria-hidden="true">
+          <use href="/icons.svg#check" />
+        </svg>
+        <!-- Meaningful -->
+        <svg class="icon icon--sm" role="img" aria-label="Success">
+          <use href="/icons.svg#check" />
+        </svg>
+
+    image:
+      element: img | picture
+      aliases: [picture]
+      description: Element for embedding images with responsive support.
+      a11y:
+        required_attrs: [alt]
+        note: "Decorative images use alt=''. Content images describe what is shown."
+      rules:
+        - Use <picture> + <source> for art direction
+        - Always set width/height to prevent layout shift
+        - Lazy load below-the-fold images (loading=lazy)
+
+    label:
+      element: label
+      aliases: [form-label]
+      description: Text label for form inputs.
+      a11y:
+        required_attrs: [for]
+      rules:
+        - Every input MUST have a visible label
+        - Required fields show "(required)" text, not just asterisk
+        - Error messages linked via aria-describedby
+
+    link:
+      element: a
+      aliases: [anchor, hyperlink]
+      description: Reference to a resource — external page or internal anchor.
+      a11y:
+        note: "Links must have discernible text. Avoid 'click here'."
+        keyboard: "Enter to activate"
+      rules:
+        - External links open in same tab by default
+        - If target=_blank, add aria-label suffix "(opens in new tab)"
+        - Underline links in body text for visibility
+        - Never use <a> without href (use <button> instead)
+
+    progress-bar:
+      element: progress | div[role=progressbar]
+      aliases: [progress]
+      description: Horizontal bar indicating completion status of a task.
+      a11y:
+        role: progressbar
+        required_attrs: [aria-valuenow, aria-valuemin, aria-valuemax, aria-label]
+      rules:
+        - Indeterminate state omits aria-valuenow
+        - Color alone must not convey status (add text label)
+
+    quote:
+      element: blockquote | q
+      aliases: [pull-quote, block-quote]
+      description: Display a quotation from a person or external source.
+      rules:
+        - Use <blockquote> for block-level quotes
+        - Include <cite> for attribution
+        - Pull quotes are visual emphasis of existing page content
+
+    radio:
+      element: input[type=radio]
+      aliases: [radio-button, radio-group]
+      description: Single selection from a list of predefined options.
+      a11y:
+        role: radiogroup (container), radio (items)
+        keyboard: "Arrow keys to move selection, Space to select"
+      rules:
+        - Group in <fieldset> with <legend>
+        - Always pre-select one option (no empty default)
+        - Custom styling hides native input visually
+
+    rating:
+      element: div | fieldset
+      description: Star rating input or display for user reviews.
+      a11y:
+        role: radiogroup (if interactive)
+        note: "Each star is a radio; group label describes the rating purpose."
+      rules:
+        - Read-only ratings use aria-label with value (e.g. "4 out of 5 stars")
+        - Support half-star precision
+        - Keyboard navigable with arrow keys
+
+    select:
+      element: select | custom
+      aliases: [dropdown-select, select-input]
+      description: Form input showing a scrollable list of predefined options.
+      a11y:
+        role: listbox (custom), combobox (with filter)
+        keyboard: "Arrow keys to browse, Enter to select, Escape to close"
+      rules:
+        - Native <select> preferred for simple cases (better AT support)
+        - Custom select needs full keyboard and screen reader support
+        - Show currently selected option when collapsed
+
+    separator:
+      element: hr | div[role=separator]
+      aliases: [divider, horizontal-rule, vertical-rule]
+      description: Visual divider between two elements.
+      a11y:
+        role: separator
+      rules:
+        - Decorative separators use aria-hidden="true"
+        - Meaningful separators keep role=separator
+
+    skeleton:
+      element: div
+      aliases: [skeleton-loader, placeholder]
+      description: Placeholder layout for content not yet loaded.
+      rules:
+        - Matches final layout dimensions exactly
+        - Uses shimmer animation (1.5s ease-in-out infinite)
+        - Container sets aria-busy="true" during loading
+        - Every data-driven component MUST have a .sk variant
+      example: |
+        <div class="card sk" aria-busy="true">
+          <div class="sk__line sk__line--avatar"></div>
+          <div class="sk__line sk__line--title"></div>
+          <div class="sk__line sk__line--text"></div>
+          <div class="sk__line sk__line--text sk__line--75"></div>
+        </div>
+
+    skip-link:
+      element: a
+      description: Keyboard-only link to skip to main content.
+      a11y:
+        note: "First focusable element on the page. Visible on focus."
+      rules:
+        - Hidden until focused (position offscreen technique)
+        - Links to #main-content or equivalent landmark
+        - Must be the very first element in <body>
+      example: |
+        <a href="#main-content" class="skip-link">
+          Skip to main content
+        </a>
+
+    slider:
+      element: input[type=range] | custom
+      aliases: [range-input]
+      description: Form control for choosing a value within a preset range.
+      a11y:
+        role: slider
+        required_attrs: [aria-valuenow, aria-valuemin, aria-valuemax, aria-label]
+        keyboard: "Arrow keys to adjust, Home/End for min/max"
+      rules:
+        - Show current value label
+        - Support step increments
+        - Multi-thumb variant for range selection
+
+    spacer:
+      element: div
+      description: Wrapper for adding consistent margin between components.
+      rules:
+        - Use spacing tokens only (4px grid)
+        - Prefer CSS gap/margin over spacer components when possible
+        - Never use for layout — use CSS Grid/Flexbox
+
+    spinner:
+      element: svg | div
+      aliases: [loader, loading]
+      description: Visual indicator that a background process is running.
+      sizes: [sm-16px, md-24px, lg-40px]
+      a11y:
+        role: status
+        required_attrs: [aria-label]
+        note: "Use aria-label='Loading' and aria-live='polite'."
+      rules:
+        - Animate with CSS (not JS) for performance
+        - Reduce motion preference respected (@media prefers-reduced-motion)
+        - Never use as only loading indicator — pair with text
+
+    stepper:
+      element: div
+      aliases: [nudger, quantity, counter]
+      description: Numeric value editor with increment/decrement buttons.
+      a11y:
+        role: spinbutton
+        required_attrs: [aria-valuenow, aria-valuemin, aria-valuemax]
+        keyboard: "Arrow Up/Down to change value"
+      rules:
+        - Buttons labeled "Increase" / "Decrease"
+        - Respect min/max bounds
+        - Show current value in text input for direct editing
+
+    text-input:
+      element: input[type=text|email|tel|url|password|number|search]
+      description: Single-line text form control.
+      a11y:
+        required_attrs: [aria-label or associated <label>]
+      rules:
+        - Always pair with visible <label>
+        - Error state uses aria-invalid="true" + aria-describedby for message
+        - Autocomplete attribute set when appropriate
+        - Placeholder is NOT a label replacement
+      states: [default, hover, focus, error, disabled, readonly]
+
+    textarea:
+      element: textarea
+      aliases: [textbox, text-box]
+      description: Multi-line text form control.
+      a11y:
+        note: "Same labeling rules as text-input."
+      rules:
+        - Set rows attribute for initial size
+        - Auto-resize variant adjusts height to content
+        - Character counter linked via aria-describedby
+
+    toggle:
+      element: button | input[type=checkbox]
+      aliases: [switch, lightswitch, toggle-button]
+      description: Binary control switching between two states (on/off).
+      a11y:
+        role: switch
+        required_attrs: [aria-checked]
+        keyboard: "Space to toggle"
+      rules:
+        - Label must describe the ON state
+        - Visual indicator of current state (not color alone)
+        - Immediate effect (no submit needed) — use checkbox for deferred
+
+    tooltip:
+      element: div[role=tooltip]
+      aliases: [toggletip]
+      description: Description or extra info shown on hover/focus.
+      a11y:
+        role: tooltip
+        required_attrs: [aria-describedby on trigger]
+        keyboard: "Escape to dismiss"
+      rules:
+        - Triggered by hover AND focus (not just hover)
+        - Dismiss on Escape
+        - Never contain interactive elements (use popover instead)
+        - Persistent while hovered (WCAG 1.4.13 Content on Hover)
+        - Max width 250px, positioned to avoid viewport overflow
+
+    visually-hidden:
+      element: span
+      aliases: [screenreader-only, sr-only]
+      description: Invisible text providing context for assistive technology.
+      rules:
+        - Use clip-rect technique (not display:none or visibility:hidden)
+        - Never hide content that sighted users also need
+        - Common uses — icon-only button labels, table context, skip links
+      example: |
+        <button type="button" class="btn btn--icon">
+          <svg aria-hidden="true"><use href="#close" /></svg>
+          <span class="visually-hidden">Close dialog</span>
+        </button>
+
+  # ---------------------------------------------------------------------------
+  # MOLECULES — 20 composed components
+  # ---------------------------------------------------------------------------
+  molecules:
+    description: |
+      Groups of atoms bonded together to form functional UI units.
+      Each molecule has a clear purpose and encapsulates behavior.
+
+    accordion:
+      atoms: [heading, button, icon]
+      aliases: [collapse, collapsible, disclosure, expandable, expander]
+      description: Vertical stack of togglable sections — collapsed shows label, expanded shows content.
+      a11y:
+        trigger_role: button
+        trigger_attrs: [aria-expanded, aria-controls]
+        panel_role: region
+        panel_attrs: [aria-labelledby]
+        keyboard: "Enter/Space to toggle, Arrow keys between headers"
+      rules:
+        - Allow multiple open or single-open (mutually exclusive)
+        - Chevron icon rotates 180° on expand
+        - Animation respects prefers-reduced-motion
+      skeleton: true
+
+    alert:
+      atoms: [icon, heading, button]
+      aliases: [notification, feedback, message, banner, callout]
+      description: Prominent inline message informing user of important changes.
+      variants: [info, success, warning, error]
+      a11y:
+        role: alert (assertive) | status (polite)
+        note: "Error alerts use role=alert for immediate announcement."
+      rules:
+        - Icon + color + text to convey severity (not color alone)
+        - Dismissible alerts have close button with aria-label="Dismiss"
+        - Persistent alerts for errors; auto-dismiss OK for success
+
+    breadcrumb:
+      atoms: [link, separator, icon]
+      description: List of links showing current page location in hierarchy.
+      a11y:
+        container: nav[aria-label="Breadcrumb"]
+        list: ol
+        current: aria-current="page"
+      rules:
+        - Last item is current page (not a link)
+        - Separator is decorative (aria-hidden="true")
+        - Truncate middle items on mobile with ellipsis
+
+    button-group:
+      atoms: [button]
+      aliases: [toolbar]
+      description: Wrapper for multiple related buttons.
+      a11y:
+        role: toolbar | group
+        required_attrs: [aria-label]
+        keyboard: "Arrow keys between buttons, Tab to enter/leave group"
+      rules:
+        - Connected borders (no gap between buttons)
+        - Only one primary action per group
+
+    card:
+      atoms: [image, heading, badge, link]
+      aliases: [tile]
+      description: Container for content representing a single entity (article, contact, task).
+      variants: [default, elevated, outlined, interactive]
+      a11y:
+        note: "Interactive cards — wrap in <a> or <button>. Entire card clickable via pseudo-element."
+      rules:
+        - Heading hierarchy must respect page context
+        - Interactive cards have hover/focus state
+        - Image uses object-fit: cover
+      skeleton: true
+
+    combobox:
+      atoms: [text-input, select, icon]
+      aliases: [autocomplete, autosuggest]
+      description: Input combining free text with filtered dropdown options.
+      a11y:
+        role: combobox (input), listbox (dropdown)
+        required_attrs: [aria-expanded, aria-controls, aria-activedescendant]
+        keyboard: "Arrow Down to open, Arrow keys to navigate, Enter to select, Escape to close"
+      rules:
+        - Filter options as user types
+        - Highlight matching text in options
+        - Support async loading with spinner
+        - Show "No results" empty state
+
+    date-picker:
+      atoms: [date-input, button, icon]
+      aliases: [calendar, datetime-picker]
+      description: Visual calendar interface for choosing dates.
+      a11y:
+        role: dialog (calendar popup), grid (calendar)
+        keyboard: "Arrow keys to navigate days, PageUp/Down for months"
+      rules:
+        - Month/year navigation via buttons
+        - Today highlighted
+        - Range selection variant for start/end dates
+        - Respect locale first-day-of-week
+
+    dropdown:
+      atoms: [button, icon, link]
+      aliases: [select-menu, menu]
+      description: Menu of actions or navigation, hidden by default, shown on click.
+      a11y:
+        role: menu (container), menuitem (options)
+        required_attrs: [aria-expanded, aria-haspopup]
+        keyboard: "Arrow keys to navigate, Enter to select, Escape to close"
+      rules:
+        - Triggered by click, not hover
+        - Focus trapped inside while open
+        - Positioned to avoid viewport overflow (flip logic)
+        - Close on outside click or Escape
+
+    empty-state:
+      atoms: [icon, heading, button]
+      description: Indication that no data exists for the current view.
+      rules:
+        - Include illustration or icon
+        - Descriptive message explaining why empty
+        - Primary action to resolve (e.g. "Create first item")
+        - Never leave a blank space without explanation
+
+    fieldset:
+      atoms: [label, checkbox, radio, text-input]
+      description: Wrapper for related form fields with shared legend.
+      a11y:
+        element: fieldset
+        required_children: [legend]
+      rules:
+        - Use for radio groups, checkbox groups, address fields
+        - Legend is the group label (visible, not hidden)
+
+    file-upload:
+      atoms: [button, icon, label]
+      aliases: [file-input, dropzone]
+      description: Input allowing users to upload files via browse or drag-and-drop.
+      a11y:
+        note: "Announce file selection and upload progress to screen readers."
+      rules:
+        - Drag-and-drop zone with visual feedback
+        - Show file name, size, type after selection
+        - Progress indicator during upload
+        - Validate file type and size client-side
+
+    list:
+      atoms: [link, icon, badge, image]
+      description: Grouped collection of related items (unordered, ordered, description).
+      a11y:
+        elements: [ul, ol, dl]
+        note: "Screen readers announce list item count."
+      rules:
+        - Use semantic list elements
+        - Interactive lists use role=listbox
+        - Dividers between items are decorative
+
+    pagination:
+      atoms: [button, link, icon]
+      description: Navigation between pages of split content.
+      a11y:
+        container: nav[aria-label="Pagination"]
+        current: aria-current="page"
+      rules:
+        - Show first, last, current, and adjacent pages
+        - Ellipsis for skipped ranges
+        - Previous/Next buttons always visible (disabled at bounds)
+        - Announce page changes to screen readers
+
+    popover:
+      atoms: [button, icon]
+      description: Element popping up from a trigger, containing interactive content.
+      a11y:
+        trigger_attrs: [aria-expanded, aria-haspopup]
+        keyboard: "Escape to close, Tab to navigate content"
+      rules:
+        - Triggered by click (not hover — use tooltip for hover)
+        - CAN contain interactive elements (unlike tooltip)
+        - Focus moves into popover on open
+        - Close on Escape or outside click
+
+    progress-tracker:
+      atoms: [icon, label, separator]
+      aliases: [stepper-nav, steps, timeline, meter]
+      description: Visualization of user progress through discrete steps.
+      variants: [horizontal, vertical]
+      a11y:
+        role: list
+        note: "Current step uses aria-current='step'. Completed steps indicate status."
+      rules:
+        - Completed steps show checkmark icon
+        - Current step visually distinct
+        - Future steps are dimmed but visible
+        - Clickable completed steps for navigation back
+
+    search:
+      atoms: [text-input, button, icon]
+      description: Input for finding content by entering a search term.
+      a11y:
+        role: search (landmark)
+        note: "Wrap in <form role='search'> or <search> element."
+        keyboard: "Enter to submit"
+      rules:
+        - Clear button appears when input has value
+        - Search icon as visual affordance
+        - Debounce API calls (300ms)
+        - Show result count for screen readers
+
+    segmented:
+      atoms: [button]
+      aliases: [toggle-button-group, segmented-control]
+      description: Hybrid of button group and radio — switch between options/views.
+      a11y:
+        role: radiogroup
+        item_role: radio
+        required_attrs: [aria-checked]
+      rules:
+        - Exactly one option selected at a time
+        - Visually connected (pill shape)
+        - Use for 2–5 options max (Hick's Law)
+
+    tabs:
+      atoms: [button, icon]
+      aliases: [tabbed-interface]
+      description: Navigation between multiple panels within the same context.
+      a11y:
+        container_role: tablist
+        tab_role: tab
+        panel_role: tabpanel
+        required_attrs: [aria-selected, aria-controls, aria-labelledby]
+        keyboard: "Arrow keys between tabs, Tab to panel, Home/End for first/last"
+      rules:
+        - Only one panel visible at a time
+        - Active tab visually distinct (underline or background)
+        - Lazy load panel content when possible
+        - Overflow handled with scroll or dropdown
+
+    toast:
+      atoms: [icon, label, button]
+      aliases: [snackbar]
+      description: Ephemeral notification appearing in a layer above content.
+      variants: [info, success, warning, error]
+      a11y:
+        role: status
+        required_attrs: [aria-live="polite"]
+        note: "Error toasts use aria-live='assertive'. Auto-dismiss pauses on hover/focus."
+      rules:
+        - Stack from bottom-right (LTR) or bottom-left (RTL)
+        - Auto-dismiss after 5s (success) or persistent (error)
+        - Pause auto-dismiss on hover and focus
+        - Close button always present
+        - Max 3 visible toasts; queue extras
+
+    tree-view:
+      atoms: [icon, link, checkbox]
+      description: Nested hierarchical display (table of contents, file explorer).
+      a11y:
+        role: tree (container), treeitem (nodes)
+        required_attrs: [aria-expanded on branches]
+        keyboard: "Arrow Right to expand, Left to collapse, Up/Down to navigate"
+      rules:
+        - Expand/collapse via click or keyboard
+        - Indentation indicates depth
+        - Optional checkboxes for multi-select
+        - Lazy load deep branches
+
+  # ---------------------------------------------------------------------------
+  # ORGANISMS — 11 complex UI structures
+  # ---------------------------------------------------------------------------
+  organisms:
+    description: |
+      Complex UI sections formed by groups of molecules and atoms.
+      Organisms are distinct page sections with their own purpose.
+
+    carousel:
+      molecules: [card, pagination]
+      aliases: [content-slider]
+      description: Multiple slides of content, navigated via swipe, scroll, or buttons.
+      a11y:
+        role: region
+        required_attrs: [aria-label, aria-roledescription="carousel"]
+        slide_attrs: [aria-roledescription="slide", aria-label="N of M"]
+        keyboard: "Arrow keys for slides, Tab to controls"
+      rules:
+        - Pause auto-play on hover, focus, or prefers-reduced-motion
+        - Previous/Next buttons always visible
+        - Dot indicators show current position
+        - Touch/swipe support on mobile
+        - Never auto-play with no pause mechanism
+      skeleton: true
+
+    drawer:
+      molecules: [button-group]
+      aliases: [tray, flyout, sheet, side-panel]
+      description: Panel sliding from screen edge, overlaying content.
+      variants: [left, right, bottom]
+      a11y:
+        role: dialog
+        required_attrs: [aria-label, aria-modal="true"]
+        keyboard: "Escape to close, Tab trapped inside"
+      rules:
+        - Focus trap while open
+        - Background scroll locked
+        - Close on Escape or overlay click
+        - Return focus to trigger on close
+        - Backdrop overlay dims background
+
+    footer:
+      molecules: [list, breadcrumb]
+      description: Bottom-of-page section with copyright, legal, and navigation links.
+      a11y:
+        element: footer
+        role: contentinfo
+      rules:
+        - Links organized in columns by category
+        - Copyright and legal links at very bottom
+        - Consistent across all pages
+
+    form:
+      molecules: [fieldset, file-upload, search]
+      description: Grouped input controls for submitting information.
+      a11y:
+        element: form
+        required_attrs: [aria-label or heading association]
+      rules:
+        - Clear submission feedback (success/error)
+        - Error summary at top with links to invalid fields
+        - Inline validation on blur (not on every keystroke)
+        - Submit button text describes action ("Create account", not "Submit")
+        - Preserve entered data on validation error
+
+    header:
+      molecules: [search, dropdown]
+      aliases: [app-bar, top-bar]
+      description: Top-of-page element containing site name and primary navigation.
+      a11y:
+        element: header
+        role: banner
+      rules:
+        - Logo links to homepage
+        - Primary navigation accessible via keyboard
+        - Mobile hamburger menu with aria-expanded
+        - Sticky variant uses position: sticky
+
+    hero:
+      atoms: [heading, button, image]
+      aliases: [jumbotron, banner]
+      description: Large banner section, usually first visible content on a page.
+      rules:
+        - Full-width background image with overlay for text contrast
+        - Clear call-to-action button
+        - Heading is h1 (page title)
+        - Responsive image handling (art direction via <picture>)
+
+    modal:
+      molecules: [button-group]
+      aliases: [dialog, popup, modal-window]
+      description: Interface overlaying all other content, requiring interaction to dismiss.
+      a11y:
+        element: dialog
+        role: dialog
+        required_attrs: [aria-label or aria-labelledby, aria-modal="true"]
+        keyboard: "Escape to close, Tab trapped inside"
+      rules:
+        - Focus moves to first focusable element (or close button)
+        - Focus trap — Tab cycles within modal only
+        - Background scroll locked (overflow: hidden on body)
+        - Return focus to trigger element on close
+        - Close via Escape key, close button, or backdrop click
+        - Use native <dialog> element when possible
+        - Avoid nested modals
+
+    navigation:
+      molecules: [dropdown, breadcrumb, tabs]
+      aliases: [nav, menu, sidebar]
+      description: Container for navigation links — site nav, sidebar, or table of contents.
+      a11y:
+        element: nav
+        required_attrs: [aria-label to distinguish multiple navs]
+        keyboard: "Tab between items, Enter to activate"
+      rules:
+        - Use <nav> element with descriptive aria-label
+        - Current page indicated with aria-current="page"
+        - Mobile navigation uses disclosure pattern
+        - Max 7±2 top-level items (Miller's Law)
+
+    rich-text-editor:
+      molecules: [button-group, dropdown]
+      aliases: [rte, wysiwyg-editor]
+      description: Interface for editing formatted text content.
+      a11y:
+        role: textbox
+        required_attrs: [aria-multiline="true", aria-label]
+        keyboard: "Standard text editing + toolbar shortcuts"
+      rules:
+        - Toolbar uses button group with keyboard navigation
+        - Ctrl/Cmd+B/I/U for bold/italic/underline
+        - Output clean semantic HTML
+        - Sanitize pasted content
+
+    table:
+      atoms: [checkbox, badge, button]
+      aliases: [data-table]
+      description: Data displayed in rows and columns with optional sorting/filtering.
+      a11y:
+        element: table
+        required_attrs: [aria-label or caption]
+        note: "Sortable columns use aria-sort (ascending/descending/none)."
+        keyboard: "Arrow keys for cell navigation in grid mode"
+      rules:
+        - Use semantic <table>, <thead>, <tbody>, <th scope>
+        - Sticky header on scroll
+        - Sortable columns show direction indicator
+        - Row selection via checkbox column
+        - Responsive — horizontal scroll or card layout on mobile
+        - Pagination for large datasets
+      skeleton: true
+
+    video:
+      atoms: [button, slider, icon]
+      aliases: [video-player, media-player]
+      description: Video content display with playback controls.
+      a11y:
+        required_attrs: [aria-label]
+        note: "Provide captions (track element) and transcript."
+      rules:
+        - Custom controls for consistent cross-browser UX
+        - Keyboard accessible play/pause, volume, seek
+        - Captions/subtitles support (WebVTT)
+        - Never auto-play with sound
+
+# =============================================================================
+# 2. DESIGN TOKENS
+# =============================================================================
+
+design_tokens:
+  description: |
+    Single source of truth for visual properties. All components reference
+    tokens via CSS custom properties. Never hard-code values.
+
+  colors:
+    dark_theme:
+      bg-primary: "#0f0a1a"
+      bg-secondary: "#1a1225"
+      bg-tertiary: "#251d33"
+      border-default: "#352d45"
+      text-primary: "#e6edf3"
+      text-secondary: "#8b949e"
+      text-muted: "#6e7681"
+      accent-purple: "#a78bfa"
+      accent-green: "#34d399"
+      accent-red: "#f87171"
+      accent-yellow: "#fbbf24"
+      accent-blue: "#60a5fa"
+      accent-cyan: "#22d3ee"
+
+    light_theme:
+      bg-primary: "#ffffff"
+      bg-secondary: "#f8f9fa"
+      bg-tertiary: "#f0f1f3"
+      border-default: "#d1d5db"
+      text-primary: "#1a1a2e"
+      text-secondary: "#4a5568"
+      text-muted: "#718096"
+
+    semantic:
+      success: "var(--accent-green)"
+      error: "var(--accent-red)"
+      warning: "var(--accent-yellow)"
+      info: "var(--accent-blue)"
+
+    rules:
+      - Never use hex values directly in components — always reference tokens
+      - Dark theme is the default
+      - Theme switching via data-theme attribute on <html>
+      - Semantic colors map to accent colors (success=green, error=red)
+      - WCAG contrast ratios — text on bg must be ≥4.5:1 (normal) or ≥3:1 (large)
+
+  typography:
+    font_families:
+      sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+      mono: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
+      note: "Zero external font dependencies. System fonts for maximum performance."
+
+    font_sizes:
+      xs: "0.75rem"    # 12px
+      sm: "0.875rem"   # 14px
+      base: "1rem"     # 16px
+      lg: "1.125rem"   # 18px
+      xl: "1.25rem"    # 20px
+      2xl: "1.5rem"    # 24px
+      3xl: "2rem"      # 32px
+
+    font_weights:
+      normal: 400
+      medium: 500
+      semibold: 600
+      bold: 700
+
+    line_heights:
+      tight: 1.25
+      normal: 1.5
+      relaxed: 1.75
+
+    rules:
+      - Base font-size 16px (1rem) on html element
+      - Use rem for font-size, em for component-internal spacing
+      - Mono font for code, data, and technical content only
+      - Heading scale — h1:3xl, h2:2xl, h3:xl, h4:lg, h5:base, h6:sm
+
+  spacing:
+    description: "4px base grid. All spacing values are multiples of 4px."
+    scale:
+      1: "0.25rem"   # 4px
+      2: "0.5rem"    # 8px
+      3: "0.75rem"   # 12px
+      4: "1rem"      # 16px
+      5: "1.5rem"    # 24px
+      6: "2rem"      # 32px
+      8: "3rem"      # 48px
+      10: "4rem"     # 64px
+    rules:
+      - Component internal padding — spacing-3 to spacing-4
+      - Between components — spacing-4 to spacing-6
+      - Section spacing — spacing-8 to spacing-10
+      - Never use arbitrary pixel values outside the scale
+
+  border_radius:
+    sm: "4px"         # 0.25rem — subtle rounding
+    default: "10px"   # 0.625rem — standard component rounding
+    lg: "16px"        # 1rem — cards, modals
+    full: "9999px"    # pills, avatars, circular elements
+    rules:
+      - Buttons use radius-default
+      - Cards and modals use radius-lg
+      - Badges and pills use radius-full
+      - Inputs use radius-sm
+      - Nested elements use smaller radius than parent
+
+  shadows:
+    sm: "0 1px 2px 0 rgba(0,0,0,0.05)"
+    default: "0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1)"
+    lg: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)"
+    rules:
+      - Cards use shadow-sm (elevated variant uses shadow-default)
+      - Dropdowns and popovers use shadow-lg
+      - Modals use shadow-lg
+      - Dark theme — shadows are subtle (reduce opacity)
+
+  z_index:
+    dropdown: 100
+    sticky: 150
+    modal: 200
+    toast: 300
+    tooltip: 400
+    rules:
+      - Never use arbitrary z-index values
+      - Stacking context created by each layer
+      - Modal backdrop is z-index modal minus 1
+
+  animation:
+    durations:
+      fast: "150ms"    # micro-interactions (hover, toggle)
+      base: "300ms"    # standard transitions (open/close)
+      slow: "500ms"    # complex animations (page transitions)
+    easing:
+      default: "cubic-bezier(0.4, 0, 0.2, 1)"   # ease-in-out
+      enter: "cubic-bezier(0, 0, 0.2, 1)"         # ease-out (elements appearing)
+      exit: "cubic-bezier(0.4, 0, 1, 1)"          # ease-in (elements leaving)
+    rules:
+      - All animations respect @media (prefers-reduced-motion reduce)
+      - Reduced motion — instant transitions (duration 0ms) or fade only
+      - Skeleton shimmer — 1.5s ease-in-out infinite
+      - Toast entrance — slide + fade, 300ms
+      - Modal entrance — fade + scale, 300ms
+
+# =============================================================================
+# 3. ICONS
+# =============================================================================
+
+icons:
+  library: Feather Icons
+  url: https://feathericons.com/
+  format: SVG sprite or inline SVG
+
+  style:
+    stroke_linecap: round
+    stroke_linejoin: round
+    stroke_width: "2px"
+    fill: none
+    viewBox: "0 0 24 24"
+
+  sizes:
+    sm: "16px"   # inline with small text
+    md: "20px"   # inline with body text
+    lg: "24px"   # standalone, buttons
+    xl: "32px"   # feature icons, empty states
+
+  rules:
+    - ONLY Feather SVG icons. No exceptions.
+    - NO emoji anywhere in the UI — use icons instead.
+    - NO FontAwesome, Material Icons, or icon fonts.
+    - Decorative icons use aria-hidden="true" and are excluded from tab order.
+    - Meaningful icons (sole content of a button) need aria-label on the parent.
+    - Icon buttons MUST have a visually-hidden text label or aria-label.
+    - Color inherits from parent via currentColor.
+    - Never scale icons with font-size — use width/height.
+
+  implementation:
+    sprite: |
+      <!-- SVG sprite at top of body -->
+      <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+        <symbol id="icon-check" viewBox="0 0 24 24">
+          <polyline points="20 6 9 17 4 12" />
+        </symbol>
+      </svg>
+      <!-- Usage -->
+      <svg class="icon icon--md" aria-hidden="true">
+        <use href="#icon-check" />
+      </svg>
+
+    inline: |
+      <svg class="icon icon--md" aria-hidden="true"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+
+  common_icons:
+    navigation: [menu, x, chevron-down, chevron-right, chevron-left, arrow-left, arrow-right, home, external-link]
+    actions: [plus, minus, edit-2, trash-2, copy, download, upload, share-2, refresh-cw, search, filter, settings]
+    status: [check, check-circle, alert-circle, alert-triangle, info, x-circle, clock, loader]
+    media: [image, file, folder, video, music, camera, mic]
+    communication: [mail, message-circle, bell, phone, send]
+    user: [user, users, log-in, log-out, lock, unlock, shield, eye, eye-off]
+
+# =============================================================================
+# 4. SKELETON LOADING
+# =============================================================================
+
+skeleton:
+  description: |
+    Skeleton screens show a placeholder layout matching the final content
+    structure. They reduce perceived loading time and prevent layout shift.
+
+  css_class: ".sk"
+  container_class: ".sk-container"
+
+  rules:
+    - EVERY component that loads data MUST have a skeleton variant
+    - Skeleton layout matches final content dimensions exactly
+    - Container sets aria-busy="true" while loading
+    - Remove aria-busy="true" when content loads
+    - Screen readers announce "Loading" via aria-live region
+    - Skeleton elements are purely decorative (aria-hidden="true" on children)
+    - No text in skeletons — only shapes
+
+  shapes:
+    line: ".sk__line"                    # text line (full width)
+    line_short: ".sk__line--75"          # 75% width text line
+    line_half: ".sk__line--50"           # 50% width text line
+    circle: ".sk__circle"               # avatar, icon placeholder
+    rect: ".sk__rect"                   # image, card placeholder
+    badge: ".sk__badge"                 # small pill shape
+
+  animation:
+    type: shimmer
+    duration: "1.5s"
+    timing: ease-in-out
+    iteration: infinite
+    direction: "left to right gradient sweep"
+    css: |
+      @keyframes sk-shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .sk__line, .sk__circle, .sk__rect, .sk__badge {
+        background: linear-gradient(
+          90deg,
+          var(--bg-tertiary) 25%,
+          var(--bg-secondary) 50%,
+          var(--bg-tertiary) 75%
+        );
+        background-size: 200% 100%;
+        animation: sk-shimmer 1.5s ease-in-out infinite;
+        border-radius: var(--radius-sm);
+      }
+    reduced_motion: |
+      @media (prefers-reduced-motion: reduce) {
+        .sk__line, .sk__circle, .sk__rect, .sk__badge {
+          animation: none;
+          opacity: 0.7;
+        }
+      }
+
+  components_requiring_skeleton:
+    atoms: [avatar, badge, heading, image, progress-bar, rating]
+    molecules: [accordion, card, list, pagination, tabs, tree-view]
+    organisms: [carousel, table, navigation]
+
+  examples:
+    card: |
+      <!-- Skeleton state -->
+      <div class="card sk" aria-busy="true">
+        <div class="sk__rect" style="height:180px" aria-hidden="true"></div>
+        <div class="card__body">
+          <div class="sk__line sk__line--50" aria-hidden="true"></div>
+          <div class="sk__line" aria-hidden="true"></div>
+          <div class="sk__line sk__line--75" aria-hidden="true"></div>
+        </div>
+      </div>
+      <!-- Loaded state -->
+      <div class="card">
+        <img src="photo.jpg" alt="Project thumbnail" class="card__image" />
+        <div class="card__body">
+          <h3 class="card__title">Project Alpha</h3>
+          <p class="card__text">A brief description of the project goals.</p>
+        </div>
+      </div>
+
+    table: |
+      <div class="table-container sk" aria-busy="true" aria-label="Loading data">
+        <table>
+          <thead>
+            <tr>
+              <th><div class="sk__line sk__line--50" aria-hidden="true"></div></th>
+              <th><div class="sk__line sk__line--50" aria-hidden="true"></div></th>
+              <th><div class="sk__line sk__line--50" aria-hidden="true"></div></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="sk__line" aria-hidden="true"></div></td>
+              <td><div class="sk__line" aria-hidden="true"></div></td>
+              <td><div class="sk__line sk__line--75" aria-hidden="true"></div></td>
+            </tr>
+            <!-- Repeat 4 more rows -->
+          </tbody>
+        </table>
+      </div>
+
+    avatar_row: |
+      <div class="user-row sk" aria-busy="true">
+        <div class="sk__circle" style="width:40px;height:40px" aria-hidden="true"></div>
+        <div>
+          <div class="sk__line sk__line--50" aria-hidden="true"></div>
+          <div class="sk__line sk__line--75" aria-hidden="true"></div>
+        </div>
+      </div>
+
+# =============================================================================
+# 5. COMPONENT COMPOSITION RULES
+# =============================================================================
+
+composition_rules:
+  - rule: Atomic hierarchy
+    detail: "Organisms contain molecules and atoms. Molecules contain atoms. Never skip levels."
+
+  - rule: Single responsibility
+    detail: "Each component does one thing well. Split complex behavior into composed children."
+
+  - rule: Prop-driven variants
+    detail: "Use data attributes or CSS classes for variants, not separate components."
+
+  - rule: Accessible by default
+    detail: "Every component ships with correct ARIA roles, keyboard support, and focus management."
+
+  - rule: Token-only styling
+    detail: "Reference design tokens via CSS custom properties. Never hard-code colors, spacing, or typography."
+
+  - rule: Mobile-first responsive
+    detail: "Design for smallest viewport first. Use min-width media queries to add complexity."
+
+  - rule: Skeleton-ready
+    detail: "Data components include a .sk class variant for loading states."
+
+  - rule: RTL-aware
+    detail: "Use CSS logical properties (margin-inline-start, not margin-left). Flex auto-reverses."
+
+  - rule: Motion-safe
+    detail: "All animations respect @media (prefers-reduced-motion: reduce)."
+
+  - rule: Theme-agnostic
+    detail: "Components work in both dark and light themes via token references."
+
+# =============================================================================
+# 6. ANTI-PATTERNS
+# =============================================================================
+
+anti_patterns:
+  - name: Color-only status
+    problem: "Using color alone to convey meaning (red=error, green=success)."
+    fix: "Always pair color with icon and/or text label."
+
+  - name: Div soup
+    problem: "Using <div> and <span> for everything instead of semantic HTML."
+    fix: "Use <button>, <nav>, <main>, <section>, <article>, <aside>, <header>, <footer>."
+
+  - name: Placeholder labels
+    problem: "Using placeholder text as the form label."
+    fix: "Always use visible <label>. Placeholder is supplementary hint only."
+
+  - name: Click-only interactions
+    problem: "Components only work with mouse click, not keyboard."
+    fix: "All interactions must work with keyboard (Enter, Space, Escape, Arrow keys)."
+
+  - name: Tooltip for critical info
+    problem: "Hiding important information in hover-only tooltips."
+    fix: "Critical info is always visible. Tooltips are supplementary."
+
+  - name: Auto-playing media
+    problem: "Videos or carousels that auto-play without user consent."
+    fix: "Never auto-play with sound. Provide pause/stop controls."
+
+  - name: Focus trap leaks
+    problem: "Modal or drawer that doesn't trap focus, allowing Tab to reach background."
+    fix: "Implement proper focus trap. Return focus to trigger on close."
+
+  - name: Missing skip links
+    problem: "Keyboard users must Tab through entire navigation to reach content."
+    fix: "Add skip-link as first focusable element on every page."
+
+  - name: Icon-only buttons without labels
+    problem: "Buttons with only an icon and no accessible name."
+    fix: "Add visually-hidden text or aria-label to every icon-only button."
+
+  - name: Hardcoded values
+    problem: "Using px values or hex colors directly in component styles."
+    fix: "Always reference design tokens via CSS custom properties."
+
+  - name: Emoji as UI
+    problem: "Using emoji characters as status indicators or icons."
+    fix: "Use Feather SVG icons exclusively. No emoji in the interface."
+
+  - name: Nested scrolling
+    problem: "Scrollable containers inside scrollable containers."
+    fix: "Avoid nested scroll. Use pagination, expand/collapse, or full-page layouts."

@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "প্রকল্প", "ideation": "ধারণা", "settings": "সেটিংস", "software_factory": "Software Factory" },
+  "settings": { "language": "ভাষা" },
+  "language_picker": { "title": "ভাষা" }
+}

@@ -1,8 +1,9 @@
 import SwiftUI
 
-// Ref: FT-SSF-001
+// Ref: FT-SSF-001, FT-SSF-015
 struct MainView: View {
     @State private var selection: SidebarItem = .jarvis
+    @ObservedObject private var l10n = L10n.shared
 
     var body: some View {
         NavigationSplitView {
@@ -13,6 +14,7 @@ struct MainView: View {
                 .background(SF.Colors.bgPrimary)
         }
         .navigationSplitViewStyle(.balanced)
+        .environment(\.layoutDirection, l10n.layoutDirection)
     }
 
     @ViewBuilder
@@ -31,12 +33,13 @@ struct MainView: View {
 enum SidebarItem: String, Hashable {
     case jarvis, projects, ideation, settings
 
+    @MainActor
     var label: String {
         switch self {
-        case .jarvis:    return "Jarvis"
-        case .projects:  return "Projects"
-        case .ideation:  return "Ideation"
-        case .settings:  return "Settings"
+        case .jarvis:    return L10n.shared.t(.navJarvis)
+        case .projects:  return L10n.shared.t(.navProjects)
+        case .ideation:  return L10n.shared.t(.navIdeation)
+        case .settings:  return L10n.shared.t(.navSettings)
         }
     }
 
@@ -55,6 +58,7 @@ struct SidebarView: View {
     @ObservedObject private var llm = LLMService.shared
     @ObservedObject private var bridge = SFBridge.shared
     @ObservedObject private var appState = AppState.shared
+    @ObservedObject private var l10n = L10n.shared
 
     var body: some View {
         List(selection: $selection) {
@@ -76,7 +80,7 @@ struct SidebarView: View {
                 Image(systemName: "hammer.fill")
                     .foregroundColor(SF.Colors.purple)
                     .font(.system(size: 11))
-                Text("Software Factory")
+                Text(l10n.t(.navSoftwareFactory))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(SF.Colors.textSecondary)
                 Spacer()
@@ -98,7 +102,7 @@ struct SidebarView: View {
             Image(systemName: appState.yoloMode ? "bolt.fill" : "bolt.slash")
                 .font(.system(size: 10))
                 .foregroundColor(appState.yoloMode ? SF.Colors.warning : SF.Colors.textMuted)
-            Text("YOLO")
+            Text(l10n.t(.sidebarYolo))
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundColor(appState.yoloMode ? SF.Colors.warning : SF.Colors.textMuted)
             Spacer()
@@ -112,7 +116,7 @@ struct SidebarView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
-        .help("YOLO: auto-approve all GO/NOGO gates")
+        .help(l10n.t(.sidebarYoloHelp))
     }
 
     private var providerBadge: some View {
@@ -129,7 +133,7 @@ struct SidebarView: View {
                     .frame(width: 16)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(provider?.displayName ?? "No LLM")
+                    Text(provider?.displayName ?? l10n.t(.sidebarNoLLM))
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(isActive ? SF.Colors.textPrimary : SF.Colors.warning)
                     Text(activeModelShort(provider))
@@ -179,7 +183,7 @@ struct SidebarView: View {
     }
 
     private func activeModelShort(_ provider: LLMProvider?) -> String {
-        guard let provider else { return "Not configured" }
+        guard let provider else { return l10n.t(.statusNotConfigured) }
         switch provider {
         case .mlx:
             let name = MLXService.shared.activeModel?.name ?? "loading…"

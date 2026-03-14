@@ -14,7 +14,8 @@ let package = Package(
             resources: [
                 .process("i18n/Localizable.xcstrings"),
                 .copy("Resources/Avatars"),
-                .copy("Resources/SFData")
+                .copy("Resources/SFData"),
+                .copy("Resources/Locales")
             ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")

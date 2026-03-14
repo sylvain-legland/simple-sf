@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Ref: FT-SSF-007
+// Ref: FT-SSF-007, FT-SSF-015
 @MainActor
 struct OnboardingView: View {
     @ObservedObject private var keychain = KeychainService.shared
@@ -8,6 +8,7 @@ struct OnboardingView: View {
     @ObservedObject var mlx = MLXService.shared
     @ObservedObject var ollama = OllamaService.shared
     @ObservedObject private var appState = AppState.shared
+    @ObservedObject private var l10n = L10n.shared
     @State private var keys: [LLMProvider: String] = [:]
     @State private var testing: LLMProvider? = nil
     @State private var testResults: [LLMProvider: Bool] = [:]
@@ -22,7 +23,7 @@ struct OnboardingView: View {
             // Header
             HStack {
                 Image(systemName: "gearshape.fill").foregroundColor(SF.Colors.purple)
-                Text("Settings")
+                Text(l10n.t(.settingsTitle))
                     .font(.title2.bold())
                     .foregroundColor(SF.Colors.textPrimary)
                 Spacer()
@@ -48,10 +49,10 @@ struct OnboardingView: View {
                 Image(systemName: "lock.shield.fill")
                     .foregroundColor(.green)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Local models run 100% on your Mac. No data leaves your machine.")
+                    Text(l10n.t(.privacyLocal))
                         .font(.caption)
                         .foregroundColor(SF.Colors.textSecondary)
-                    Text("Cloud API keys stored in macOS Keychain — sent only to the provider.")
+                    Text(l10n.t(.privacyCloud))
                         .font(.caption)
                         .foregroundColor(SF.Colors.textSecondary)
                 }

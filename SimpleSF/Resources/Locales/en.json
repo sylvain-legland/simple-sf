@@ -1,0 +1,196 @@
+{
+  "app": {
+    "name": "Simple SF",
+    "tagline": "Your private Software Factory"
+  },
+  "nav": {
+    "jarvis": "Jarvis",
+    "projects": "Projects",
+    "ideation": "Ideation",
+    "settings": "Settings",
+    "software_factory": "Software Factory"
+  },
+  "action": {
+    "start": "Start",
+    "stop": "Stop",
+    "pause": "Pause",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "retry": "Retry",
+    "back": "Back",
+    "continue": "Continue",
+    "refresh": "Refresh",
+    "use": "Use",
+    "test": "Test",
+    "skip": "Skip",
+    "get_started": "Get Started",
+    "launch": "Launch"
+  },
+  "status": {
+    "running": "Running",
+    "stopped": "Stopped",
+    "active": "Active",
+    "ready": "Ready",
+    "queued": "Queued",
+    "paused": "Paused",
+    "completed": "Completed",
+    "loading": "Loading…",
+    "starting": "Starting...",
+    "not_configured": "Not configured"
+  },
+  "sidebar": {
+    "yolo": "YOLO",
+    "yolo_help": "YOLO: auto-approve all GO/NOGO gates",
+    "no_llm": "No LLM",
+    "auto_detect": "Auto",
+    "auto_detect_help": "Switch back to auto-detect"
+  },
+  "jarvis": {
+    "title": "Jarvis",
+    "thinking": "Thinking…",
+    "team_meeting": "The team is meeting…",
+    "welcome": "Hello! I'm Jarvis, your AI assistant.",
+    "new_conversation": "New conversation"
+  },
+  "projects": {
+    "title": "Projects",
+    "empty": "No projects yet",
+    "empty_hint": "Ask Jarvis to create a project for you.\n\"Create a project called MyApp using Swift\"",
+    "pilot": "Pilot Projects",
+    "ac_validation": "AC validation",
+    "load_pilot": "Load",
+    "reset": "Reset",
+    "load_pilot_hint": "Click \"Load\" to import the 8 pilot projects",
+    "lifecycle": "Full Product Lifecycle",
+    "workflow_not_defined": "Workflow not defined — launch the project so the PM decides the lifecycle",
+    "launch_workflow": "Launch workflow for agents to start discussing",
+    "phase_result": "Phase result",
+    "agent_working": "Agents working…",
+    "agent_writing": "%@ is writing…",
+    "messages": "messages",
+    "round": "Round %d"
+  },
+  "mission": {
+    "title": "Mission",
+    "value_stream": "Value Stream",
+    "launch_epic": "Launch an Epic",
+    "description": "Describe your product. The SAFe team chains 14 phases:\nIdeation → Strategic Committee → Architecture → Dev Sprints → QA → Prod Deploy → TMA",
+    "select_project": "Select a project…",
+    "launch_safe": "Launch SAFe Workflow",
+    "phase_result": "Phase result"
+  },
+  "ideation": {
+    "title": "Ideation",
+    "discussing": "Agents discussing...",
+    "describe": "Describe your idea",
+    "agents": "3 agents",
+    "rounds": "3 rounds",
+    "pattern": "network pattern",
+    "launch": "Launch Ideation",
+    "configure_provider": "Configure a provider in Settings",
+    "complete": "Ideation complete — 3 perspectives, 3 rounds"
+  },
+  "agents": {
+    "title": "Agent Team",
+    "count": "%d agents"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "language_hint": "Jarvis responds in this language",
+    "local_models": "Local Models",
+    "local_hint": "100% on-device · no internet needed",
+    "cloud_providers": "Cloud Providers",
+    "cloud_hint": "Requires API key",
+    "no_provider": "No provider",
+    "no_model_active": "No model active",
+    "select_provider": "Select a provider below",
+    "configure_hint": "Configure a local or cloud provider below, then click \"Use\" to activate it.",
+    "auto_start": "Auto-start",
+    "get_api_key": "Get API key →",
+    "model": "Model:",
+    "port": "Port %d"
+  },
+  "setup": {
+    "title": "Simple SF",
+    "subtitle": "Your private Software Factory\nPowered by AI agents, running 100% on your Mac.",
+    "hardware": "Apple %@ · %@ GB unified memory",
+    "how_run": "How do you want to run AI?",
+    "privacy": "Everything stays on your Mac. No data leaves your machine.",
+    "choose_model": "Choose your model",
+    "memory": "%@ GB unified memory — recommended:",
+    "recommended": "Recommended",
+    "installed": "Installed",
+    "model_details": "%@ · %@ · %@ GB · min %@ GB RAM",
+    "download_complete": "Download complete!",
+    "download_failed": "Download failed",
+    "downloading": "Downloading %@...",
+    "download_size": "%@ GB from HuggingFace",
+    "ollama": "Ollama Setup",
+    "ollama_available": "Available models:",
+    "ollama_no_models": "No models installed. Run in Terminal:",
+    "ollama_not_running": "Ollama is not running",
+    "ollama_running": "Ollama is running",
+    "ollama_continue": "Continue with Ollama",
+    "ollama_open": "Open Ollama.app",
+    "ollama_install": "Install Ollama",
+    "all_set": "You're all set!",
+    "all_set_subtitle": "Your private AI Software Factory is ready.\nTalk to Jarvis to start building.",
+    "start_using": "Start using Simple SF",
+    "skip_configure": "Skip — I'll configure later",
+    "skip_cloud": "Skip — use cloud API keys instead",
+    "use_model": "Use this model",
+    "download_model": "Download %@ GB",
+    "ollama_mlx": "Ollama",
+    "apple_mlx": "Apple MLX",
+    "no_mlx_models": "No MLX models in ~/.cache/huggingface/hub/ or ~/.cache/mlx-models/",
+    "no_ollama_models": "No models installed. Run: ollama pull qwen3:14b",
+    "start_ollama": "Start Ollama",
+    "start_server": "Start Server"
+  },
+  "privacy": {
+    "local": "Local models run 100% on your Mac. No data leaves your machine.",
+    "cloud": "Cloud API keys stored in macOS Keychain — sent only to the provider."
+  },
+  "output": {
+    "export_zip": "Export ZIP",
+    "push_git": "Push to Git"
+  },
+  "a11y": {
+    "loading": "Loading…",
+    "loading_agents": "Loading agents…",
+    "loading_projects": "Loading projects…",
+    "loading_chat": "Loading chat…",
+    "loading_mission": "Loading mission…",
+    "error": "Error: %@",
+    "offline": "Offline. Changes will sync when you reconnect."
+  },
+  "plural": {
+    "agents": {
+      "one": "%d agent",
+      "other": "%d agents"
+    },
+    "projects": {
+      "one": "%d project",
+      "other": "%d projects"
+    },
+    "messages": {
+      "one": "%d message",
+      "other": "%d messages"
+    },
+    "phases": {
+      "one": "%d phase",
+      "other": "%d phases"
+    },
+    "rounds": {
+      "one": "%d round",
+      "other": "%d rounds"
+    }
+  },
+  "language_picker": {
+    "title": "Language",
+    "system": "System default",
+    "search": "Search languages…"
+  }
+}

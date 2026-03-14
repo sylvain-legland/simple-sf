@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "Proiecte", "ideation": "Ideatie", "settings": "Setari", "software_factory": "Software Factory" },
+  "settings": { "language": "Limba" },
+  "language_picker": { "title": "Limba" }
+}

@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "프로젝트", "ideation": "아이디어", "settings": "설정", "software_factory": "Software Factory" },
+  "settings": { "language": "언어" },
+  "language_picker": { "title": "언어" }
+}

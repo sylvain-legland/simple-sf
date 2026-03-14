@@ -1,0 +1,12 @@
+{
+  "app": { "name": "Simple SF", "tagline": "Sua fábrica de software privada" },
+  "nav": { "jarvis": "Jarvis", "projects": "Projetos", "ideation": "Ideação", "settings": "Configurações", "software_factory": "Software Factory" },
+  "action": { "start": "Iniciar", "stop": "Parar", "pause": "Pausar", "cancel": "Cancelar", "save": "Salvar", "delete": "Excluir", "retry": "Tentar novamente", "back": "Voltar", "continue": "Continuar", "refresh": "Atualizar", "use": "Usar", "test": "Testar", "skip": "Pular", "get_started": "Começar", "launch": "Lançar" },
+  "status": { "running": "Executando", "stopped": "Parado", "active": "Ativo", "ready": "Pronto", "queued": "Na fila", "paused": "Em pausa", "completed": "Concluído", "loading": "Carregando…", "starting": "Iniciando…", "not_configured": "Não configurado" },
+  "jarvis": { "title": "Jarvis", "thinking": "Pensando…", "team_meeting": "A equipe está reunida…", "welcome": "Olá! Sou Jarvis, seu assistente de IA.", "new_conversation": "Nova conversa" },
+  "projects": { "title": "Projetos", "empty": "Nenhum projeto", "lifecycle": "Ciclo de Vida Completo do Produto" },
+  "ideation": { "title": "Ideação", "launch": "Iniciar Ideação", "describe": "Descreva sua ideia" },
+  "settings": { "title": "Configurações", "language": "Idioma", "language_hint": "Jarvis responde neste idioma" },
+  "language_picker": { "title": "Idioma", "system": "Idioma do sistema", "search": "Pesquisar idiomas…" },
+  "plural": { "agents": { "one": "%d agente", "other": "%d agentes" }, "projects": { "one": "%d projeto", "other": "%d projetos" } }
+}

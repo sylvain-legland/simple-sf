@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "Projeler", "ideation": "Fikirler", "settings": "Ayarlar", "software_factory": "Software Factory" },
+  "settings": { "language": "Dil" },
+  "language_picker": { "title": "Dil" }
+}

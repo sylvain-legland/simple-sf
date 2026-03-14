@@ -1,0 +1,13 @@
+{
+  "app": { "name": "Simple SF", "tagline": "Ihre private Software-Fabrik" },
+  "nav": { "jarvis": "Jarvis", "projects": "Projekte", "ideation": "Ideenfindung", "settings": "Einstellungen", "software_factory": "Software Factory" },
+  "action": { "start": "Starten", "stop": "Stoppen", "pause": "Pausieren", "cancel": "Abbrechen", "save": "Speichern", "delete": "Löschen", "retry": "Wiederholen", "back": "Zurück", "continue": "Weiter", "refresh": "Aktualisieren", "use": "Verwenden", "test": "Testen", "skip": "Überspringen", "get_started": "Loslegen", "launch": "Starten" },
+  "status": { "running": "Läuft", "stopped": "Gestoppt", "active": "Aktiv", "ready": "Bereit", "queued": "Warteschlange", "paused": "Pausiert", "completed": "Abgeschlossen", "loading": "Laden…", "starting": "Wird gestartet…", "not_configured": "Nicht konfiguriert" },
+  "sidebar": { "yolo": "YOLO", "yolo_help": "YOLO: Alle GO/NOGO-Tore automatisch genehmigen", "no_llm": "Kein LLM", "auto_detect": "Auto", "auto_detect_help": "Zurück zur automatischen Erkennung" },
+  "jarvis": { "title": "Jarvis", "thinking": "Denkt nach…", "team_meeting": "Das Team trifft sich…", "welcome": "Hallo! Ich bin Jarvis, Ihr KI-Assistent.", "new_conversation": "Neues Gespräch" },
+  "projects": { "title": "Projekte", "empty": "Keine Projekte", "lifecycle": "Vollständiger Produktlebenszyklus" },
+  "ideation": { "title": "Ideenfindung", "launch": "Ideenfindung starten", "describe": "Beschreiben Sie Ihre Idee" },
+  "settings": { "title": "Einstellungen", "language": "Sprache", "language_hint": "Jarvis antwortet in dieser Sprache" },
+  "language_picker": { "title": "Sprache", "system": "Systemsprache", "search": "Sprachen suchen…" },
+  "plural": { "agents": { "one": "%d Agent", "other": "%d Agenten" }, "projects": { "one": "%d Projekt", "other": "%d Projekte" } }
+}

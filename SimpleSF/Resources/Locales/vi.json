@@ -1,0 +1,5 @@
+{
+  "nav": { "jarvis": "Jarvis", "projects": "Dự án", "ideation": "Ý tưởng", "settings": "Cài đặt", "software_factory": "Software Factory" },
+  "settings": { "language": "Ngôn ngữ" },
+  "language_picker": { "title": "Ngôn ngữ" }
+}
