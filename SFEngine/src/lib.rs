@@ -12,6 +12,13 @@ pub mod bench;
 pub mod sandbox;
 pub mod indexer;
 pub mod eval;
+pub mod cache;
+pub mod workers;
+pub mod ops;
+pub mod quality;
+pub mod observability;
+pub mod a2a;
+pub mod mcp;
 mod ffi;
 
 pub use ffi::*;
