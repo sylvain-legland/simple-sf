@@ -13,19 +13,31 @@ struct MissionView: View {
     @State private var status: SFBridge.MissionStatus?
     @State private var selectedPhaseIndex: Int?
     @State private var pollTimer: Timer?
+    @State private var missionLoadingState: LoadingState = .loading  // Ref: FT-SSF-013
 
     var body: some View {
         VStack(spacing: 0) {
             IHMContextHeader(context: .mission)
 
-            if !bridge.isRunning && bridge.currentMissionId == nil {
+            if missionLoadingState == .loading {
+                // Ref: FT-SSF-013 — Skeleton while determining mission state
+                SkeletonMissionView()
+                    .padding(SF.Spacing.xl)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if !bridge.isRunning && bridge.currentMissionId == nil {
                 launchForm
             } else {
                 valueStreamView
             }
         }
         .background(SF.Colors.bgPrimary)
-        .onAppear { startPolling() }
+        .onAppear {
+            startPolling()
+            // Brief skeleton then show real content
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                missionLoadingState = .loaded
+            }
+        }
         .onDisappear { stopPolling() }
     }
 
