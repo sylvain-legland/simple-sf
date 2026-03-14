@@ -138,3 +138,36 @@ pub fn format_report(findings: &[SASTFinding]) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_bare_unwrap() {
+        let code = "let x = foo.unwrap()\n";
+        let findings = custom_rules(code, "test.rs");
+        assert!(findings.iter().any(|f| f.rule == "no-bare-unwrap"));
+    }
+
+    #[test]
+    fn detects_hardcoded_password() {
+        let code = r#"let password = "hunter2";"#;
+        let findings = custom_rules(code, "test.rs");
+        assert!(findings.iter().any(|f| f.rule == "hardcoded-secret"));
+    }
+
+    #[test]
+    fn detects_sql_injection() {
+        let code = r#"let q = format!("SELECT * FROM users WHERE id = {}", id);"#;
+        let findings = custom_rules(code, "test.rs");
+        assert!(findings.iter().any(|f| f.rule == "sql-injection"));
+    }
+
+    #[test]
+    fn clean_code_no_findings() {
+        let code = "fn add(a: i32, b: i32) -> i32 { a + b }\n";
+        let findings = custom_rules(code, "clean.rs");
+        assert!(findings.is_empty());
+    }
+}

@@ -77,3 +77,30 @@ impl EventStore {
 impl Default for EventStore {
     fn default() -> Self { Self::new() }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn append_increments_sequence() {
+        let mut store = EventStore::new();
+        store.append(DomainEvent::MissionCreated { id: "m1".into(), project: "p".into(), task: "t".into() });
+        store.append(DomainEvent::MissionCompleted { id: "m1".into(), outcome: "ok".into() });
+        assert_eq!(store.replay().len(), 2);
+        assert_eq!(store.replay()[0].0, 1);
+        assert_eq!(store.replay()[1].0, 2);
+    }
+
+    #[test]
+    fn replay_for_mission_filters() {
+        let mut store = EventStore::new();
+        store.append(DomainEvent::MissionCreated { id: "m1".into(), project: "p".into(), task: "t".into() });
+        store.append(DomainEvent::MissionCreated { id: "m2".into(), project: "p".into(), task: "t2".into() });
+        store.append(DomainEvent::MissionCompleted { id: "m1".into(), outcome: "done".into() });
+        let m1_events = store.replay_for_mission("m1");
+        assert_eq!(m1_events.len(), 2);
+        let m2_events = store.replay_for_mission("m2");
+        assert_eq!(m2_events.len(), 1);
+    }
+}

@@ -50,3 +50,41 @@ pub fn format_prompt(task: &str, examples: &[&Example]) -> String {
     prompt.push_str(&format!("Now your task:\n{}", task));
     prompt
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_and_select_examples() {
+        let mut bank = FewShotBank::new();
+        bank.add_example(Example {
+            task_type: "code".into(),
+            input: "write rust code".into(),
+            output: "fn main() {}".into(),
+            quality: 0.9,
+        });
+        bank.add_example(Example {
+            task_type: "docs".into(),
+            input: "write documentation".into(),
+            output: "# Title".into(),
+            quality: 0.8,
+        });
+        let selected = bank.select_examples("write rust code", 1);
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].task_type, "code");
+    }
+
+    #[test]
+    fn format_prompt_includes_examples() {
+        let ex = Example {
+            task_type: "test".into(),
+            input: "input1".into(),
+            output: "output1".into(),
+            quality: 1.0,
+        };
+        let prompt = format_prompt("my task", &[&ex]);
+        assert!(prompt.contains("Example 1:"));
+        assert!(prompt.contains("my task"));
+    }
+}

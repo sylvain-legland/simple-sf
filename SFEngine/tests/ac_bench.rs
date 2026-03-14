@@ -194,45 +194,45 @@ fn ac_l1_llm() {
 //  L2 — AC Tools (10 cases)
 // ══════════════════════════════════════════════════════════════
 
-#[test]
-fn ac_l2_tools() {
+#[tokio::test]
+async fn ac_l2_tools() {
     ensure_db();
     let mut r = ACResult::new("L2-Tools");
     let ws = "/tmp/ac_bench_tools";
     std::fs::create_dir_all(ws).ok();
 
     // L2-01: code_write creates file
-    let res = tools::execute_tool("code_write", &json!({"path": "ac_test.txt", "content": "AC bench"}), ws);
+    let res = tools::execute_tool("code_write", &json!({"path": "ac_test.txt", "content": "AC bench"}), ws).await;
     r.check("l2-01-code-write", res.contains("Written") || res.contains("written") || std::fs::read_to_string(format!("{}/ac_test.txt", ws)).is_ok(),
         &format!("code_write: {}", &res[..res.len().min(80)]));
 
     // L2-02: code_read reads it back
-    let res = tools::execute_tool("code_read", &json!({"path": "ac_test.txt"}), ws);
+    let res = tools::execute_tool("code_read", &json!({"path": "ac_test.txt"}), ws).await;
     r.check("l2-02-code-read", res.contains("AC bench"), &format!("code_read: {}", &res[..res.len().min(80)]));
 
     // L2-03: list_files shows the file
-    let res = tools::execute_tool("list_files", &json!({"path": "."}), ws);
+    let res = tools::execute_tool("list_files", &json!({"path": "."}), ws).await;
     r.check("l2-03-list-files", res.contains("ac_test"), &format!("list_files: {}", &res[..res.len().min(80)]));
 
     // L2-04: code_edit modifies file
-    let res = tools::execute_tool("code_edit", &json!({"path": "ac_test.txt", "old_str": "AC bench", "new_str": "AC PASSED"}), ws);
+    let res = tools::execute_tool("code_edit", &json!({"path": "ac_test.txt", "old_str": "AC bench", "new_str": "AC PASSED"}), ws).await;
     let content = std::fs::read_to_string(format!("{}/ac_test.txt", ws)).unwrap_or_default();
     r.check("l2-04-code-edit", content.contains("AC PASSED"), &format!("code_edit: {}", &res[..res.len().min(80)]));
 
     // L2-05: code_search finds content
-    let res = tools::execute_tool("code_search", &json!({"pattern": "AC PASSED"}), ws);
+    let res = tools::execute_tool("code_search", &json!({"pattern": "AC PASSED"}), ws).await;
     r.check("l2-05-code-search", res.contains("ac_test"), &format!("code_search: {}", &res[..res.len().min(80)]));
 
     // L2-06: memory_store works
-    let res = tools::execute_tool("memory_store", &json!({"key": "ac-l2", "value": "bench data"}), ws);
+    let res = tools::execute_tool("memory_store", &json!({"key": "ac-l2", "value": "bench data"}), ws).await;
     r.check("l2-06-memory-store", !res.contains("Error"), &format!("memory_store: {}", &res[..res.len().min(80)]));
 
     // L2-07: memory_search retrieves it
-    let res = tools::execute_tool("memory_search", &json!({"query": "ac-l2"}), ws);
+    let res = tools::execute_tool("memory_search", &json!({"query": "ac-l2"}), ws).await;
     r.check("l2-07-memory-search", res.contains("bench data"), &format!("memory_search: {}", &res[..res.len().min(80)]));
 
     // L2-08: unknown tool returns error
-    let res = tools::execute_tool("nonexistent_tool", &json!({}), ws);
+    let res = tools::execute_tool("nonexistent_tool", &json!({}), ws).await;
     r.check("l2-08-unknown-tool", res.contains("Unknown tool") || res.contains("unknown"), &format!("unknown: {}", &res[..res.len().min(80)]));
 
     // L2-09: tool_schemas returns schemas for role
@@ -240,7 +240,7 @@ fn ac_l2_tools() {
     r.check("l2-09-schemas", schemas.len() >= 5, &format!("developer has {} tool schemas", schemas.len()));
 
     // L2-10: path traversal blocked
-    let res = tools::execute_tool("code_read", &json!({"path": "../../etc/passwd"}), ws);
+    let res = tools::execute_tool("code_read", &json!({"path": "../../etc/passwd"}), ws).await;
     r.check("l2-10-path-traversal", res.contains("outside") || res.contains("denied") || res.contains("Error") || !res.contains("root:"),
         &format!("path traversal: {}", &res[..res.len().min(80)]));
 
@@ -364,8 +364,8 @@ fn ac_l4_guard() {
 //  L5 — AC Memory (10 cases)
 // ══════════════════════════════════════════════════════════════
 
-#[test]
-fn ac_l5_memory() {
+#[tokio::test]
+async fn ac_l5_memory() {
     ensure_db();
     let mut r = ACResult::new("L5-Memory");
     let ws = "/tmp/workspaces/ac-mem-project";
@@ -373,14 +373,14 @@ fn ac_l5_memory() {
     let pid = "ac-mem-project";
 
     // L5-01: Store and retrieve
-    tools::execute_tool("memory_store", &json!({"key": "ac-mem-01", "value": "test data"}), ws);
-    let res = tools::execute_tool("memory_search", &json!({"query": "ac-mem-01"}), ws);
+    tools::execute_tool("memory_store", &json!({"key": "ac-mem-01", "value": "test data"}), ws).await;
+    let res = tools::execute_tool("memory_search", &json!({"query": "ac-mem-01"}), ws).await;
     r.check("l5-01-roundtrip", res.contains("test data"), "Store → search roundtrip");
 
     // L5-02: Upsert overwrites same key
-    tools::execute_tool("memory_store", &json!({"key": "ac-mem-02", "value": "original"}), ws);
-    tools::execute_tool("memory_store", &json!({"key": "ac-mem-02", "value": "updated"}), ws);
-    let res = tools::execute_tool("memory_search", &json!({"query": "ac-mem-02"}), ws);
+    tools::execute_tool("memory_store", &json!({"key": "ac-mem-02", "value": "original"}), ws).await;
+    tools::execute_tool("memory_store", &json!({"key": "ac-mem-02", "value": "updated"}), ws).await;
+    let res = tools::execute_tool("memory_search", &json!({"query": "ac-mem-02"}), ws).await;
     r.check("l5-02-upsert", res.contains("updated") && !res.contains("original"),
         "Upsert replaces value");
 
@@ -389,26 +389,26 @@ fn ac_l5_memory() {
     let ws_b = "/tmp/workspaces/ac-proj-b";
     std::fs::create_dir_all(ws_a).ok();
     std::fs::create_dir_all(ws_b).ok();
-    tools::execute_tool("memory_store", &json!({"key": "secret-a", "value": "project-a-data"}), ws_a);
-    let res = tools::execute_tool("memory_search", &json!({"query": "secret-a"}), ws_b);
+    tools::execute_tool("memory_store", &json!({"key": "secret-a", "value": "project-a-data"}), ws_a).await;
+    let res = tools::execute_tool("memory_search", &json!({"query": "secret-a"}), ws_b).await;
     r.check("l5-03-isolation", !res.contains("project-a-data"),
         "Project A data not visible in project B");
 
     // L5-04: Global scope accessible from anywhere
-    tools::execute_tool("memory_store", &json!({"key": "global-key", "value": "global-val", "scope": "global"}), ws_a);
-    let res = tools::execute_tool("memory_search", &json!({"query": "global-key", "scope": "all"}), ws_b);
+    tools::execute_tool("memory_store", &json!({"key": "global-key", "value": "global-val", "scope": "global"}), ws_a).await;
+    let res = tools::execute_tool("memory_search", &json!({"query": "global-key", "scope": "all"}), ws_b).await;
     r.check("l5-04-global", res.contains("global-val"),
         "Global memory accessible cross-project");
 
     // L5-05: load_project_memory formats correctly
-    tools::execute_tool("memory_store", &json!({"key": "inject-test", "value": "injected content"}), ws);
+    tools::execute_tool("memory_store", &json!({"key": "inject-test", "value": "injected content"}), ws).await;
     let mem = tools::load_project_memory(pid);
     r.check("l5-05-inject", mem.contains("Project Memory") || mem.contains("inject"),
         &format!("Injected memory length: {}", mem.len()));
 
     // L5-06: Memory injection bounded to 4K
     for i in 0..30 {
-        tools::execute_tool("memory_store", &json!({"key": format!("bulk-{}", i), "value": "x".repeat(300)}), ws);
+        tools::execute_tool("memory_store", &json!({"key": format!("bulk-{}", i), "value": "x".repeat(300)}), ws).await;
     }
     let mem = tools::load_project_memory(pid);
     r.check("l5-06-bounded", mem.len() <= 5000,
@@ -421,7 +421,7 @@ fn ac_l5_memory() {
     // L5-08: Compaction caps at 200 entries
     for i in 0..210 {
         let args = json!({"key": format!("cap-{}", i), "value": format!("val-{}", i)});
-        tools::execute_tool("memory_store", &args, ws);
+        tools::execute_tool("memory_store", &args, ws).await;
     }
     tools::compact_memory(pid);
     let count: i64 = db::with_db(|conn| {
@@ -438,8 +438,8 @@ fn ac_l5_memory() {
     r.check("l5-09-empty", !mem.contains("ac-l5-test"), "Nonexistent project → no test data");
 
     // L5-10: Unicode survives roundtrip
-    tools::execute_tool("memory_store", &json!({"key": "unicode", "value": "日本語テスト αβγ"}), ws);
-    let res = tools::execute_tool("memory_search", &json!({"query": "unicode"}), ws);
+    tools::execute_tool("memory_store", &json!({"key": "unicode", "value": "日本語テスト αβγ"}), ws).await;
+    let res = tools::execute_tool("memory_search", &json!({"query": "unicode"}), ws).await;
     r.check("l5-10-unicode", res.contains("日本語") && res.contains("αβγ"),
         "Unicode roundtrip");
 

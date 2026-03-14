@@ -82,3 +82,51 @@ impl VetoSystem {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn absolute_veto_blocks() {
+        let mut sys = VetoSystem::new();
+        sys.cast_veto(Veto {
+            from: "trace-lead".into(), level: VetoLevel::Absolute,
+            reason: "critical".into(), phase: "dev".into(),
+        });
+        assert!(!sys.can_proceed("dev"));
+    }
+
+    #[test]
+    fn advisory_does_not_block() {
+        let mut sys = VetoSystem::new();
+        sys.cast_veto(Veto {
+            from: "developer".into(), level: VetoLevel::Advisory,
+            reason: "suggestion".into(), phase: "dev".into(),
+        });
+        assert!(sys.can_proceed("dev"));
+    }
+
+    #[test]
+    fn strong_blocks_until_overridden() {
+        let mut sys = VetoSystem::new();
+        sys.cast_veto(Veto {
+            from: "developer".into(), level: VetoLevel::Strong,
+            reason: "needs fix".into(), phase: "dev".into(),
+        });
+        assert!(!sys.can_proceed("dev"));
+        sys.override_veto(0, "architect");
+        assert!(sys.can_proceed("dev"));
+    }
+
+    #[test]
+    fn absolute_cannot_be_overridden() {
+        let mut sys = VetoSystem::new();
+        sys.cast_veto(Veto {
+            from: "developer".into(), level: VetoLevel::Absolute,
+            reason: "fatal".into(), phase: "dev".into(),
+        });
+        sys.override_veto(0, "trace-lead");
+        assert!(!sys.can_proceed("dev"));
+    }
+}

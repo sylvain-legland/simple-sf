@@ -47,6 +47,7 @@ pub fn check_dependencies(from: &Layer, to: &Layer) -> bool {
 }
 
 /// Scan a source string for `use crate::` imports and warn on layer violations.
+#[allow(dead_code)]
 pub fn validate_imports(file: &str, module_layer: &Layer) -> Vec<String> {
     let mappings = default_mappings();
     let mut warnings = Vec::new();
@@ -63,4 +64,24 @@ pub fn validate_imports(file: &str, module_layer: &Layer) -> Vec<String> {
         }
     }
     warnings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn domain_to_infra_forbidden() {
+        assert!(!check_dependencies(&Layer::Domain, &Layer::Infrastructure));
+    }
+
+    #[test]
+    fn application_to_domain_allowed() {
+        assert!(check_dependencies(&Layer::Application, &Layer::Domain));
+    }
+
+    #[test]
+    fn presentation_to_application_allowed() {
+        assert!(check_dependencies(&Layer::Presentation, &Layer::Application));
+    }
 }

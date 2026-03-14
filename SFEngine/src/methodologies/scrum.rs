@@ -47,3 +47,29 @@ pub fn calculate_velocity(completed: usize, total: usize) -> f64 {
     }
     completed as f64 / total as f64
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn planning_prompt_contains_keywords() {
+        let sprint = Sprint { number: 1, goal: "MVP".into(), backlog: vec!["US-1".into()], velocity: 10.0 };
+        let prompt = ceremony_prompt(Ceremony::Planning, &sprint);
+        assert!(prompt.contains("planning") || prompt.contains("Planning") || prompt.contains("Sprint 1"));
+        assert!(prompt.contains("MVP"));
+    }
+
+    #[test]
+    fn retro_prompt_contains_improve() {
+        let sprint = Sprint { number: 2, goal: "G".into(), backlog: vec![], velocity: 5.0 };
+        let prompt = ceremony_prompt(Ceremony::Retrospective, &sprint);
+        assert!(prompt.contains("improve"));
+    }
+
+    #[test]
+    fn calculate_velocity_correct() {
+        assert!((calculate_velocity(8, 10) - 0.8).abs() < f64::EPSILON);
+        assert_eq!(calculate_velocity(0, 0), 0.0);
+    }
+}

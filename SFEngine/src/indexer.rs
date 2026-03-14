@@ -8,6 +8,7 @@ mod index_walker;
 
 // Re-export public API
 pub use index_store::{SearchResult, format_results, grep_search};
+pub use index_walker::parse_file;
 pub use index_walker::CodeChunk;
 
 use std::path::Path;
@@ -16,7 +17,7 @@ use index_store::{
     count_chunks, delete_stale_chunks, embed_batch,
     fts_search, get_indexed_mtimes, store_chunks, vector_search,
 };
-use index_walker::{file_mtime, parse_file, should_skip};
+use index_walker::{file_mtime, should_skip};
 
 // ─── Indexing pipeline ───────────────────────────────────────
 

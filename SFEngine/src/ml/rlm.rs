@@ -64,3 +64,28 @@ fn estimate_confidence(output: &str) -> f64 {
     if no_hedging { score += 0.15; }
     score.min(1.0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_values() {
+        let cfg = default_config();
+        assert_eq!(cfg.max_depth, 3);
+        assert!((cfg.min_confidence - 0.8).abs() < f64::EPSILON);
+        assert!(!cfg.refinement_prompt.is_empty());
+    }
+
+    #[test]
+    fn should_recurse_false_at_max_depth() {
+        let cfg = default_config();
+        assert!(!should_recurse("some output", cfg.max_depth, &cfg));
+    }
+
+    #[test]
+    fn should_recurse_true_for_empty() {
+        let cfg = default_config();
+        assert!(should_recurse("", 0, &cfg));
+    }
+}

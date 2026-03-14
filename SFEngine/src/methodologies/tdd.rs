@@ -49,3 +49,25 @@ impl TDDCycle {
         self.iterations >= max_cycles
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn advance_cycles_through_phases() {
+        let mut cycle = TDDCycle::new("test.rs", "impl.rs");
+        assert_eq!(cycle.phase, TDDPhase::Red);
+        assert_eq!(cycle.advance(), TDDPhase::Green);
+        assert_eq!(cycle.advance(), TDDPhase::Refactor);
+        assert_eq!(cycle.advance(), TDDPhase::Red);
+        assert_eq!(cycle.iterations, 1);
+    }
+
+    #[test]
+    fn is_complete_after_max_cycles() {
+        let mut cycle = TDDCycle::new("t.rs", "i.rs");
+        for _ in 0..9 { cycle.advance(); } // 3 advances per cycle
+        assert!(cycle.is_complete(3));
+    }
+}

@@ -110,3 +110,40 @@ impl MetricsRegistry {
         out
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inc_counter_increments() {
+        let mut reg = MetricsRegistry::new();
+        assert_eq!(reg.counters["sf_llm_calls_total"].value, 0);
+        reg.inc_counter("sf_llm_calls_total");
+        reg.inc_counter("sf_llm_calls_total");
+        assert_eq!(reg.counters["sf_llm_calls_total"].value, 2);
+    }
+
+    #[test]
+    fn observe_histogram_adds_values() {
+        let mut reg = MetricsRegistry::new();
+        reg.observe_histogram("sf_llm_latency_seconds", 0.42);
+        reg.observe_histogram("sf_llm_latency_seconds", 1.5);
+        assert_eq!(reg.histograms["sf_llm_latency_seconds"].values.len(), 2);
+    }
+
+    #[test]
+    fn export_prometheus_contains_metric_names() {
+        let reg = MetricsRegistry::new();
+        let out = reg.export_prometheus();
+        assert!(out.contains("sf_llm_calls_total"));
+        assert!(out.contains("sf_mission_duration_seconds"));
+    }
+
+    #[test]
+    fn pre_registered_metrics_exist() {
+        let reg = MetricsRegistry::new();
+        assert_eq!(reg.counters.len(), 4);
+        assert_eq!(reg.histograms.len(), 3);
+    }
+}

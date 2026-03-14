@@ -66,3 +66,30 @@ pub fn simple_embed(text: &str) -> Vec<f64> {
     }
     vec
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_embed_returns_64_dim() {
+        let v = simple_embed("hello world");
+        assert_eq!(v.len(), 64);
+    }
+
+    #[test]
+    fn cosine_similarity_identical_is_one() {
+        let v = simple_embed("test vector");
+        let sim = cosine_similarity(&v, &v);
+        assert!((sim - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn add_and_search_returns_closest() {
+        let mut store = VectorStore::new();
+        store.add("rust".into(), simple_embed("rust programming language"));
+        store.add("python".into(), simple_embed("python scripting web"));
+        let results = store.search(&simple_embed("rust systems language"), 2);
+        assert_eq!(results[0].0, "rust");
+    }
+}

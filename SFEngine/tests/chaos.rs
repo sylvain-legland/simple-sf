@@ -361,25 +361,25 @@ fn chaos_23_guard_cumulative_score() {
 // 5. DB & MEMORY CHAOS — concurrent writes, edge cases
 // ══════════════════════════════════════════════════════════════
 
-#[test]
-fn chaos_24_concurrent_memory_writes() {
+#[tokio::test]
+async fn chaos_24_concurrent_memory_writes() {
     ensure_db();
     let handles: Vec<_> = (0..10).map(|i| {
-        std::thread::spawn(move || {
+        tokio::spawn(async move {
             let ws = format!("/tmp/workspaces/chaos-{}", i);
             let args = json!({"key": format!("chaos-key-{}", i), "value": format!("chaos-val-{}", i)});
-            let result = tools::execute_tool("memory_store", &args, &ws);
+            let result = tools::execute_tool("memory_store", &args, &ws).await;
             assert!(!result.contains("Error"), "Concurrent write {} should succeed: {}", i, result);
         })
     }).collect();
 
     for h in handles {
-        h.join().expect("Thread should not panic");
+        h.await.expect("Task should not panic");
     }
 }
 
-#[test]
-fn chaos_25_memory_store_special_chars() {
+#[tokio::test]
+async fn chaos_25_memory_store_special_chars() {
     ensure_db();
     let ws = "/tmp/workspaces/chaos-special";
     let args = json!({
@@ -387,17 +387,17 @@ fn chaos_25_memory_store_special_chars() {
         "value": "Content with <html> tags & \"quotes\" and 'apostrophes' and\nnewlines\n\tand tabs",
         "category": "test"
     });
-    let result = tools::execute_tool("memory_store", &args, ws);
+    let result = tools::execute_tool("memory_store", &args, ws).await;
     assert!(result.contains("Stored"), "Special chars should be handled: {}", result);
 }
 
-#[test]
-fn chaos_26_memory_store_very_large_key() {
+#[tokio::test]
+async fn chaos_26_memory_store_very_large_key() {
     ensure_db();
     let ws = "/tmp/workspaces/chaos-bigkey";
     let big_key = "k".repeat(10_000);
     let args = json!({"key": big_key, "value": "small value"});
-    let result = tools::execute_tool("memory_store", &args, ws);
+    let result = tools::execute_tool("memory_store", &args, ws).await;
     assert!(result.contains("Stored"), "Large key should work: {}", result);
 }
 
@@ -408,12 +408,12 @@ fn chaos_27_compact_empty_project() {
     tools::compact_memory("nonexistent-project-xyz-chaos");
 }
 
-#[test]
-fn chaos_28_compact_idempotent() {
+#[tokio::test]
+async fn chaos_28_compact_idempotent() {
     ensure_db();
     let pid = "chaos-compact-idem";
     let ws = format!("/tmp/workspaces/{}", pid);
-    tools::execute_tool("memory_store", &json!({"key": "k1", "value": "v1"}), &ws);
+    tools::execute_tool("memory_store", &json!({"key": "k1", "value": "v1"}), &ws).await;
 
     // Compact multiple times
     tools::compact_memory(pid);
@@ -422,7 +422,7 @@ fn chaos_28_compact_idempotent() {
 
     // Should still have the entry
     let search = json!({"query": "k1", "scope": "project"});
-    let found = tools::execute_tool("memory_search", &search, &ws);
+    let found = tools::execute_tool("memory_search", &search, &ws).await;
     assert!(found.contains("k1"), "Entry should survive compaction: {}", found);
 }
 
@@ -430,8 +430,8 @@ fn chaos_28_compact_idempotent() {
 // 6. TOOL CHAOS — edge cases
 // ══════════════════════════════════════════════════════════════
 
-#[test]
-fn chaos_29_code_write_path_traversal() {
+#[tokio::test]
+async fn chaos_29_code_write_path_traversal() {
     ensure_db();
     let ws = std::env::temp_dir().join("sf_chaos_traversal");
     std::fs::create_dir_all(&ws).unwrap();
@@ -439,7 +439,7 @@ fn chaos_29_code_write_path_traversal() {
     // Attempt path traversal
     let result = tools::execute_tool("code_write",
         &json!({"path": "../../etc/passwd", "content": "hacked"}),
-        ws.to_str().unwrap());
+        ws.to_str().unwrap()).await;
     // Should either block or write within workspace
     eprintln!("[chaos] Path traversal result: {}", result);
 
@@ -450,8 +450,8 @@ fn chaos_29_code_write_path_traversal() {
     let _ = std::fs::remove_dir_all(&ws);
 }
 
-#[test]
-fn chaos_30_code_search_regex_injection() {
+#[tokio::test]
+async fn chaos_30_code_search_regex_injection() {
     ensure_db();
     let ws = std::env::temp_dir().join("sf_chaos_regex");
     std::fs::create_dir_all(&ws).unwrap();
@@ -460,25 +460,25 @@ fn chaos_30_code_search_regex_injection() {
     // Malformed regex should not crash
     let result = tools::execute_tool("code_search",
         &json!({"query": "(((unclosed", "path": "."}),
-        ws.to_str().unwrap());
+        ws.to_str().unwrap()).await;
     // Should handle gracefully (error message or empty result)
     eprintln!("[chaos] Regex injection result: {}", &result[..result.len().min(200)]);
 
     let _ = std::fs::remove_dir_all(&ws);
 }
 
-#[test]
-fn chaos_31_build_no_workspace() {
+#[tokio::test]
+async fn chaos_31_build_no_workspace() {
     ensure_db();
     let result = tools::execute_tool("build",
         &json!({"command": "echo 'test'"}),
-        "/nonexistent/workspace/path");
+        "/nonexistent/workspace/path").await;
     // Should handle missing workspace
     eprintln!("[chaos] Build no workspace: {}", &result[..result.len().min(200)]);
 }
 
-#[test]
-fn chaos_32_deep_search_huge_query() {
+#[tokio::test]
+async fn chaos_32_deep_search_huge_query() {
     ensure_db();
     let ws = std::env::temp_dir().join("sf_chaos_deepsearch");
     std::fs::create_dir_all(&ws).unwrap();
@@ -486,7 +486,7 @@ fn chaos_32_deep_search_huge_query() {
     let huge_query = "x".repeat(10_000);
     let result = tools::execute_tool("deep_search",
         &json!({"query": huge_query}),
-        ws.to_str().unwrap());
+        ws.to_str().unwrap()).await;
     // Should not crash
     eprintln!("[chaos] Deep search huge query: {} chars result", result.len());
 
@@ -638,8 +638,8 @@ fn chaos_42_catalog_stats_stable() {
 // 10. MEMORY SYSTEM STRESS
 // ══════════════════════════════════════════════════════════════
 
-#[test]
-fn chaos_43_memory_200_entries_cap() {
+#[tokio::test]
+async fn chaos_43_memory_200_entries_cap() {
     ensure_db();
     let pid = "chaos-cap-test";
     let ws = format!("/tmp/workspaces/{}", pid);
@@ -647,7 +647,7 @@ fn chaos_43_memory_200_entries_cap() {
     // Insert 250 entries
     for i in 0..250 {
         let args = json!({"key": format!("cap-key-{:04}", i), "value": format!("val-{}", i)});
-        tools::execute_tool("memory_store", &args, &ws);
+        tools::execute_tool("memory_store", &args, &ws).await;
     }
 
     // Compact should cap at 200
@@ -662,8 +662,8 @@ fn chaos_43_memory_200_entries_cap() {
     assert!(count <= 200, "Should be capped at 200, got {}", count);
 }
 
-#[test]
-fn chaos_44_memory_unicode() {
+#[tokio::test]
+async fn chaos_44_memory_unicode() {
     ensure_db();
     let ws = "/tmp/workspaces/chaos-unicode";
     let args = json!({
@@ -671,16 +671,16 @@ fn chaos_44_memory_unicode() {
         "value": "Contenu en français avec des accents: é à ü ö — emoji: 🚀 🎉 中文内容",
         "category": "i18n"
     });
-    let result = tools::execute_tool("memory_store", &args, ws);
+    let result = tools::execute_tool("memory_store", &args, ws).await;
     assert!(result.contains("Stored"), "Unicode should work: {}", result);
 
     let search = json!({"query": "emoji", "scope": "project"});
-    let found = tools::execute_tool("memory_search", &search, ws);
+    let found = tools::execute_tool("memory_search", &search, ws).await;
     assert!(found.contains("🚀"), "Unicode should be searchable: {}", found);
 }
 
-#[test]
-fn chaos_45_load_project_memory_truncation() {
+#[tokio::test]
+async fn chaos_45_load_project_memory_truncation() {
     ensure_db();
     let pid = "chaos-trunc-test";
     let ws = format!("/tmp/workspaces/{}", pid);
@@ -689,7 +689,7 @@ fn chaos_45_load_project_memory_truncation() {
     for i in 0..20 {
         let big_val = format!("BIG-{}: {}", i, "x".repeat(500));
         let args = json!({"key": format!("trunc-{}", i), "value": big_val});
-        tools::execute_tool("memory_store", &args, &ws);
+        tools::execute_tool("memory_store", &args, &ws).await;
     }
 
     let memory = tools::load_project_memory(pid);

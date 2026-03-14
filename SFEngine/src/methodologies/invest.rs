@@ -52,3 +52,32 @@ pub fn score(s: &INVESTScore) -> f64 {
     .count();
     count as f64 / 6.0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn good_story_scores_high() {
+        let ac = vec!["AC1".into(), "AC2".into()];
+        let s = check_story(
+            "User login",
+            "As a user I want to login so that I can access the dashboard",
+            &ac,
+        );
+        assert!(s.valuable);
+        assert!(s.estimable);
+        assert!(s.small);
+        assert!(s.testable);
+        assert!(score(&s) >= 0.8);
+    }
+
+    #[test]
+    fn bad_story_scores_low() {
+        let ac: Vec<String> = vec![];
+        let s = check_story("x", "", &ac);
+        assert!(!s.valuable);
+        assert!(!s.testable);
+        assert!(score(&s) <= 0.5);
+    }
+}

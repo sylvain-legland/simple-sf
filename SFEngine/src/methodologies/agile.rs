@@ -63,3 +63,34 @@ pub fn burndown(total: f64, completed: f64, sprints_remaining: usize) -> Vec<f64
         .map(|i| remaining - step * i as f64)
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_sprint_and_avg_velocity() {
+        let mut m = AgileMetrics::default();
+        m.add_sprint(10.0, 5.0, 4);
+        m.add_sprint(20.0, 3.0, 6);
+        assert!((m.avg_velocity() - 15.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn trend_improving() {
+        let mut m = AgileMetrics::default();
+        m.add_sprint(5.0, 1.0, 1);
+        m.add_sprint(10.0, 1.0, 1);
+        m.add_sprint(15.0, 1.0, 1);
+        assert_eq!(m.trend(), "improving");
+    }
+
+    #[test]
+    fn trend_declining() {
+        let mut m = AgileMetrics::default();
+        m.add_sprint(15.0, 1.0, 1);
+        m.add_sprint(10.0, 1.0, 1);
+        m.add_sprint(5.0, 1.0, 1);
+        assert_eq!(m.trend(), "declining");
+    }
+}

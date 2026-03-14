@@ -61,3 +61,33 @@ pub fn should_stop(scores: &[f64], threshold: f64) -> bool {
         _ => false,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detect_converging() {
+        assert_eq!(detect_trend(&[1.0, 2.0, 3.0]), Trend::Converging);
+    }
+
+    #[test]
+    fn detect_plateau() {
+        assert_eq!(detect_trend(&[5.0, 5.0, 5.0]), Trend::Plateau);
+    }
+
+    #[test]
+    fn detect_oscillating() {
+        assert_eq!(detect_trend(&[1.0, 3.0, 1.0]), Trend::Oscillating);
+    }
+
+    #[test]
+    fn detect_diverging() {
+        assert_eq!(detect_trend(&[3.0, 2.0, 1.0]), Trend::Diverging);
+    }
+
+    #[test]
+    fn detect_insufficient() {
+        assert_eq!(detect_trend(&[1.0]), Trend::Insufficient);
+    }
+}

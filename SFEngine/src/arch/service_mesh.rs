@@ -65,3 +65,26 @@ impl ServiceMesh {
 impl Default for ServiceMesh {
     fn default() -> Self { Self::new() }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn register_and_discover() {
+        let mut mesh = ServiceMesh { services: Vec::new() };
+        mesh.register(ServiceEndpoint {
+            name: "test-svc".into(), url: "http://localhost:1234".into(),
+            health_path: "/health".into(), timeout_ms: 100,
+        });
+        assert!(mesh.discover("test-svc").is_some());
+        assert!(mesh.discover("nonexistent").is_none());
+    }
+
+    #[test]
+    fn new_has_default_services() {
+        let mesh = ServiceMesh::new();
+        assert!(mesh.all_services().len() >= 3);
+        assert!(mesh.discover("sf-engine").is_some());
+    }
+}

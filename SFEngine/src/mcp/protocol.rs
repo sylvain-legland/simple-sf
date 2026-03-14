@@ -60,3 +60,37 @@ pub fn format_error(id: u64, code: i32, msg: &str) -> String {
         code, msg, id,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_valid_request() {
+        let json = r#"{"jsonrpc":"2.0","method":"tools/list","id":1}"#;
+        let req = parse_request(json).unwrap();
+        assert_eq!(req.method, "tools/list");
+        assert_eq!(req.id, 1);
+        assert_eq!(req.jsonrpc, "2.0");
+    }
+
+    #[test]
+    fn parse_missing_method_fails() {
+        let json = r#"{"jsonrpc":"2.0","id":1}"#;
+        assert!(parse_request(json).is_err());
+    }
+
+    #[test]
+    fn format_response_valid_json() {
+        let resp = format_response(42, r#""ok""#);
+        assert!(resp.contains("\"result\":\"ok\""));
+        assert!(resp.contains("\"id\":42"));
+    }
+
+    #[test]
+    fn format_error_contains_code() {
+        let err = format_error(1, PARSE_ERROR, "bad json");
+        assert!(err.contains("-32700"));
+        assert!(err.contains("bad json"));
+    }
+}

@@ -62,3 +62,31 @@ pub fn compression_ratio(original: &str, compressed: &str) -> f64 {
     }
     1.0 - (compressed.len() as f64 / original.len() as f64)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compress_removes_blank_lines() {
+        let input = "line1\n\n\n\nline2";
+        let result = compress(input);
+        assert!(!result.contains("\n\n\n"));
+    }
+
+    #[test]
+    fn compress_abbreviates_words() {
+        let result = compress("function implementation documentation");
+        assert!(result.contains("fn"));
+        assert!(result.contains("impl"));
+        assert!(result.contains("doc"));
+    }
+
+    #[test]
+    fn compression_ratio_positive() {
+        let original = "function implementation documentation parameter";
+        let compressed = compress(original);
+        let ratio = compression_ratio(original, &compressed);
+        assert!(ratio > 0.0);
+    }
+}

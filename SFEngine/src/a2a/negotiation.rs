@@ -90,3 +90,38 @@ impl NegotiationProtocol {
         self.proposals.iter().find(|p| p.id == proposal_id).expect("proposal not found")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn propose_and_vote() {
+        let mut proto = NegotiationProtocol::new(0.5);
+        let id = proto.propose("alice", "use Rust");
+        assert_eq!(proto.proposals.len(), 1);
+        proto.vote(&id, "bob", true);
+        proto.vote(&id, "carol", true);
+        let state = proto.check_consensus(&id);
+        assert_eq!(state, NegotiationState::Agreed);
+    }
+
+    #[test]
+    fn majority_reject() {
+        let mut proto = NegotiationProtocol::new(0.6);
+        let id = proto.propose("alice", "use Java");
+        proto.vote(&id, "bob", false);
+        proto.vote(&id, "carol", false);
+        proto.vote(&id, "dave", true);
+        let state = proto.check_consensus(&id);
+        assert_eq!(state, NegotiationState::Rejected);
+    }
+
+    #[test]
+    fn no_votes_stays_proposed() {
+        let mut proto = NegotiationProtocol::new(0.5);
+        let id = proto.propose("alice", "idea");
+        let state = proto.check_consensus(&id);
+        assert_eq!(state, NegotiationState::Proposed);
+    }
+}

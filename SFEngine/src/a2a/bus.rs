@@ -79,3 +79,41 @@ impl A2ABus {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn send_and_receive() {
+        let mut bus = A2ABus::new();
+        bus.send(A2AMessage {
+            from: "a".into(), to: "b".into(), content: "hello".into(),
+            msg_type: MessageType::Request, timestamp: 0,
+        });
+        let msgs = bus.receive("b");
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].content, "hello");
+        assert!(bus.receive("b").is_empty());
+    }
+
+    #[test]
+    fn broadcast_sends_to_all() {
+        let mut bus = A2ABus::new();
+        bus.inbox.insert("agent1".into(), vec![]);
+        bus.inbox.insert("agent2".into(), vec![]);
+        bus.broadcast("sender", "alert");
+        assert_eq!(bus.receive("agent1").len(), 1);
+        assert_eq!(bus.receive("agent2").len(), 1);
+    }
+
+    #[test]
+    fn veto_creates_veto_message() {
+        let mut bus = A2ABus::new();
+        bus.veto("lead", "dev", "quality too low");
+        let msgs = bus.receive("dev");
+        assert_eq!(msgs.len(), 1);
+        assert!(matches!(msgs[0].msg_type, MessageType::Veto));
+        assert_eq!(msgs[0].content, "quality too low");
+    }
+}

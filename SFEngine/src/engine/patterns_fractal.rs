@@ -130,7 +130,7 @@ pub(crate) async fn run_fractal_stories(
     let workers: Vec<_> = if agent_ids.len() > 2 {
         agent_ids[1..agent_ids.len() - 1].iter().map(|id| get(id)).collect::<Result<_, _>>()?
     } else {
-        vec![get(agent_ids[agent_ids.len().min(1).max(1) - 1])?]
+        vec![get(agent_ids[agent_ids.len() - 1])?]
     };
 
     let mut hierarchy = Vec::new();

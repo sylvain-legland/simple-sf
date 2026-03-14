@@ -91,3 +91,32 @@ pub fn format_clusters(clusters: &[ErrorCluster]) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn levenshtein_kitten_sitting() {
+        assert_eq!(levenshtein("kitten", "sitting"), 3);
+    }
+
+    #[test]
+    fn levenshtein_empty_strings() {
+        assert_eq!(levenshtein("", "abc"), 3);
+        assert_eq!(levenshtein("abc", ""), 3);
+        assert_eq!(levenshtein("", ""), 0);
+    }
+
+    #[test]
+    fn cluster_errors_groups_similar() {
+        let errors = vec![
+            "connection refused".into(),
+            "connection reset".into(),
+            "timeout expired".into(),
+        ];
+        let clusters = cluster_errors(&errors, 0.7);
+        // "connection refused" and "connection reset" should cluster together
+        assert!(clusters.len() <= 2);
+    }
+}

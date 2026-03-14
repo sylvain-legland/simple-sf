@@ -109,3 +109,44 @@ impl AlertManager {
         triggered.iter().map(|&i| &self.rules[i]).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::observability::metrics::MetricsRegistry;
+
+    #[test]
+    fn default_rules_exist() {
+        let am = AlertManager::new();
+        assert_eq!(am.rules.len(), 4);
+        assert!(am.rules.iter().any(|r| r.name == "MissionStuck"));
+    }
+
+    #[test]
+    fn add_rule_increases_count() {
+        let mut am = AlertManager::new();
+        let before = am.rules.len();
+        am.add_rule(AlertRule {
+            name: "Custom".into(),
+            condition: AlertCondition::CounterAbove("sf_llm_calls_total".into(), 50),
+            severity: Severity::Warning,
+            message: "too many calls".into(),
+        });
+        assert_eq!(am.rules.len(), before + 1);
+    }
+
+    #[test]
+    fn check_fires_when_threshold_exceeded() {
+        let mut am = AlertManager::new();
+        am.add_rule(AlertRule {
+            name: "TestAlert".into(),
+            condition: AlertCondition::CounterAbove("sf_llm_calls_total".into(), 5),
+            severity: Severity::Warning,
+            message: "over 5".into(),
+        });
+        let mut reg = MetricsRegistry::new();
+        reg.inc_counter_by("sf_llm_calls_total", 10);
+        let fired = am.check(&reg);
+        assert!(fired.iter().any(|r| r.name == "TestAlert"));
+    }
+}

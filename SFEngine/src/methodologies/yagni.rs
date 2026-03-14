@@ -67,3 +67,31 @@ pub fn format_report(reports: &[YAGNIReport]) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_todo_comments() {
+        let content = "fn main() {\n  // TODO fix this\n  // TODO another\n}";
+        let report = analyze_file(content, "test.rs");
+        assert_eq!(report.todo_count, 2);
+    }
+
+    #[test]
+    fn detects_dead_code_attr() {
+        let content = "#[allow(dead_code)]\nfn unused() {}";
+        let report = analyze_file(content, "test.rs");
+        assert_eq!(report.dead_imports.len(), 1);
+    }
+
+    #[test]
+    fn clean_file_has_no_warnings() {
+        let content = "fn main() { println!(\"hello\"); }";
+        let report = analyze_file(content, "clean.rs");
+        assert_eq!(report.todo_count, 0);
+        assert!(report.dead_imports.is_empty());
+        assert!(report.complexity_warnings.is_empty());
+    }
+}

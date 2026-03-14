@@ -37,3 +37,31 @@ pub fn format_priority_list(items: &[WSJFItem]) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn score_calculation() {
+        let item = WSJFItem { id: "a".into(), business_value: 8.0, time_criticality: 5.0, risk_reduction: 2.0, job_size: 3.0 };
+        assert!((score(&item) - 5.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn score_zero_size_returns_zero() {
+        let item = WSJFItem { id: "z".into(), business_value: 10.0, time_criticality: 5.0, risk_reduction: 5.0, job_size: 0.0 };
+        assert_eq!(score(&item), 0.0);
+    }
+
+    #[test]
+    fn prioritize_sorts_descending() {
+        let mut items = vec![
+            WSJFItem { id: "low".into(), business_value: 1.0, time_criticality: 1.0, risk_reduction: 1.0, job_size: 10.0 },
+            WSJFItem { id: "high".into(), business_value: 10.0, time_criticality: 5.0, risk_reduction: 5.0, job_size: 2.0 },
+        ];
+        prioritize(&mut items);
+        assert_eq!(items[0].id, "high");
+        assert_eq!(items[1].id, "low");
+    }
+}

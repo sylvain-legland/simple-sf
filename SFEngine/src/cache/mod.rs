@@ -66,3 +66,34 @@ impl TTLCache {
         self.store.keys().map(|k| k.as_str()).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_and_get() {
+        let mut cache = TTLCache::new(60);
+        cache.set("k1", "v1".into(), None);
+        assert_eq!(cache.get("k1"), Some("v1"));
+    }
+
+    #[test]
+    fn expired_entry_returns_none() {
+        let mut cache = TTLCache::new(60);
+        // Insert with expires_at in the past
+        cache.store.insert("old".to_string(), CacheEntry {
+            value: "gone".into(),
+            expires_at: 0,
+        });
+        assert_eq!(cache.get("old"), None);
+    }
+
+    #[test]
+    fn delete_removes_entry() {
+        let mut cache = TTLCache::new(60);
+        cache.set("k", "v".into(), None);
+        assert!(cache.delete("k"));
+        assert_eq!(cache.get("k"), None);
+    }
+}

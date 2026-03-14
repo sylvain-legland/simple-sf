@@ -56,3 +56,28 @@ pub fn assess_quality(steps: &[String]) -> ReasoningQuality {
         _ => ReasoningQuality::Shallow,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_with_cot_adds_prefix() {
+        let result = wrap_with_cot("build a parser");
+        assert!(result.contains("step by step"));
+        assert!(result.contains("build a parser"));
+    }
+
+    #[test]
+    fn extract_steps_parses_numbered() {
+        let text = "1. First step\n2. Second step\n3. Third step";
+        let steps = extract_steps(text);
+        assert_eq!(steps.len(), 3);
+        assert_eq!(steps[0], "First step");
+    }
+
+    #[test]
+    fn assess_quality_missing_for_empty() {
+        assert_eq!(assess_quality(&[]), ReasoningQuality::Missing);
+    }
+}

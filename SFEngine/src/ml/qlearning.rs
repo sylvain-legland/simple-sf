@@ -62,3 +62,30 @@ impl QLearner {
             .map(|((_, action), _)| action.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_creates_empty_table() {
+        let ql = QLearner::new(0.1, 0.9, 0.1);
+        assert!(ql.q_table.is_empty());
+    }
+
+    #[test]
+    fn update_adds_q_values_and_best_action() {
+        let mut ql = QLearner::new(1.0, 0.0, 0.0);
+        ql.update("s1", "left", 5.0, "s2");
+        ql.update("s1", "right", 10.0, "s2");
+        assert_eq!(ql.best_action("s1"), Some("right".into()));
+    }
+
+    #[test]
+    fn select_action_returns_valid_action() {
+        let ql = QLearner::new(0.1, 0.9, 0.0);
+        let actions = vec!["up".into(), "down".into()];
+        let chosen = ql.select_action("start", &actions);
+        assert!(actions.contains(&chosen));
+    }
+}

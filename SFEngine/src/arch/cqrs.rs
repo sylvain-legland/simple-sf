@@ -61,3 +61,33 @@ impl Default for CQRSBus {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestCmd;
+    impl Command for TestCmd {
+        fn execute(&self) -> Result<CommandResult, String> {
+            Ok(CommandResult { success: true, id: Some("c1".into()), message: "ok".into() })
+        }
+        fn name(&self) -> &str { "test_cmd" }
+    }
+
+    #[test]
+    fn dispatch_command_logs_and_returns() {
+        let mut bus = CQRSBus::new();
+        let result = bus.dispatch_command(&TestCmd).unwrap();
+        assert!(result.success);
+        assert_eq!(result.message, "ok");
+    }
+
+    #[test]
+    fn command_count_increments() {
+        let mut bus = CQRSBus::new();
+        assert_eq!(bus.command_count(), 0);
+        bus.dispatch_command(&TestCmd).unwrap();
+        bus.dispatch_command(&TestCmd).unwrap();
+        assert_eq!(bus.command_count(), 2);
+    }
+}

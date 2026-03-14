@@ -49,14 +49,11 @@ pub fn scoped_query(prefix: &str, query: &str) -> String {
         let lower = keyword.to_lowercase();
         // Handle both cases
         for kw in &[upper.to_string(), lower] {
-            while let Some(pos) = result.find(kw.as_str()) {
+            if let Some(pos) = result.find(kw.as_str()) {
                 let after = pos + kw.len();
                 if after < result.len() {
                     result.insert_str(after, &prefixed);
-                    // Skip past what we just inserted to avoid infinite loop
-                    break;
                 }
-                break;
             }
         }
     }

@@ -50,3 +50,38 @@ impl Default for DeepBench {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn composite_score_calculation() {
+        let r = BenchResult {
+            agent_id: "a".into(),
+            speed_ms: 0,
+            quality: 1.0,
+            cost_tokens: 0,
+            specialization: 1.0,
+        };
+        let score = DeepBench::composite_score(&r);
+        // quality*0.4 + speed(1.0)*0.2 + cost(1.0)*0.2 + spec*0.2 = 1.0
+        assert!((score - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn leaderboard_sorted_descending() {
+        let mut bench = DeepBench::new();
+        bench.add_result(BenchResult {
+            agent_id: "slow".into(), speed_ms: 5000, quality: 0.5,
+            cost_tokens: 50000, specialization: 0.3,
+        });
+        bench.add_result(BenchResult {
+            agent_id: "fast".into(), speed_ms: 100, quality: 0.9,
+            cost_tokens: 1000, specialization: 0.9,
+        });
+        let lb = bench.leaderboard();
+        assert_eq!(lb[0].0, "fast");
+        assert!(lb[0].1 > lb[1].1);
+    }
+}

@@ -56,3 +56,37 @@ impl ThompsonSampler {
         ranked
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_creates_sampler_with_uniform_priors() {
+        let ids = vec!["a".into(), "b".into()];
+        let ts = ThompsonSampler::new(&ids);
+        assert_eq!(ts.agents.len(), 2);
+        assert_eq!(ts.agents["a"], (1.0, 1.0));
+    }
+
+    #[test]
+    fn update_changes_alpha_beta() {
+        let mut ts = ThompsonSampler::new(&vec!["x".into()]);
+        ts.update("x", true);
+        assert_eq!(ts.agents["x"], (2.0, 1.0));
+        ts.update("x", false);
+        assert_eq!(ts.agents["x"], (2.0, 2.0));
+    }
+
+    #[test]
+    fn select_returns_valid_agent_and_rankings_sorted() {
+        let ids = vec!["a".into(), "b".into(), "c".into()];
+        let mut ts = ThompsonSampler::new(&ids);
+        ts.update("b", true);
+        ts.update("b", true);
+        let selected = ts.select();
+        assert!(ids.contains(&selected));
+        let ranked = ts.rankings();
+        assert!(ranked[0].1 >= ranked[1].1);
+    }
+}

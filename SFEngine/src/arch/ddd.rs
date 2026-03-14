@@ -60,3 +60,26 @@ impl ValueObject for GuardScore {}
 #[derive(Clone, PartialEq, Debug)]
 pub struct AgentRole(pub String);
 impl ValueObject for AgentRole {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repository_save_and_find() {
+        let mut repo = Repository::<String>::new();
+        repo.save(Entity { id: "e1".into(), version: 1, data: "hello".into() });
+        let found = repo.find("e1");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().data, "hello");
+    }
+
+    #[test]
+    fn repository_delete() {
+        let mut repo = Repository::<String>::new();
+        repo.save(Entity { id: "e1".into(), version: 1, data: "x".into() });
+        assert!(repo.delete("e1"));
+        assert!(repo.find("e1").is_none());
+        assert!(!repo.delete("e1"));
+    }
+}

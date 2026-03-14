@@ -60,3 +60,29 @@ pub fn verify_chain(claim: &str, steps: &[String]) -> CoveResult {
     let checks = check_steps(steps, &questions);
     aggregate(&checks)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cove_result_creation() {
+        let r = CoveResult { verified: true, confidence: 0.9, issues: vec![] };
+        assert!(r.verified);
+        assert!(r.issues.is_empty());
+    }
+
+    #[test]
+    fn plan_questions_generates_three() {
+        let qs = plan_questions("the sky is blue");
+        assert_eq!(qs.len(), 3);
+        assert!(qs[0].contains("sky is blue"));
+    }
+
+    #[test]
+    fn aggregate_empty_checks() {
+        let result = aggregate(&[]);
+        assert!(!result.verified);
+        assert!((result.confidence - 0.0).abs() < f64::EPSILON);
+    }
+}

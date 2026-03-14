@@ -48,3 +48,34 @@ impl SkillBroker {
         scores
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn match_task_ranks_matching_skills_higher() {
+        let agents = vec![
+            ("alice".into(), vec!["rust".into(), "testing".into()]),
+            ("bob".into(), vec!["python".into(), "web".into()]),
+        ];
+        let results = SkillBroker::match_task("rust testing", &agents);
+        assert_eq!(results[0].0, "alice");
+        assert!(results[0].1 > results[1].1);
+    }
+
+    #[test]
+    fn match_task_empty_returns_empty() {
+        let results = SkillBroker::match_task("", &[]);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn match_task_partial_match() {
+        let agents = vec![
+            ("dev".into(), vec!["javascript".into(), "react".into()]),
+        ];
+        let results = SkillBroker::match_task("react component", &agents);
+        assert!(results[0].1 > 0.0);
+    }
+}

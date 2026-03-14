@@ -67,3 +67,43 @@ impl Instinct {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reinforce_adjusts_confidence() {
+        let mut inst = Instinct::new();
+        inst.patterns.push(LearnedPattern {
+            trigger: "test".into(),
+            action: "fix".into(),
+            confidence: 0.5,
+            seen_count: 1,
+        });
+        inst.reinforce(0, true);
+        assert!((inst.patterns[0].confidence - 0.6).abs() < f64::EPSILON);
+        inst.reinforce(0, false);
+        assert!((inst.patterns[0].confidence - 0.45).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn extract_patterns_from_log() {
+        let log = "SUCCESS: build passed\nrun tests\nSUCCESS: build passed\nrun tests\n";
+        let patterns = Instinct::extract_patterns(log);
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn suggest_matches_context() {
+        let mut inst = Instinct::new();
+        inst.patterns.push(LearnedPattern {
+            trigger: "build error".into(),
+            action: "recompile".into(),
+            confidence: 0.8,
+            seen_count: 3,
+        });
+        let suggestion = inst.suggest("there was a build failure");
+        assert!(suggestion.is_some());
+    }
+}

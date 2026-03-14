@@ -70,3 +70,34 @@ pub fn format_chaos_report(results: &[ChaosResult]) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn describe_returns_non_empty() {
+        let scenarios = [
+            ChaosScenario::LLMFailure, ChaosScenario::DBCorruption,
+            ChaosScenario::NetworkPartition, ChaosScenario::Timeout,
+            ChaosScenario::DiskFull, ChaosScenario::HighLoad,
+        ];
+        for s in &scenarios {
+            assert!(!describe(s).is_empty());
+        }
+    }
+
+    #[test]
+    fn all_six_scenarios_covered() {
+        let scenarios = [
+            ChaosScenario::LLMFailure, ChaosScenario::DBCorruption,
+            ChaosScenario::NetworkPartition, ChaosScenario::Timeout,
+            ChaosScenario::DiskFull, ChaosScenario::HighLoad,
+        ];
+        assert_eq!(scenarios.len(), 6);
+        for s in &scenarios {
+            assert!(!injection_point(s).is_empty());
+            assert!(!expected_behavior(s).is_empty());
+        }
+    }
+}

@@ -58,3 +58,34 @@ fn tokenize(text: &str) -> Vec<String> {
 pub fn create_default() -> BM25Ranker {
     BM25Ranker::new(1.5, 0.75)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rank_returns_relevant_docs_higher() {
+        let mut r = create_default();
+        r.add_document("rust".into(), "rust programming language systems");
+        r.add_document("python".into(), "python scripting language web");
+        let results = r.rank("rust systems");
+        assert_eq!(results[0].0, "rust");
+        assert!(results[0].1 > results[1].1);
+    }
+
+    #[test]
+    fn select_tools_returns_matching() {
+        let mut r = create_default();
+        r.add_document("fmt".into(), "format code style lint");
+        r.add_document("test".into(), "run test suite unit");
+        let tools = r.select_tools("run unit test", &[]);
+        assert!(tools.contains(&"test".to_string()));
+    }
+
+    #[test]
+    fn empty_corpus_rank_returns_empty() {
+        let r = create_default();
+        let results = r.rank("anything");
+        assert!(results.is_empty());
+    }
+}

@@ -48,3 +48,29 @@ pub fn compress(content: &str, tier: ContextTier) -> String {
 pub fn estimate_tokens(text: &str) -> usize {
     text.len() / 4
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tier_for_budget_returns_correct_tier() {
+        assert_eq!(tier_for_budget(500), ContextTier::L0);
+        assert_eq!(tier_for_budget(4000), ContextTier::L1);
+        assert_eq!(tier_for_budget(10000), ContextTier::L2);
+    }
+
+    #[test]
+    fn compress_l0_truncates_long_content() {
+        let long = "x".repeat(1000);
+        let result = compress(&long, ContextTier::L0);
+        assert!(result.len() < long.len());
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn compress_l2_returns_full() {
+        let text = "Hello world\n\nSecond paragraph";
+        assert_eq!(compress(text, ContextTier::L2), text);
+    }
+}

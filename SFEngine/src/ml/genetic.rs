@@ -75,3 +75,36 @@ impl GeneticOptimizer {
             .expect("population must not be empty")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_creates_population() {
+        let pool = vec!["a".into(), "b".into(), "c".into()];
+        let ga = GeneticOptimizer::new(10, pool);
+        assert_eq!(ga.population.len(), 10);
+        assert_eq!(ga.generation, 0);
+    }
+
+    #[test]
+    fn evolve_increments_generation() {
+        let pool = vec!["x".into(), "y".into()];
+        let mut ga = GeneticOptimizer::new(6, pool);
+        ga.evolve();
+        assert_eq!(ga.generation, 1);
+        ga.evolve();
+        assert_eq!(ga.generation, 2);
+    }
+
+    #[test]
+    fn best_returns_highest_fitness() {
+        let pool = vec!["a".into(), "b".into()];
+        let mut ga = GeneticOptimizer::new(4, pool);
+        ga.set_fitness(0, 0.3);
+        ga.set_fitness(1, 0.9);
+        ga.set_fitness(2, 0.1);
+        assert!((ga.best().fitness - 0.9).abs() < f64::EPSILON);
+    }
+}

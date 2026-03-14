@@ -77,3 +77,28 @@ pub fn format_pattern_report() -> String {
     out.push_str(&format!("\nCoverage: {n}/{t} patterns implemented\n"));
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_patterns_returns_15() {
+        assert_eq!(all_patterns().len(), 15);
+    }
+
+    #[test]
+    fn pattern_coverage_full() {
+        let (actual, target) = pattern_coverage();
+        assert_eq!(actual, 15);
+        assert_eq!(target, 15);
+    }
+
+    #[test]
+    fn has_all_categories() {
+        let patterns = all_patterns();
+        assert!(patterns.iter().any(|p| p.category == "Creational"));
+        assert!(patterns.iter().any(|p| p.category == "Structural"));
+        assert!(patterns.iter().any(|p| p.category == "Behavioral"));
+    }
+}

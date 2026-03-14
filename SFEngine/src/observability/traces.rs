@@ -126,3 +126,46 @@ impl TraceCollector {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn start_span_returns_span_id() {
+        let mut tc = TraceCollector::new();
+        let id = tc.start_span("test.op", None);
+        assert!(!id.is_empty());
+        assert_eq!(tc.spans.len(), 1);
+    }
+
+    #[test]
+    fn end_span_sets_end_time() {
+        let mut tc = TraceCollector::new();
+        let id = tc.start_span("op", None);
+        assert!(tc.spans[0].end_ns.is_none());
+        tc.end_span(&id, SpanStatus::Ok);
+        assert!(tc.spans[0].end_ns.is_some());
+    }
+
+    #[test]
+    fn spans_for_trace_filters() {
+        let mut tc = TraceCollector::new();
+        let id1 = tc.start_span("parent", None);
+        let trace_id = tc.spans[0].trace_id.clone();
+        let _id2 = tc.start_span("unrelated", None);
+        let matched = tc.spans_for_trace(&trace_id);
+        assert_eq!(matched.len(), 1);
+        assert_eq!(matched[0].span_id, id1);
+    }
+
+    #[test]
+    fn export_json_valid() {
+        let mut tc = TraceCollector::new();
+        let id = tc.start_span("op", None);
+        tc.end_span(&id, SpanStatus::Ok);
+        let json = tc.export_json();
+        assert!(json.contains("resourceSpans"));
+        assert!(json.contains("spanId"));
+    }
+}

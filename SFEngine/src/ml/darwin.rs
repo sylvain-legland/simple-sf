@@ -53,3 +53,33 @@ impl Default for DarwinSelector {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_creates_default_ratings() {
+        let mut ds = DarwinSelector::new();
+        ds.ensure_agent("a");
+        assert!((ds.ratings["a"] - 1000.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn record_match_adjusts_elo() {
+        let mut ds = DarwinSelector::new();
+        ds.record_match("winner", "loser");
+        assert!(ds.ratings["winner"] > 1000.0);
+        assert!(ds.ratings["loser"] < 1000.0);
+    }
+
+    #[test]
+    fn select_top_returns_sorted() {
+        let mut ds = DarwinSelector::new();
+        ds.record_match("a", "b");
+        ds.record_match("a", "c");
+        let top = ds.select_top(2);
+        assert_eq!(top[0], "a");
+        assert_eq!(top.len(), 2);
+    }
+}

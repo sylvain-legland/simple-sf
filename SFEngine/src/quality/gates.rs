@@ -179,3 +179,41 @@ pub fn hard_gates_pass(results: &[(u8, GateResult)]) -> bool {
     }
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_gates_returns_17() {
+        assert_eq!(all_gates().len(), 17);
+    }
+
+    #[test]
+    fn passing_context_all_gates_pass() {
+        let ctx = GateContext {
+            code: "fn main() {}".into(),
+            test_output: "test result: ok".into(),
+            guard_score: 2,
+            veto_count: 0,
+            complexity: 5.0,
+            loc: 100,
+        };
+        let results = run_all_gates(&ctx);
+        assert!(hard_gates_pass(&results));
+    }
+
+    #[test]
+    fn high_guard_score_fails_hard_gate() {
+        let ctx = GateContext {
+            code: String::new(),
+            test_output: String::new(),
+            guard_score: 7,
+            veto_count: 0,
+            complexity: 5.0,
+            loc: 50,
+        };
+        let results = run_all_gates(&ctx);
+        assert!(!hard_gates_pass(&results));
+    }
+}

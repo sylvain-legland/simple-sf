@@ -86,3 +86,32 @@ impl KanbanBoard {
         out
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_item(id: &str) -> KanbanItem {
+        KanbanItem { id: id.into(), title: id.into(), state: KanbanState::Backlog, wip_class: "".into() }
+    }
+
+    #[test]
+    fn new_creates_board_with_wip_limits() {
+        let board = KanbanBoard::new();
+        assert!(board.items.is_empty());
+        assert_eq!(board.wip_limits.get("InProgress"), Some(&3));
+        assert_eq!(board.wip_limits.get("Review"), Some(&2));
+    }
+
+    #[test]
+    fn move_item_respects_wip_limits() {
+        let mut board = KanbanBoard::new();
+        for i in 0..4 {
+            board.items.push(make_item(&format!("t{i}")));
+        }
+        assert!(board.move_item("t0", KanbanState::InProgress).is_ok());
+        assert!(board.move_item("t1", KanbanState::InProgress).is_ok());
+        assert!(board.move_item("t2", KanbanState::InProgress).is_ok());
+        assert!(board.move_item("t3", KanbanState::InProgress).is_err());
+    }
+}

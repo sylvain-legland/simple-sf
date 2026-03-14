@@ -66,3 +66,30 @@ impl ProxyPool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_access_valid_role() {
+        let proxy = AgentProxy::new("agent-1", vec!["admin".into(), "developer".into()]);
+        assert!(proxy.check_access("admin"));
+        assert!(proxy.check_access("developer"));
+    }
+
+    #[test]
+    fn check_access_invalid_role() {
+        let proxy = AgentProxy::new("agent-1", vec!["admin".into()]);
+        assert!(!proxy.check_access("viewer"));
+    }
+
+    #[test]
+    fn lazy_loading() {
+        let mut proxy = AgentProxy::new("agent-1", vec!["admin".into()]);
+        assert!(!proxy.is_loaded());
+        proxy.load();
+        assert!(proxy.is_loaded());
+        assert!(proxy.get_persona().contains("agent-1"));
+    }
+}

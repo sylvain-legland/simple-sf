@@ -118,3 +118,43 @@ pub fn validate_scenario(s: &Scenario) -> Vec<String> {
     }
     errors
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_valid_gherkin() {
+        let input = "\
+Feature: Login
+  Scenario: Valid login
+    Given a user exists
+    When they enter valid credentials
+    Then they see the dashboard";
+        let feature = parse_feature(input).unwrap();
+        assert_eq!(feature.name, "Login");
+        assert_eq!(feature.scenarios.len(), 1);
+        let s = &feature.scenarios[0];
+        assert_eq!(s.name, "Valid login");
+        assert_eq!(s.given.len(), 1);
+        assert_eq!(s.when.len(), 1);
+        assert_eq!(s.then.len(), 1);
+    }
+
+    #[test]
+    fn parse_missing_feature_line() {
+        let input = "Scenario: Orphan\n  Given something";
+        assert!(parse_feature(input).is_err());
+    }
+
+    #[test]
+    fn validate_complete_scenario() {
+        let s = Scenario {
+            name: "OK".into(),
+            given: vec!["x".into()],
+            when: vec!["y".into()],
+            then: vec!["z".into()],
+        };
+        assert!(validate_scenario(&s).is_empty());
+    }
+}
