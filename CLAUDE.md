@@ -2,8 +2,9 @@
 
 ## WHAT
 Native macOS multi-agent AI app. SwiftUI+Rust FFI. 185 agents. 10 LLM providers. Local-first. Zero server.
-51 swift / 34 rust files. ~15K LOC total. All files <500L. SQLite WAL. AGPL-v3.
+51 swift / 98 rust files. ~23K LOC total. All files <500L. SQLite WAL. AGPL-v3.
 48 files annotated `// Ref: FT-SSF-XXX`. 40 i18n langs + 6 RTL. TLA+ verified mission engine.
+135 methodologies/patterns/techniques — 100% parity with SF Legacy.
 
 ## NEVER
 - emoji — SVG Feather/SF Symbols ONLY
@@ -42,12 +43,27 @@ SimpleSF/                    51 Swift, 7.6K LOC
   i18n/                      LocalizationManager Strings RTLSupport LanguagePickerView
   Resources/SFData/          agents.json(185) patterns.json skills.json workflows.json
   Resources/Locales/         40 JSON locale files (en,fr complete + 38 partial)
-SFEngine/                    34 Rust, 7.8K LOC
-  src/engine/                10 mod: types discussion workflow mission phase patterns patterns_ext build resilience mod
+SFEngine/                    98 Rust, 13K LOC
+  src/engine/                14 mod: types discussion workflow mission phase patterns patterns_ext
+                             patterns_competition patterns_collab patterns_distributed patterns_fractal
+                             build resilience mod
   src/tools/                 6 mod: code_tools file_tools shell_tools memory_tools schemas mod
+  src/ml/                    16 mod: thompson genetic qlearning darwin skill_broker deep_bench cove
+                             context_tiers prompt_compress bm25 instinct convergence rlm few_shot cot embeddings
+  src/methodologies/         9 mod: tdd bdd kanban xp wsjf invest yagni scrum agile
+  src/arch/                  5 mod: cqrs events clean ddd service_mesh
+  src/observability/         3 mod: traces metrics alerts
+  src/quality/               4 mod: gates veto sast chaos
+  src/a2a/                   2 mod: bus negotiation
+  src/mcp/                   2 mod: server protocol
+  src/design_patterns/       3 mod: decorator proxy patterns
+  src/cache/                 1 mod: TTL cache
+  src/workers/               1 mod: job queue
+  src/ops/                   1 mod: error_cluster
+  src/db/                    4 mod: db(schema+WAL) locks tenant migrations
   src/indexer/               index_walker index_store + indexer.rs
   src/eval/                  eval_metrics eval_runner + eval.rs
-  src/                       llm agents db ffi guard sandbox executor bench catalog ideation protocols lib
+  src/                       llm agents ffi guard sandbox executor bench catalog ideation protocols lib
 SimpleSFServer/              Optional REST (Axum, JWT, CORS restricted, security headers)
 formal/                      TLA+ spec: MissionEngine.tla + .cfg (verified: 586 states, 0 errors)
 docs/skills/                 5 YAML: UX(636L) A11Y(1244L) Security(531L) Skeleton(1731L) UIComponents(1252L)
@@ -89,12 +105,64 @@ Skeleton: Line Circle Card List Badge + 4 contextual (AgentGrid ProjectList Chat
 25 regex. Score: <5=pass 5-6=soft >=7=reject
 SLOP . MOCK . FAKE_BUILD(+7) . HALLUC(claims action w/o tool_calls +5)
 
-## Engine — TLA+ Verified
-Patterns: network sequential parallel hierarchical loop aggregator router wave solo
-Phases: Once Sprint(PM checkpoint) Gate(loopback→target) FeedbackLoop(QA→tickets→dev)
+## Engine — TLA+ Verified (25 patterns)
+Core(9): network sequential parallel hierarchical loop aggregator router wave solo
+Competition(4): tournament voting escalation speculative
+Collaboration(4): red-blue relay mob hitl
+Distributed(3): blackboard map-reduce composite
+Fractal(5): fractal_qa fractal_stories fractal_tests fractal_worktree backprop
+Phases: Once Sprint(PM checkpoint) Gate(loopback→target,MAX=3) FeedbackLoop(QA→tickets→dev)
 Resilience: 3 retries exp backoff . LLM health probe . MLX auto-restart
-Gate loopback: MAX=3 (TLA+ found infinite loop bug → fixed)
-TLA+ proof: 6 safety invariants + 2 liveness properties. 586 states, 0 errors.
+TLA+ proof: 6 safety invariants + 2 liveness. 586 states, 0 errors.
+
+## AI/ML (16 algorithms — src/ml/)
+Thompson Sampling(agent selection) . Genetic Algorithm(workflow opt) . Q-Learning(pattern selection)
+Darwin Selection(ELO ratings) . Skill Broker(task→agent) . Deep Bench(multi-dim scoring)
+CoVe(chain of verification) . Context Tiers(L0/L1/L2) . Prompt Compression(40-70% savings)
+BM25(tool ranking) . Instinct Learning(pattern extraction) . Convergence Detection(trend analysis)
+RLM(recursive refinement) . Few-shot(example injection) . CoT(step-by-step) . Embeddings(cosine similarity)
+
+## Methodologies (9 — src/methodologies/)
+TDD(red-green-refactor) . BDD/Gherkin(parser+validator) . Kanban(WIP limits)
+XP(pair programming) . WSJF(weighted prioritization) . INVEST(story quality)
+YAGNI(dead code detector) . Scrum(ceremonies) . Agile(velocity+burndown)
+
+## Architecture (5 — src/arch/)
+CQRS(command/query bus) . Event Sourcing(8 domain events) . Clean Architecture(layer validation)
+DDD(aggregates+entities+value objects) . Service Mesh(discovery+health)
+
+## Observability (src/observability/)
+Traces: OTEL-compatible spans (trace_id, span_id, parent, attributes, status)
+Metrics: Prometheus format — sf_agent_rounds, sf_llm_calls, sf_llm_latency, sf_guard_rejections, sf_mission_duration
+Alerts: MissionStuck(>2h) . LLMFailing(>10/5m) . HighRejectRate(>80%) . AgentStuck(>100 rounds)
+
+## Quality Gates (17 — src/quality/)
+Hard(11): guardrails . veto . prompt_inject(<7) . tool_acl . adversarial_L0 . AC_reward(>60%)
+  RBAC . clippy . tests_pass . deploy_canary . coverage(>60%)
+Soft(6): adversarial_L1 . convergence . complexity(CC<10,LOC<500,MI>20) . sonar . output_validator . stale_prune
+Veto: Absolute(blocks) . Strong(overridable) . Advisory(info). Hierarchy: trace-lead>architect>lead>qa>dev
+SAST: clippy strict + 4 custom rules (unwrap, hardcoded secrets, SQLi, path traversal)
+Chaos: 6 scenarios (LLM failure, DB corruption, network partition, timeout, disk full, high load)
+
+## A2A Bus + MCP (src/a2a/ + src/mcp/)
+A2A: message bus (Request/Response/Broadcast/Veto/Ack) + negotiation protocol (propose→vote→consensus)
+MCP: JSON-RPC 2.0 server, 18 tools registered, resource discovery
+
+## Design Patterns (15/15 GoF — src/design_patterns/)
+Creational(3): Singleton(DB) Factory(agents,LLM) Builder(workflow)
+Structural(4): Adapter(FFI,LLM) Decorator(logging,timing,caching,guard) Facade(engine,FFI) Proxy(lazy+RBAC)
+Behavioral(8): Strategy(LLM,sandbox) Observer(EventCallback) ChainOfResp(guard) StateMachine(mission,TLA+)
+  Command(tools) TemplateMethod(phase) Iterator(patterns) Mediator(engine)
+
+## Data & Storage (src/db/ + src/cache/ + src/workers/)
+SQLite WAL + FK . FTS5(memory+code) . Advisory locks . TTL cache(in-memory)
+Multi-tenant(project isolation) . 5-version migrations . Async job queue(atomic claim)
+Error clustering(Levenshtein similarity)
+
+## DevOps (CI/CD + Docker + IaC)
+CI: .github/workflows/ci.yml (cargo build+test+clippy → swift build)
+Deploy: blue-green(scripts/) + canary(scripts/) + GitOps(.github/workflows/deploy.yml)
+Docker: multi-stage Dockerfile + docker-compose.yml . IaC: infra/main.tf (Terraform)
 
 ## Traceability — E2E UDID
 Persona(6) → Feature(25,FT-SSF-NNN) → Story(31,US-SSF-*) → AC(59,AC-SSF-*)

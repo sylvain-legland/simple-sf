@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust-check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build SFEngine
+        run: cd SFEngine && cargo build --release
+      - name: Test SFEngine
+        run: cd SFEngine && cargo test
+      - name: Clippy
+        run: cd SFEngine && cargo clippy -- -W warnings
+
+  swift-build:
+    runs-on: macos-latest
+    needs: rust-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Rust staticlib
+        run: cd SFEngine && cargo build --release
+      - name: Build Swift
+        run: xcrun swift build

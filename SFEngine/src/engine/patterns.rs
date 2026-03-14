@@ -1,6 +1,16 @@
 // Ref: FT-SSF-020
 
 use super::patterns_ext::{run_aggregator, run_hierarchical, run_router, run_wave};
+use super::patterns_fractal::{
+    run_fractal_qa, run_fractal_stories, run_fractal_tests,
+    run_fractal_worktree, run_backprop,
+};
+use super::patterns_competition::{
+    run_tournament, run_voting, run_escalation, run_speculative,
+};
+use super::patterns_collab::{
+    run_red_blue, run_relay, run_mob, run_hitl,
+};
 use super::types::*;
 use crate::agents::{self, Agent};
 use crate::executor::{self, AgentEvent, EventCallback};
@@ -28,6 +38,19 @@ pub(crate) async fn run_pattern(
         "aggregator" => run_aggregator(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
         "router" => run_router(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
         "wave" => run_wave(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "fractal_qa" => run_fractal_qa(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "fractal_stories" => run_fractal_stories(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "fractal_tests" => run_fractal_tests(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "fractal_worktree" => run_fractal_worktree(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "backprop" | "backprop_merge" => run_backprop(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "tournament" => run_tournament(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "voting" => run_voting(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "escalation" => run_escalation(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "speculative" => run_speculative(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "red-blue" | "red_blue" => run_red_blue(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "relay" => run_relay(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "mob" => run_mob(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
+        "hitl" | "human-in-the-loop" => run_hitl(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
         _ => run_sequential(agent_ids, task, phase, workspace, mission_id, phase_id, on_event).await,
     }
 }

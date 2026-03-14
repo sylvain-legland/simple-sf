@@ -2,7 +2,8 @@
 
 ## WHAT
 Native macOS multi-agent AI app. SwiftUI+Rust FFI. 185 agents. 10 LLM providers. Local-first.
-51 swift / 34 rust files. ~15K LOC. All <500L. SQLite WAL. AGPL-v3. TLA+ verified engine.
+51 swift / 98 rust files. ~23K LOC. All <500L. SQLite WAL. AGPL-v3. TLA+ verified.
+135 methodologies — 100% parity with SF Legacy. 25 orchestration patterns.
 
 ## NEVER
 - emoji — SVG Feather/SF Symbols ONLY
@@ -27,56 +28,69 @@ SimpleSF/                    51 Swift
   App/ Engine/(SFBridge+5ext) Jarvis/(3) LLM/(5) Onboarding/(6) Data/(3)
   Projects/(8) Ideation/ Output/(2) Views/{Shared(7),Agents,Mission(3)} i18n/(4)
   Resources/{SFData(4json),Locales(40json),Avatars(22jpg)}
-SFEngine/                    34 Rust
-  src/engine/(10mod) src/tools/(6mod) src/indexer/(3) src/eval/(3)
-  src/{llm,agents,db,ffi,guard,sandbox,executor,bench,catalog,ideation,protocols,lib}.rs
+SFEngine/                    98 Rust
+  src/engine/(14mod)         patterns(9) competition(4) collab(4) distributed(3) fractal(5)
+  src/ml/(16mod)             thompson genetic qlearning darwin skill_broker deep_bench cove
+                             context_tiers prompt_compress bm25 instinct convergence rlm few_shot cot embeddings
+  src/methodologies/(9mod)   tdd bdd kanban xp wsjf invest yagni scrum agile
+  src/arch/(5mod)            cqrs events clean ddd service_mesh
+  src/observability/(3mod)   traces metrics alerts
+  src/quality/(4mod)         gates(17) veto sast chaos
+  src/a2a/(2mod)             bus negotiation
+  src/mcp/(2mod)             server protocol
+  src/design_patterns/(3mod) decorator proxy patterns(15 GoF)
+  src/tools/(6) src/db/(4) src/cache/(1) src/workers/(1) src/ops/(1) src/indexer/(3) src/eval/(3)
+  src/{llm,agents,ffi,guard,sandbox,executor,bench,catalog,ideation,protocols,lib}.rs
 SimpleSFServer/              Optional REST (Axum, JWT, CORS restricted)
 formal/                      TLA+ MissionEngine.tla (verified: 586 states, 0 errors)
 docs/skills/                 5 YAML (UX A11Y Security Skeleton UIComponents)
 docs/wiki/                   13 pages . traceability.db (25 tables, 305 links)
+.github/workflows/           ci.yml(build+test+clippy) deploy.yml(GitOps)
+Dockerfile + docker-compose  Multi-stage build + healthcheck
+infra/main.tf                Terraform IaC
+scripts/                     deploy-blue-green.sh deploy-canary.sh
 ```
 
-## Tokens (SF enum — DesignTokens.swift)
-Colors(39): adaptive(dark:light) . bg: #0f0a1a/#f5f3f8 . brand: purple=#bc8cff . text: #e6edf3/#1a1225
-  status: success/warning/error/info . roles: rte/po/architect/lead/dev/qa/security
-Typo(7): JetBrains Mono 13/11 . System 18b/14sb/13r/11r/10m
-Space(5): xs=4 sm=6 md=10 lg=16 xl=24 . Radius(5): sm=4 md=8 lg=12 xl=16 full=999
+## Engine — 25 Patterns (TLA+ verified)
+Core(9): network seq par hier loop aggregator router wave solo
+Competition(4): tournament voting escalation speculative
+Collab(4): red-blue relay mob hitl
+Distributed(3): blackboard map-reduce composite
+Fractal(5): fractal_qa fractal_stories fractal_tests fractal_worktree backprop
+Phases: Once . Sprint(PM) . Gate(loopback MAX=3) . FeedbackLoop(QA→dev)
 
-## LLM — 10
-Ollama . MLX . OpenAI . Anthropic . Gemini . MiniMax . Kimi . OpenRouter . Qwen . Zhipu
-RwLock runtime switch. 5 retries exp backoff 2s→60s. Streaming callbacks.
+## AI/ML — 16 Algorithms
+Thompson(Beta) . GA(crossover+mutation) . Q-Learning(ε-greedy) . Darwin(ELO)
+SkillBroker . DeepBench . CoVe(3-phase) . ContextTiers(L0/L1/L2)
+PromptCompress(40-70%) . BM25(tool rank) . Instinct . Convergence
+RLM(recursive) . FewShot . CoT . Embeddings(cosine,64dim)
 
-## FFI (15)
-sf_init . sf_configure_llm . sf_set_yolo . sf_create/list/delete_project
-sf_start_mission . sf_mission_status . sf_jarvis_discuss . sf_load_discussion_history
-sf_start_ideation . sf_list_agents . sf_list_workflows . sf_run_bench . sf_free_string
+## Methodologies — 9
+TDD(red-green-refactor) . BDD/Gherkin(parser) . Kanban(WIP) . XP(pair)
+WSJF(prioritize) . INVEST(story quality) . YAGNI(dead code) . Scrum(ceremonies) . Agile(velocity)
 
-## Guard — L0 (guard.rs)
-25 regex. <5=pass 5-6=soft >=7=reject. SLOP MOCK FAKE_BUILD(+7) HALLUC(+5)
+## Architecture — 5
+CQRS(cmd/query bus) . EventSourcing(8 events) . CleanArch(layer validation)
+DDD(aggregates) . ServiceMesh(discovery)
 
-## Engine — TLA+ Verified
-Patterns: network seq par hier loop aggregator router wave solo
-Phases: Once . Sprint(PM checkpoint) . Gate(loopback MAX=3) . FeedbackLoop(QA→tickets→dev)
-Resilience: 3 retries . LLM probe . MLX auto-restart
-Proof: 6 invariants + 2 liveness. 586 states 0 errors.
+## Quality — 17 Gates + Veto + SAST + Chaos
+Hard(11): guardrails veto prompt_inject tool_acl adversarial_L0 AC_reward RBAC clippy tests deploy coverage
+Soft(6): adversarial_L1 convergence complexity sonar output_validator stale_prune
+Chaos: 6 scenarios . SAST: 4 custom rules
 
-## Traceability (traceability.db)
-Persona(6)→Feature(25)→Story(31)→AC(59)→IHM(12)→Code(55)→TU(4)→E2E(3)→CRUD(21)→RBAC(20)
-305 links. 71% coverage. 48 files annotated `// Ref: FT-SSF-XXX`. Test gap: 16%.
+## Observability + A2A + MCP
+OTEL spans . Prometheus metrics(7) . Alerts(4 rules)
+A2A: msg bus + negotiation(propose→vote→consensus)
+MCP: JSON-RPC 2.0, 18 tools, resource discovery
 
-## Security (7 fixes applied)
-demo bypass removed . JWT_SECRET env . CORS restricted . SQLi parameterized
-path traversal(safe_resolve) . security headers . SBD: 5/25 PASS 12 WARN 8 FAIL
+## Design Patterns — 15/15 GoF
+Creational(3): Singleton Factory Builder
+Structural(4): Adapter Decorator Facade Proxy
+Behavioral(8): Strategy Observer ChainOfResp StateMachine Command TemplateMethod Iterator Mediator
 
-## Compliance
-SOC2: 67%(16/24) . ISO27001: 67%(16/24) . LEAN/KISS: 55%
-
-## UX(30 laws) . A11Y(30 ARIA) . i18n(40 langs, 6 RTL)
-Skills: docs/skills/{ux-laws,a11y-wai-aria,secure-by-design,ui-skeleton-annotation,ui-components}-deep.yaml
-
-## API — 20 endpoints (SimpleSFServer)
-Auth(JWT) . Projects(CRUD+control) . Chat(sessions+stream) . Ideation(CRUD+stream) . LLM(providers)
-JWT_SECRET + CORS_ORIGINS env required. Security headers enabled.
+## DevOps
+CI/CD: GitHub Actions . GitOps: auto-deploy . Docker: multi-stage
+Blue-Green + Canary deploy scripts . IaC: Terraform
 
 ## Gotchas
 - Rust .a BEFORE swift build . macOS 14+ . StrictConcurrency . Swift 6

@@ -20,6 +20,10 @@ mod build;
 mod resilience;
 mod patterns;
 mod patterns_ext;
+mod patterns_distributed;
+mod patterns_competition;
+mod patterns_fractal;
+mod patterns_collab;
 
 // ── Public API re-exports (preserves the original engine:: surface) ──
 

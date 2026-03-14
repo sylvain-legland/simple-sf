@@ -19,6 +19,10 @@ pub mod quality;
 pub mod observability;
 pub mod a2a;
 pub mod mcp;
+pub mod design_patterns;
+pub mod ml;
+pub mod methodologies;
+pub mod arch;
 mod ffi;
 
 pub use ffi::*;
