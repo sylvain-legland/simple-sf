@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Ref: FT-SSF-007
+// Ref: FT-SSF-007, FT-SSF-015
 // Individual wizard step views: Welcome, Choose Engine, Ollama Setup, Done.
 
 extension SetupWizardView {
@@ -15,11 +15,11 @@ extension SetupWizardView {
                     LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing)
                 )
 
-            Text("Simple SF")
+            Text(L10n.shared.t(.setupTitle))
                 .font(.largeTitle.bold())
                 .foregroundColor(.white)
 
-            Text("Your private Software Factory\nPowered by AI agents, running 100% on your Mac.")
+            Text(L10n.shared.t(.setupSubtitle))
                 .font(.title3)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -40,7 +40,7 @@ extension SetupWizardView {
             }
 
             Button(action: { withAnimation { step = .chooseEngine } }) {
-                Label("Get Started", systemImage: "arrow.right.circle.fill")
+                Label(L10n.shared.t(.actionGetStarted), systemImage: "arrow.right.circle.fill")
                     .font(.title3.bold())
                     .padding(.horizontal, 32)
                     .padding(.vertical, 12)
@@ -49,7 +49,7 @@ extension SetupWizardView {
             .tint(.purple)
             .padding(.top, 8)
 
-            Button("Skip — I'll configure later") {
+            Button(L10n.shared.t(.setupSkipConfigure)) {
                 appState.completeSetup()
             }
             .font(.caption)
@@ -62,11 +62,11 @@ extension SetupWizardView {
 
     var chooseEngineStep: some View {
         VStack(spacing: 24) {
-            Text("How do you want to run AI?")
+            Text(L10n.shared.t(.setupHowRun))
                 .font(.title2.bold())
                 .foregroundColor(.white)
 
-            Text("Everything stays on your Mac. No data leaves your machine.")
+            Text(L10n.shared.t(.setupPrivacy))
                 .font(.callout)
                 .foregroundColor(.gray)
 
@@ -102,7 +102,7 @@ extension SetupWizardView {
             .padding(.top, 8)
 
             Button(action: { withAnimation { step = .welcome } }) {
-                Label("Back", systemImage: "arrow.left")
+                Label(L10n.shared.t(.actionBack), systemImage: "arrow.left")
                     .font(.caption)
             }
             .buttonStyle(.plain)
@@ -148,18 +148,18 @@ extension SetupWizardView {
                 .font(.system(size: 48))
                 .foregroundColor(.blue)
 
-            Text("Ollama Setup")
+            Text(L10n.shared.t(.setupOllama))
                 .font(.title2.bold())
                 .foregroundColor(.white)
 
             if ollama.isRunning {
-                Label("Ollama is running", systemImage: "checkmark.circle.fill")
+                Label(L10n.shared.t(.setupOllamaRunning), systemImage: "checkmark.circle.fill")
                     .font(.headline)
                     .foregroundColor(.green)
 
                 if !ollama.availableModels.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Available models:")
+                        Text(L10n.shared.t(.setupOllamaAvailable))
                             .font(.callout)
                             .foregroundColor(.gray)
 
@@ -190,7 +190,7 @@ extension SetupWizardView {
                     .buttonStyle(.borderedProminent)
                     .tint(.blue)
                 } else {
-                    Text("No models installed. Run in Terminal:")
+                    Text(L10n.shared.t(.setupOllamaNoModels))
                         .font(.callout)
                         .foregroundColor(.gray)
 
@@ -210,13 +210,13 @@ extension SetupWizardView {
                 }
             } else {
                 VStack(spacing: 16) {
-                    Text("Ollama is not running")
+                    Text(L10n.shared.t(.setupOllamaNotRunning))
                         .font(.callout)
                         .foregroundColor(.gray)
 
                     HStack(spacing: 16) {
                         Button(action: { ollama.start() }) {
-                            Label("Open Ollama.app", systemImage: "play.circle.fill")
+                            Label(L10n.shared.t(.setupOllamaOpen), systemImage: "play.circle.fill")
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
                         }
@@ -224,7 +224,7 @@ extension SetupWizardView {
                         .tint(.blue)
 
                         Link(destination: URL(string: "https://ollama.com/download")!) {
-                            Label("Install Ollama", systemImage: "arrow.down.circle")
+                            Label(L10n.shared.t(.setupOllamaInstall), systemImage: "arrow.down.circle")
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
                         }
@@ -241,7 +241,7 @@ extension SetupWizardView {
 
             HStack {
                 Button(action: { withAnimation { step = .chooseEngine } }) {
-                    Label("Back", systemImage: "arrow.left")
+                    Label(L10n.shared.t(.actionBack), systemImage: "arrow.left")
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.gray)
@@ -263,11 +263,11 @@ extension SetupWizardView {
                     LinearGradient(colors: [.green, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)
                 )
 
-            Text("You're all set!")
+            Text(L10n.shared.t(.setupAllSet))
                 .font(.largeTitle.bold())
                 .foregroundColor(.white)
 
-            Text("Your private AI Software Factory is ready.\nTalk to Jarvis to start building.")
+            Text(L10n.shared.t(.setupAllSetSubtitle))
                 .font(.title3)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -295,7 +295,7 @@ extension SetupWizardView {
             .cornerRadius(8)
 
             Button(action: { appState.completeSetup() }) {
-                Label("Start using Simple SF", systemImage: "sparkles")
+                Label(L10n.shared.t(.setupStartUsing), systemImage: "sparkles")
                     .font(.title3.bold())
                     .padding(.horizontal, 32)
                     .padding(.vertical, 12)

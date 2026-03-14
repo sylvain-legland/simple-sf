@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 // Ref: FT-SSF-015
 // Localization manager: loads JSON locale files, resolves strings,

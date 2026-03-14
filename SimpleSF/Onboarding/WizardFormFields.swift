@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Ref: FT-SSF-007
+// Ref: FT-SSF-007, FT-SSF-015
 // Model selection and download progress views for the setup wizard.
 
 extension SetupWizardView {
@@ -9,7 +9,7 @@ extension SetupWizardView {
 
     var mlxModelStep: some View {
         VStack(spacing: 20) {
-            Text("Choose your model")
+            Text(L10n.shared.t(.setupChooseModel))
                 .font(.title2.bold())
                 .foregroundColor(.white)
 
@@ -42,7 +42,7 @@ extension SetupWizardView {
                                         .font(.headline)
                                         .foregroundColor(fits ? .white : .gray)
                                     if isRec {
-                                        Text("Recommended")
+                Text(L10n.shared.t(.setupRecommended))
                                             .font(.caption2.bold())
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
@@ -51,7 +51,7 @@ extension SetupWizardView {
                                             .cornerRadius(4)
                                     }
                                     if alreadyHave {
-                                        Text("Installed")
+                                        Text(L10n.shared.t(.setupInstalled))
                                             .font(.caption2.bold())
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
@@ -137,7 +137,7 @@ extension SetupWizardView {
                     .font(.system(size: 56))
                     .foregroundColor(.green)
 
-                Text("Download complete!")
+                Text(L10n.shared.t(.setupDownloadComplete))
                     .font(.title2.bold())
                     .foregroundColor(.white)
 
@@ -161,7 +161,7 @@ extension SetupWizardView {
                     .font(.system(size: 56))
                     .foregroundColor(.red)
 
-                Text("Download failed")
+                Text(L10n.shared.t(.setupDownloadFailed))
                     .font(.title2.bold())
                     .foregroundColor(.white)
 

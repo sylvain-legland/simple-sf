@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Ref: FT-SSF-013
+// Ref: FT-SSF-013, FT-SSF-015
 // MARK: - Shimmer Animation
 
 /// A linear gradient sweep that animates left-to-right over 1.5s, looping infinitely.

@@ -12,11 +12,11 @@ extension OnboardingView {
             HStack {
                 Image(systemName: "desktopcomputer")
                     .foregroundColor(SF.Colors.purple)
-                Text(l10n.t(.settingsLocalModels))
+                Text(L10n.shared.t(.settingsLocalModels))
                     .font(.headline)
                     .foregroundColor(SF.Colors.textPrimary)
                 Spacer()
-                Text(l10n.t(.settingsLocalHint))
+                Text(L10n.shared.t(.settingsLocalHint))
                     .font(.caption2)
                     .foregroundColor(SF.Colors.textSecondary)
             }
@@ -50,11 +50,11 @@ extension OnboardingView {
                         .foregroundColor(SF.Colors.textMuted)
                 }
                 if ollama.isRunning {
-                    Label(l10n.t(.statusRunning), systemImage: "circle.fill")
+                    Label(L10n.shared.t(.statusRunning), systemImage: "circle.fill")
                         .font(.caption2)
                         .foregroundColor(.green)
                 } else {
-                    Label(l10n.t(.statusStopped), systemImage: "circle")
+                    Label(L10n.shared.t(.statusStopped), systemImage: "circle")
                         .font(.caption2)
                         .foregroundColor(SF.Colors.textMuted)
                 }
@@ -73,7 +73,7 @@ extension OnboardingView {
             if ollama.isRunning {
                 if !ollama.availableModels.isEmpty {
                     HStack {
-                        Text(l10n.t(.settingsModel))
+                        Text(L10n.shared.t(.settingsModel))
                             .font(.callout)
                             .foregroundColor(SF.Colors.textSecondary)
                         Picker("", selection: $ollama.activeModel) {
@@ -90,14 +90,14 @@ extension OnboardingView {
                         .frame(maxWidth: 300)
                     }
                 } else {
-                    Text(l10n.t(.setupNoOllamaModels))
+                    Text(L10n.shared.t(.setupNoOllamaModels))
                         .font(.caption)
                         .foregroundColor(SF.Colors.textSecondary)
                 }
 
                 HStack(spacing: 12) {
                     Button(action: { ollama.stop() }) {
-                        Label(l10n.t(.actionStop), systemImage: "stop.circle.fill")
+                        Label(L10n.shared.t(.actionStop), systemImage: "stop.circle.fill")
                     }
                     .buttonStyle(.bordered)
                     .tint(.red)
@@ -110,7 +110,7 @@ extension OnboardingView {
             } else {
                 HStack(spacing: 12) {
                     Button(action: { ollama.start() }) {
-                        Label(l10n.t(.setupStartOllama), systemImage: "play.circle.fill")
+                        Label(L10n.shared.t(.setupStartOllama), systemImage: "play.circle.fill")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(SF.Colors.purple)
@@ -134,7 +134,7 @@ extension OnboardingView {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(l10n.t(.setupAppleMLX))
+                    Text(L10n.shared.t(.setupAppleMLX))
                         .font(.subheadline.bold())
                         .foregroundColor(SF.Colors.textPrimary)
                     Text(LLMProvider.mlx.subtitle)
@@ -156,7 +156,7 @@ extension OnboardingView {
 
             if !mlx.availableModels.isEmpty {
                 HStack {
-                    Text(l10n.t(.settingsModel))
+                    Text(L10n.shared.t(.settingsModel))
                         .font(.callout)
                         .foregroundColor(SF.Colors.textSecondary)
                     Picker("", selection: $mlx.activeModel) {
@@ -177,7 +177,7 @@ extension OnboardingView {
                     .frame(maxWidth: 300)
                 }
             } else {
-                Text(l10n.t(.setupNoMLXModels))
+                Text(L10n.shared.t(.setupNoMLXModels))
                     .font(.caption)
                     .foregroundColor(SF.Colors.textSecondary)
             }
@@ -185,7 +185,7 @@ extension OnboardingView {
             HStack(spacing: 12) {
                 if mlx.isRunning {
                     Button(action: { mlx.stop() }) {
-                        Label(l10n.t(.actionStop), systemImage: "stop.circle.fill")
+                        Label(L10n.shared.t(.actionStop), systemImage: "stop.circle.fill")
                     }
                     .buttonStyle(.bordered)
                     .tint(.red)
@@ -202,7 +202,7 @@ extension OnboardingView {
                             if mlx.isRunning { SFBridge.shared.syncLLMConfig() }
                         }
                     }) {
-                        Label(l10n.t(.setupStartServer), systemImage: "play.circle.fill")
+                        Label(L10n.shared.t(.setupStartServer), systemImage: "play.circle.fill")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(SF.Colors.purple)
@@ -216,7 +216,7 @@ extension OnboardingView {
                     get: { AppState.shared.mlxAutoRestart },
                     set: { AppState.shared.setMLXAutoRestart($0) }
                 )) {
-                    Text(l10n.t(.settingsAutoStart))
+                    Text(L10n.shared.t(.settingsAutoStart))
                         .font(.caption)
                         .foregroundColor(SF.Colors.textSecondary)
                 }
@@ -248,18 +248,18 @@ extension OnboardingView {
     private var mlxStatusBadge: some View {
         switch mlx.state {
         case .stopped:
-            Label(l10n.t(.statusStopped), systemImage: "circle")
+            Label(L10n.shared.t(.statusStopped), systemImage: "circle")
                 .font(.caption2)
                 .foregroundColor(SF.Colors.textMuted)
         case .starting:
             HStack(spacing: 4) {
                 ProgressView().scaleEffect(0.5)
-                Text(l10n.t(.statusStarting))
+                Text(L10n.shared.t(.statusStarting))
                     .font(.caption2)
                     .foregroundColor(.orange)
             }
         case .running:
-            Label(l10n.t(.statusRunning), systemImage: "circle.fill")
+            Label(L10n.shared.t(.statusRunning), systemImage: "circle.fill")
                 .font(.caption2)
                 .foregroundColor(.green)
         case .error(let msg):
