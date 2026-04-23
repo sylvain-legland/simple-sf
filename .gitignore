@@ -18,3 +18,15 @@ SimpleSFServer/target/
 SFEngine/target/
 dist/
 SimpleSFServer/
+
+# ── Client / project-specific data (never commit) ──
+SimpleSF/Resources/Avatars/agent-lpd*
+SimpleSF/Resources/Avatars/agent-sharelook*
+SimpleSF/Resources/Avatars/agent-logs-facteur*
+SimpleSF/Resources/Avatars/agent-bscc*
+SimpleSF/Resources/Avatars/agent-veligo*
+SimpleSF/Resources/SFData/clients/
+data/clients/
+**/client-projects/
+**/laposte/
+**/la-poste/

@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — La Poste / client project guard
+# Blocks any commit referencing La Poste or known client projects.
+# Uses: 1) fast static grep  2) local LLM via LM Studio :1234
+
+set -euo pipefail
+
+REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
+
+# ── 1. STATIC GREP (fast, no LLM needed) ────────────────────────────────────
+BLOCKED_PATTERN='la[[:space:]\-_]?poste|laposte|lpd[^a-z]|veligo|bscc|sharelook|logs.facteur|agent.lpd|agent.logs|colissimo|chronopost|innovation.laposte|azure\.innovation|gitlab\.azure\.innovation|sylvain\.legland@laposte|@laposte\.fr'
+
+STAGED_DIFF=$(git diff --cached --unified=0 2>/dev/null || true)
+STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || true)
+
+if [ -z "$STAGED_DIFF" ] && [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+# Check diff content
+if echo "$STAGED_DIFF" | grep -iE "$BLOCKED_PATTERN" > /dev/null 2>&1; then
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════════╗"
+  echo "║  ❌  PRE-COMMIT BLOCKED — La Poste / client reference detected  ║"
+  echo "╚══════════════════════════════════════════════════════════════════╝"
+  echo ""
+  echo "Matched lines:"
+  echo "$STAGED_DIFF" | grep -inE "$BLOCKED_PATTERN" | head -20
+  echo ""
+  echo "Remove all La Poste / client project references before committing."
+  exit 1
+fi
+
+# Check filenames
+if echo "$STAGED_FILES" | grep -iE 'lpd|sharelook|logs.facteur|veligo|bscc|laposte' > /dev/null 2>&1; then
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════════╗"
+  echo "║  ❌  PRE-COMMIT BLOCKED — client filename detected              ║"
+  echo "╚══════════════════════════════════════════════════════════════════╝"
+  echo ""
+  echo "Blocked filenames:"
+  echo "$STAGED_FILES" | grep -iE 'lpd|sharelook|logs.facteur|veligo|bscc|laposte'
+  exit 1
+fi
+
+# ── 2. LLM SEMANTIC CHECK via LM Studio :1234 ───────────────────────────────
+if curl -sf http://localhost:1234/v1/models > /dev/null 2>&1; then
+  DIFF_EXCERPT=$(echo "$STAGED_DIFF" | head -200)
+
+  LLM_RESULT=$(python3 - <<PYEOF
+import json, sys, urllib.request, urllib.error
+
+diff = """${DIFF_EXCERPT}"""
+
+payload = {
+    "model": "local-model",
+    "messages": [
+        {
+            "role": "system",
+            "content": (
+                "You are a security pre-commit guard. "
+                "Analyze the git diff and answer ONLY with valid JSON, no markdown fences: "
+                '{"blocked": true|false, "reason": "short explanation or empty string"}'
+            )
+        },
+        {
+            "role": "user",
+            "content": (
+                "Does this git diff contain any direct or indirect reference to:\n"
+                "- La Poste (French postal company), La Poste Digital, LP, LPD\n"
+                "- Postal services: facteur, colissimo, chronopost, courrier postal\n"
+                "- Known client project codenames: BSCC, Veligo, Sharelook, logs-facteur\n"
+                "- La Poste internal domains: innovation-laposte, azure.innovation\n\n"
+                "Ignore: generic words like 'post' in English, 'repository', 'poster'.\n\n"
+                f"Diff:\n{diff[:3000]}"
+            )
+        }
+    ],
+    "temperature": 0,
+    "max_tokens": 80
+}
+
+try:
+    req = urllib.request.Request(
+        "http://localhost:1234/v1/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        result = json.loads(resp.read())
+        content = result["choices"][0]["message"]["content"].strip()
+        # strip markdown fences if any
+        content = content.replace("\`\`\`json", "").replace("\`\`\`", "").strip()
+        data = json.loads(content)
+        if data.get("blocked"):
+            print(f"LLM_BLOCKED:{data.get('reason', 'La Poste reference detected')}")
+        else:
+            print("LLM_OK")
+except Exception as e:
+    print(f"LLM_SKIP:{e}")
+PYEOF
+)
+
+  if echo "$LLM_RESULT" | grep -q "^LLM_BLOCKED:"; then
+    REASON=$(echo "$LLM_RESULT" | sed 's/^LLM_BLOCKED://')
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "║  ❌  PRE-COMMIT BLOCKED (LLM) — La Poste reference detected    ║"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "  Reason: $REASON"
+    echo ""
+    exit 1
+  fi
+fi
+
+exit 0
